@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 """Train control-affine Neural ODE on generated Cleo data.
 
+Uses trial-level train/test split: last 2 trials held out for testing.
+
 Usage:
-    python -m modeling.scripts.fit_canode [--data data/training_continuous.h5]
+    python -m modeling.scripts.fit_canode [--data data/training_trials.h5]
 """
 
 import argparse
@@ -16,7 +18,7 @@ import matplotlib.pyplot as plt
 
 def main():
     parser = argparse.ArgumentParser(description="Train control-affine Neural ODE")
-    parser.add_argument("--data", type=str, default="data/training_continuous.h5")
+    parser.add_argument("--data", type=str, default="data/training_trials.h5")
     parser.add_argument("--n-epochs", type=int, default=500)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--hidden", type=int, default=128)
@@ -24,7 +26,8 @@ def main():
     parser.add_argument("--window-size", type=int, default=200,
                         help="Time steps per training window")
     parser.add_argument("--stride", type=int, default=100)
-    parser.add_argument("--test-fraction", type=float, default=0.2)
+    parser.add_argument("--n-test-trials", type=int, default=2,
+                        help="Number of trials held out for testing")
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--output-dir", type=str, default="results/canode")
     parser.add_argument("--save-model", type=str, default="results/canode/model.pt")
@@ -38,34 +41,40 @@ def main():
         device = args.device
     print(f"Using device: {device}")
 
-    from modeling.data import load_continuous_h5
+    from modeling.data import load_trials_h5
     from modeling.models.canode import ControlAffineODE, train_canode
 
-    # Load data
+    # Load data: x is (n_trials, n_channels, n_steps)
     print("Loading data...")
-    data = load_continuous_h5(args.data)
-    x, u, dt = data["x"], data["u"], data["dt"]
-    n_channels, n_total = x.shape
-    n_inputs = u.shape[0]
-    print(f"  x: {x.shape}, u: {u.shape}, dt: {dt}s")
+    data = load_trials_h5(args.data)
+    x_all, u_all = data["x"], data["u"]
+    dt = float(data["dt"])
+    n_trials, n_channels, n_steps = x_all.shape
+    n_inputs = u_all.shape[1]
+    print(f"  x: {x_all.shape}, u: {u_all.shape}, dt: {dt}s")
 
-    # Train/test split (temporal)
-    n_test = int(n_total * args.test_fraction)
-    n_train = n_total - n_test
-    x_train, x_test = x[:, :n_train], x[:, n_train:]
-    u_train, u_test = u[:, :n_train], u[:, n_train:]
-    print(f"  Train: {n_train} steps, Test: {n_test} steps")
+    # Trial-level train/test split
+    n_test = args.n_test_trials
+    n_train = n_trials - n_test
+    x_train_trials = x_all[:n_train]
+    u_train_trials = u_all[:n_train]
+    x_test_trials = x_all[n_train:]
+    u_test_trials = u_all[n_train:]
+    print(f"  Train: {n_train} trials, Test: {n_test} trials")
 
-    # Normalize data (zero mean, unit variance per channel)
+    # Concatenate train trials for windowed training
+    x_train = np.concatenate([x_train_trials[i] for i in range(n_train)], axis=1)
+    u_train = np.concatenate([u_train_trials[i] for i in range(n_train)], axis=1)
+    print(f"  Train concat: x={x_train.shape}, u={u_train.shape}")
+
+    # Normalize (per-channel, computed on training data only)
     x_mean = x_train.mean(axis=1, keepdims=True)
     x_std = x_train.std(axis=1, keepdims=True) + 1e-8
     u_mean = u_train.mean(axis=1, keepdims=True)
     u_std = u_train.std(axis=1, keepdims=True) + 1e-8
 
     x_train_n = (x_train - x_mean) / x_std
-    x_test_n = (x_test - x_mean) / x_std
     u_train_n = (u_train - u_mean) / u_std
-    u_test_n = (u_test - u_mean) / u_std
 
     # Build model
     print(f"\nBuilding CA-NODE: n_x={n_channels}, n_u={n_inputs}, "
@@ -90,7 +99,7 @@ def main():
         device=device,
     )
 
-    # Save model
+    # Save model + normalization stats
     torch.save({
         "model_state": model.state_dict(),
         "n_x": n_channels,
@@ -105,28 +114,37 @@ def main():
     }, args.save_model)
     print(f"Model saved to {args.save_model}")
 
-    # Evaluate on test set (multi-step prediction)
-    print("\nEvaluating on test set...")
+    # Evaluate on each test trial
+    print("\nEvaluating on test trials...")
     model.eval()
     model = model.to(device)
 
-    n_eval = min(2000, x_test_n.shape[1])
-    x_eval = torch.tensor(x_test_n[:, :n_eval].T, dtype=torch.float32).to(device)
-    u_eval = torch.tensor(u_test_n[:, :n_eval].T, dtype=torch.float32).to(device)
-    t_eval = torch.arange(n_eval, dtype=torch.float32).to(device) * dt
+    test_results = []
+    for ti in range(n_test):
+        x_test = x_test_trials[ti]  # (n_ch, T)
+        u_test = u_test_trials[ti]  # (n_u, T)
 
-    with torch.no_grad():
-        model.set_input(t_eval, u_eval)
-        x_pred = model.integrate(x_eval[0], t_eval)  # (T, n_x)
+        # Normalize using training stats
+        x_test_n = (x_test - x_mean) / x_std
+        u_test_n = (u_test - u_mean) / u_std
 
-    x_pred_np = x_pred.cpu().numpy()  # (T, n_x)
-    x_true_np = x_eval.cpu().numpy()  # (T, n_x)
+        n_eval = min(2000, x_test_n.shape[1])
+        x_eval = torch.tensor(x_test_n[:, :n_eval].T, dtype=torch.float32).to(device)
+        u_eval = torch.tensor(u_test_n[:, :n_eval].T, dtype=torch.float32).to(device)
+        t_eval = torch.arange(n_eval, dtype=torch.float32).to(device) * dt
 
-    mse = np.mean((x_pred_np - x_true_np) ** 2)
-    var = np.var(x_true_np)
-    r2 = 1 - mse / var
-    print(f"  Test MSE (normalized): {mse:.6f}")
-    print(f"  Test R^2: {r2:.4f}")
+        with torch.no_grad():
+            model.set_input(t_eval, u_eval)
+            x_pred = model.integrate(x_eval[0], t_eval)
+
+        x_pred_np = x_pred.cpu().numpy()
+        x_true_np = x_eval.cpu().numpy()
+
+        mse = np.mean((x_pred_np - x_true_np) ** 2)
+        var = np.var(x_true_np)
+        r2 = 1 - mse / var
+        test_results.append((x_true_np, x_pred_np, r2, mse))
+        print(f"  Trial {n_train + ti}: MSE={mse:.4f}, R2={r2:.4f}")
 
     # Plot training curves
     fig, ax = plt.subplots(1, 1, figsize=(10, 4))
@@ -140,9 +158,10 @@ def main():
     fig.tight_layout()
     fig.savefig(os.path.join(args.output_dir, "training_curve.png"), dpi=150)
 
-    # Plot predictions vs ground truth
+    # Plot predictions for first test trial
+    x_true_np, x_pred_np, r2, mse = test_results[0]
     n_plot_ch = min(5, n_channels)
-    t_plot = np.arange(n_eval) * dt
+    t_plot = np.arange(x_true_np.shape[0]) * dt
 
     fig2, axes = plt.subplots(n_plot_ch, 1, figsize=(14, 2.5 * n_plot_ch), sharex=True)
     for i in range(n_plot_ch):

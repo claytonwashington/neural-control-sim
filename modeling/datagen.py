@@ -3,13 +3,16 @@
 Drives optic fibers with Ornstein-Uhlenbeck processes and records
 smoothed multi-unit firing rates for system identification.
 
+Supports parallel multi-trial generation using multiprocessing.
+
 Usage:
     from modeling.datagen import generate_multi_trial
-    trials = generate_multi_trial(n_trials=10, trial_duration_s=30)
+    trials = generate_multi_trial(n_trials=10, trial_duration_s=30, n_workers=10)
 """
 
 from __future__ import annotations
 
+import multiprocessing as mp
 import numpy as np
 from numpy.typing import NDArray
 
@@ -142,13 +145,13 @@ class DataCollectionIOP(LatencyIOProcessor):
         )
         self.x_history.append(np.array(self._rates, dtype=np.float64))
 
-        # 3. Look up pre-computed OU input (clamp to available steps)
+        # 4. Look up pre-computed OU input (clamp to available steps)
         step = min(self._step, self.u.shape[1] - 1)
         u_now = self.u[:, step]
         self.u_history.append(u_now.copy())
         self._step += 1
 
-        # 4. Drive fibers (irradiance in mW/mm^2)
+        # 5. Drive fibers (irradiance in mW/mm^2)
         out = {self.light_name: u_now * mwatt / mm**2}
         return out, t_samp
 
@@ -250,6 +253,61 @@ def generate_dataset(
     }
 
 
+# =============================================================================
+# Single-trial worker for multiprocessing
+# =============================================================================
+
+def _run_single_trial(args: dict) -> dict:
+    """Worker function for parallel trial generation.
+
+    Must be a top-level function (not lambda/closure) for pickling.
+    Imports Brian2 fresh in each spawned process via start_scope().
+
+    Parameters
+    ----------
+    args : dict
+        All parameters needed to run one trial.
+
+    Returns
+    -------
+    dict with 'x' and 'u' arrays for this trial.
+    """
+    import warnings
+    warnings.filterwarnings("ignore")
+
+    import brian2.only as b2
+    b2.start_scope()
+
+    from modeling.plant import build_plant
+
+    trial_idx = args["trial_idx"]
+    n_trials = args["n_trials"]
+    ou_seed = args["ou_seed"]
+
+    print(f"[Worker] Trial {trial_idx + 1}/{n_trials} (PID={mp.current_process().pid}, OU seed={ou_seed})")
+
+    sim, devices = build_plant(
+        n_exc=args["n_exc"],
+        n_inh=args["n_inh"],
+        n_channels=args["n_channels"],
+        seed=args["plant_seed"],
+    )
+
+    data = generate_dataset(
+        sim, devices,
+        duration_s=args["trial_duration_s"],
+        sample_period_ms=args["sample_period_ms"],
+        tau_smooth_ms=args["tau_smooth_ms"],
+        ou_tau=args["ou_tau"],
+        ou_sigma=args["ou_sigma"],
+        ou_mu=args["ou_mu"],
+        seed=ou_seed,
+    )
+
+    print(f"[Worker] Trial {trial_idx + 1}/{n_trials} done. x={data['x'].shape}")
+    return {"x": data["x"], "u": data["u"]}
+
+
 def generate_multi_trial(
     n_trials: int = 10,
     trial_duration_s: float = 30.0,
@@ -263,13 +321,14 @@ def generate_multi_trial(
     n_exc: int = 800,
     n_inh: int = 200,
     n_channels: int = 50,
+    n_workers: int | None = None,
 ) -> dict:
     """Generate multi-trial dataset with independent initial conditions and OU noise.
 
     Each trial rebuilds the plant (same connectivity via plant_seed, but
     different random initial membrane voltages) and uses a different OU noise
-    realization. This gives the model diverse starting points across the
-    state-space manifold.
+    realization. Trials run in parallel using multiprocessing with 'spawn'
+    context (required by Brian2).
 
     Parameters
     ----------
@@ -289,6 +348,9 @@ def generate_multi_trial(
         Seed for plant connectivity (fixed across trials)
     n_exc, n_inh, n_channels : int
         Plant parameters
+    n_workers : int or None
+        Number of parallel workers. None = n_trials (one per trial).
+        Set to 1 for sequential execution (debugging).
 
     Returns
     -------
@@ -303,57 +365,55 @@ def generate_multi_trial(
         'tau_smooth_ms' : float
         'trial_duration_s' : float
     """
-    from modeling.plant import build_plant
+    if n_workers is None:
+        n_workers = n_trials
 
-    all_x = []
-    all_u = []
-
+    # Build args for each trial
+    trial_args = []
     for i in range(n_trials):
-        print(f"\n{'='*60}")
-        print(f"Trial {i+1}/{n_trials} (OU seed={base_seed + i})")
-        print(f"{'='*60}")
+        trial_args.append({
+            "trial_idx": i,
+            "n_trials": n_trials,
+            "ou_seed": base_seed + i,
+            "plant_seed": plant_seed,
+            "n_exc": n_exc,
+            "n_inh": n_inh,
+            "n_channels": n_channels,
+            "trial_duration_s": trial_duration_s,
+            "sample_period_ms": sample_period_ms,
+            "tau_smooth_ms": tau_smooth_ms,
+            "ou_tau": ou_tau,
+            "ou_sigma": ou_sigma,
+            "ou_mu": ou_mu,
+        })
 
-        # Rebuild plant each trial: same connectivity, different initial V
-        sim, devices = build_plant(
-            n_exc=n_exc, n_inh=n_inh, n_channels=n_channels,
-            seed=plant_seed,
-        )
+    print(f"Launching {n_trials} trials with {n_workers} parallel workers")
+    print(f"  Each trial: {trial_duration_s}s, {n_exc}E/{n_inh}I, {n_channels}ch")
 
-        # Run with unique OU noise
-        data = generate_dataset(
-            sim, devices,
-            duration_s=trial_duration_s,
-            sample_period_ms=sample_period_ms,
-            tau_smooth_ms=tau_smooth_ms,
-            ou_tau=ou_tau,
-            ou_sigma=ou_sigma,
-            ou_mu=ou_mu,
-            seed=base_seed + i,
-        )
+    if n_workers == 1:
+        # Sequential fallback (useful for debugging)
+        results = [_run_single_trial(a) for a in trial_args]
+    else:
+        # Parallel execution with 'spawn' context (required by Brian2)
+        ctx = mp.get_context("spawn")
+        with ctx.Pool(processes=n_workers) as pool:
+            results = pool.map(_run_single_trial, trial_args)
 
-        all_x.append(data["x"])
-        all_u.append(data["u"])
-
-    # Stack into contiguous 3D arrays: (n_trials, n_channels, n_steps)
+    # Stack into contiguous 3D arrays
     dt_s = sample_period_ms / 1000.0
-    n_steps = int(trial_duration_s / dt_s)
-    t = np.arange(n_steps) * dt_s
+    min_steps = min(r["x"].shape[1] for r in results)
+    x_stacked = np.stack([r["x"][:, :min_steps] for r in results])
+    u_stacked = np.stack([r["u"][:, :min_steps] for r in results])
+    t = np.arange(min_steps) * dt_s
 
-    # Trim all trials to same length (in case of minor length differences)
-    min_steps = min(x.shape[1] for x in all_x)
-    x_stacked = np.stack([x[:, :min_steps] for x in all_x])  # (n_trials, n_ch, T)
-    u_stacked = np.stack([u[:, :min_steps] for u in all_u])  # (n_trials, n_u, T)
-
-    print(f"\n{'='*60}")
-    print(f"Multi-trial generation complete.")
+    print(f"\nMulti-trial generation complete.")
     print(f"  x: {x_stacked.shape}, u: {u_stacked.shape}")
     print(f"  {n_trials} trials x {trial_duration_s}s = {n_trials * trial_duration_s}s total")
-    print(f"{'='*60}")
 
     return {
         "x": x_stacked,
         "u": u_stacked,
-        "t": t[:min_steps],
+        "t": t,
         "dt": dt_s,
         "n_trials": n_trials,
         "n_channels": x_stacked.shape[1],

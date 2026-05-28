@@ -6,7 +6,7 @@ Models the dynamics as:
 where f_theta (drift) and g_phi (control susceptibility) are MLPs.
 Integrated using torchdiffeq.odeint with MSE loss against recorded rates.
 
-Strictly control-affine by construction, enabling downstream QP-based control.
+Supports batched training: multiple windows solved simultaneously on GPU.
 """
 
 from __future__ import annotations
@@ -20,11 +20,7 @@ from torchdiffeq import odeint
 
 
 class DriftNet(nn.Module):
-    """f_theta(x): Autonomous dynamics MLP.
-
-    Maps state x to its time derivative contribution from
-    intrinsic (uncontrolled) dynamics.
-    """
+    """f_theta(x): Autonomous dynamics MLP."""
 
     def __init__(self, n_x: int, hidden: int = 128, n_layers: int = 2):
         super().__init__()
@@ -40,10 +36,7 @@ class DriftNet(nn.Module):
 
 class ControlNet(nn.Module):
     """g_phi(x): Control susceptibility MLP.
-
-    Maps state x to a (n_x, n_u) matrix. The control contribution
-    is then g(x) @ u, which is linear in u (control-affine).
-    """
+    Maps state x to a (n_x, n_u) matrix."""
 
     def __init__(self, n_x: int, n_u: int, hidden: int = 128, n_layers: int = 2):
         super().__init__()
@@ -56,62 +49,50 @@ class ControlNet(nn.Module):
         self.net = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Returns (batch, n_x, n_u) or (n_x, n_u) matrix."""
         flat = self.net(x)
         if x.dim() == 1:
             return flat.view(self.n_x, self.n_u)
         return flat.view(-1, self.n_x, self.n_u)
 
 
-class LinearInterpolation:
-    """Linearly interpolate a discrete input signal u(t) for ODE solver."""
+class BatchLinearInterpolation:
+    """Linearly interpolate batched input signals u(t).
+
+    Parameters
+    ----------
+    t : Tensor, shape (T,)
+    u : Tensor, shape (batch, T, n_u)
+    """
 
     def __init__(self, t: torch.Tensor, u: torch.Tensor):
-        """
-        Parameters
-        ----------
-        t : Tensor, shape (T,)
-            Time points
-        u : Tensor, shape (T, n_u) or (batch, T, n_u)
-            Input values at each time point
-        """
         self.t = t
-        self.u = u
+        self.u = u  # (B, T, n_u)
+        self.B = u.shape[0]
 
     def __call__(self, t_query: torch.Tensor) -> torch.Tensor:
-        """Interpolate u at time t_query."""
         t = self.t
-        # Clamp to valid range
         t_q = torch.clamp(t_query, t[0], t[-1])
-
-        # Find interval
         idx = torch.searchsorted(t, t_q) - 1
         idx = torch.clamp(idx, 0, len(t) - 2)
-
-        # Linear interpolation weight
         dt = t[idx + 1] - t[idx]
-        w = (t_q - t[idx]) / (dt + 1e-8)
-
-        if self.u.dim() == 2:
-            return (1 - w) * self.u[idx] + w * self.u[idx + 1]
-        else:  # batched
-            w = w.unsqueeze(-1)
-            return (1 - w) * self.u[:, idx] + w * self.u[:, idx + 1]
+        w = ((t_q - t[idx]) / (dt + 1e-8)).unsqueeze(0).unsqueeze(-1)  # (1, 1, 1) for broadcast
+        # u[:, idx] -> (B, n_u), u[:, idx+1] -> (B, n_u)
+        return (1 - w) * self.u[:, idx] + w * self.u[:, idx + 1]  # (B, n_u)
 
 
 class ControlAffineODE(nn.Module):
     """dx/dt = f_theta(x) + g_phi(x) @ u(t)
 
-    A Neural ODE with strictly control-affine structure.
+    Supports both single and batched integration.
 
     Parameters
     ----------
     n_x : int
-        State dimension (number of recording channels)
+        State dimension
     n_u : int
-        Input dimension (number of fibers)
+        Input dimension
     hidden : int
-        Hidden layer size for both f and g networks
+        Hidden layer size
     n_layers : int
         Number of hidden layers
     """
@@ -122,96 +103,97 @@ class ControlAffineODE(nn.Module):
         self.n_u = n_u
         self.f = DriftNet(n_x, hidden, n_layers)
         self.g = ControlNet(n_x, n_u, hidden, n_layers)
-        self._u_interp: LinearInterpolation | None = None
+        self._u_interp: BatchLinearInterpolation | None = None
 
     def set_input(self, t: torch.Tensor, u: torch.Tensor):
-        """Set the input trajectory for the next ODE integration.
+        """Set input trajectory for ODE integration.
 
         Parameters
         ----------
         t : Tensor, shape (T,)
-        u : Tensor, shape (T, n_u)
+        u : Tensor, shape (B, T, n_u) or (T, n_u)
         """
-        self._u_interp = LinearInterpolation(t, u)
+        if u.dim() == 2:
+            u = u.unsqueeze(0)  # (1, T, n_u)
+        self._u_interp = BatchLinearInterpolation(t, u)
 
     def forward(self, t: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
-        """ODE right-hand side: dx/dt = f(x) + g(x) @ u(t)."""
+        """ODE right-hand side: dx/dt = f(x) + g(x) @ u(t).
+
+        x shape: (B, n_x) for batched, (n_x,) for single
+        """
         assert self._u_interp is not None, "Call set_input() before integration"
 
-        u_t = self._u_interp(t)  # (n_u,) or (batch, n_u)
-        drift = self.f(x)  # (n_x,) or (batch, n_x)
-        g_x = self.g(x)  # (n_x, n_u) or (batch, n_x, n_u)
+        u_t = self._u_interp(t)  # (B, n_u)
+        drift = self.f(x)  # (B, n_x)
+        g_x = self.g(x)  # (B, n_x, n_u)
 
         if x.dim() == 1:
+            u_t = u_t.squeeze(0)  # (n_u,)
             control = g_x @ u_t  # (n_x,)
         else:
-            control = torch.bmm(g_x, u_t.unsqueeze(-1)).squeeze(-1)  # (batch, n_x)
+            control = torch.bmm(g_x, u_t.unsqueeze(-1)).squeeze(-1)  # (B, n_x)
 
         return drift + control
 
-    def integrate(self, x0: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        """Integrate the ODE from x0 over time points t.
-
-        Input must be set via set_input() before calling.
+    def integrate(self, x0: torch.Tensor, t: torch.Tensor, method: str = "dopri5") -> torch.Tensor:
+        """Integrate ODE. Input must be set via set_input() first.
 
         Parameters
         ----------
-        x0 : Tensor, shape (n_x,) or (batch, n_x)
-        t : Tensor, shape (T,)
+        x0 : (B, n_x) or (n_x,)
+        t : (T,)
 
         Returns
         -------
-        x_traj : Tensor, shape (T, n_x) or (T, batch, n_x)
+        (T, B, n_x) or (T, n_x)
         """
-        return odeint(self, x0, t, method="dopri5", rtol=1e-5, atol=1e-6)
+        return odeint(self, x0, t, method=method, rtol=1e-4, atol=1e-5)
 
 
 # ============================================================================
-# Dataset and training utilities
+# Dataset
 # ============================================================================
 
 
 class TrajectoryWindowDataset(Dataset):
-    """Dataset of (x_window, u_window, t_window) trajectory windows.
+    """Dataset of trajectory windows for batched training.
 
     Parameters
     ----------
     x : ndarray, shape (n_channels, n_total_steps)
     u : ndarray, shape (n_inputs, n_total_steps)
     dt : float
-        Time step in seconds
     window_size : int
-        Number of time steps per window
     stride : int
-        Stride between consecutive windows
     """
 
-    def __init__(
-        self,
-        x: np.ndarray,
-        u: np.ndarray,
-        dt: float,
-        window_size: int = 200,
-        stride: int = 100,
-    ):
-        self.windows = []
+    def __init__(self, x, u, dt, window_size=200, stride=100):
         n_total = x.shape[1]
-        t_base = np.arange(window_size) * dt
+        t_base = np.arange(window_size, dtype=np.float32) * dt
 
-        for start in range(0, n_total - window_size, stride):
-            x_win = x[:, start : start + window_size].T  # (T, n_x)
-            u_win = u[:, start : start + window_size].T  # (T, n_u)
-            self.windows.append((
-                torch.tensor(x_win, dtype=torch.float32),
-                torch.tensor(u_win, dtype=torch.float32),
-                torch.tensor(t_base, dtype=torch.float32),
-            ))
+        # Pre-build all windows as contiguous arrays
+        starts = list(range(0, n_total - window_size, stride))
+        self.x_windows = torch.tensor(
+            np.stack([x[:, s:s + window_size].T for s in starts]),  # (N, T, n_x)
+            dtype=torch.float32,
+        )
+        self.u_windows = torch.tensor(
+            np.stack([u[:, s:s + window_size].T for s in starts]),  # (N, T, n_u)
+            dtype=torch.float32,
+        )
+        self.t = torch.tensor(t_base, dtype=torch.float32)
 
-    def __len__(self) -> int:
-        return len(self.windows)
+    def __len__(self):
+        return self.x_windows.shape[0]
 
     def __getitem__(self, idx):
-        return self.windows[idx]
+        return self.x_windows[idx], self.u_windows[idx], self.t
+
+
+# ============================================================================
+# Training
+# ============================================================================
 
 
 def train_canode(
@@ -221,36 +203,34 @@ def train_canode(
     dt: float,
     n_epochs: int = 500,
     lr: float = 1e-3,
+    batch_size: int = 64,
     window_size: int = 200,
     stride: int = 100,
     val_fraction: float = 0.1,
-    device: str = "cuda" if torch.cuda.is_available() else "cpu",
+    device: str = "cuda",
     verbose: bool = True,
 ) -> dict:
-    """Train the control-affine Neural ODE.
+    """Train the control-affine Neural ODE with batched GPU integration.
 
     Parameters
     ----------
     model : ControlAffineODE
-    x : ndarray, shape (n_channels, n_total_steps)
-    u : ndarray, shape (n_inputs, n_total_steps)
+    x : (n_channels, n_total_steps)
+    u : (n_inputs, n_total_steps)
     dt : float
-        Time step in seconds
     n_epochs : int
     lr : float
-        Learning rate
+    batch_size : int
+        Windows per GPU batch
     window_size : int
-        Steps per training window
     stride : int
-        Stride between windows
     val_fraction : float
-        Fraction of windows for validation
     device : str
     verbose : bool
 
     Returns
     -------
-    history : dict with 'train_loss' and 'val_loss' lists
+    history : dict with 'train_loss' and 'val_loss'
     """
     model = model.to(device)
 
@@ -259,27 +239,36 @@ def train_canode(
     n_train = len(dataset) - n_val
     train_set, val_set = torch.utils.data.random_split(dataset, [n_train, n_val])
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, patience=20, factor=0.5, verbose=verbose
-    )
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True,
+                              pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False,
+                            pin_memory=True)
+
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-5)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
 
     history = {"train_loss": [], "val_loss": []}
+
+    if verbose:
+        print(f"  Dataset: {len(dataset)} windows, {n_train} train, {n_val} val")
+        print(f"  Batch size: {batch_size}, batches/epoch: {len(train_loader)}")
 
     for epoch in range(n_epochs):
         # --- Training ---
         model.train()
         train_losses = []
-        for x_win, u_win, t_win in train_set:
-            x_win = x_win.to(device)
-            u_win = u_win.to(device)
-            t_win = t_win.to(device)
+        for x_batch, u_batch, t_batch in train_loader:
+            # x_batch: (B, T, n_x), u_batch: (B, T, n_u), t_batch: (B, T) [all same]
+            x_batch = x_batch.to(device)
+            u_batch = u_batch.to(device)
+            t_vec = t_batch[0].to(device)  # (T,) — same for all windows
 
-            model.set_input(t_win, u_win)
-            x0 = x_win[0]  # initial state
-            x_pred = model.integrate(x0, t_win)  # (T, n_x)
+            model.set_input(t_vec, u_batch)  # (B, T, n_u)
+            x0 = x_batch[:, 0]  # (B, n_x)
+            x_pred = model.integrate(x0, t_vec)  # (T, B, n_x)
+            x_pred = x_pred.permute(1, 0, 2)  # (B, T, n_x)
 
-            loss = F.mse_loss(x_pred, x_win)
+            loss = F.mse_loss(x_pred, x_batch)
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -293,21 +282,22 @@ def train_canode(
         model.eval()
         val_losses = []
         with torch.no_grad():
-            for x_win, u_win, t_win in val_set:
-                x_win = x_win.to(device)
-                u_win = u_win.to(device)
-                t_win = t_win.to(device)
+            for x_batch, u_batch, t_batch in val_loader:
+                x_batch = x_batch.to(device)
+                u_batch = u_batch.to(device)
+                t_vec = t_batch[0].to(device)
 
-                model.set_input(t_win, u_win)
-                x_pred = model.integrate(x_win[0], t_win)
-                val_losses.append(F.mse_loss(x_pred, x_win).item())
+                model.set_input(t_vec, u_batch)
+                x_pred = model.integrate(x_batch[:, 0], t_vec)
+                x_pred = x_pred.permute(1, 0, 2)
+                val_losses.append(F.mse_loss(x_pred, x_batch).item())
 
-        avg_val = np.mean(val_losses)
+        avg_val = np.mean(val_losses) if val_losses else float("nan")
         history["val_loss"].append(avg_val)
-        scheduler.step(avg_val)
+        scheduler.step()
 
         if verbose and (epoch % 10 == 0 or epoch == n_epochs - 1):
-            print(f"Epoch {epoch:4d}/{n_epochs} | "
+            print(f"  Epoch {epoch:4d}/{n_epochs} | "
                   f"train: {avg_train:.6f} | val: {avg_val:.6f} | "
                   f"lr: {optimizer.param_groups[0]['lr']:.2e}")
 
