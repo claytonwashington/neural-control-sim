@@ -9,7 +9,7 @@ To ensure coordinate development across different agents (IDE, 2.0 CLI, Jules, G
 ## Active Task List
 
 - `[ ]` example_parent_task ([details](file:///home/cbwash2/cleo/tasks/README.md))
-- `[/]` Phase 1: Digital Twin Inner Loop ([details](file:///home/cbwash2/cleo/tasks/digital_twin_phase1.md))
+- `[x]` Phase 1: Digital Twin Inner Loop ([details](file:///home/cbwash2/cleo/tasks/digital_twin_phase1.md))
   - Branch: `feature/digital-twin-phase1`
   - Agent: Antigravity
   - Cleo E/I plant + OU data gen + N4SID + control-affine NODE

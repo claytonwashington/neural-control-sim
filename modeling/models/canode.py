@@ -209,6 +209,7 @@ def train_canode(
     val_fraction: float = 0.1,
     device: str = "cuda",
     verbose: bool = True,
+    method: str = "dopri5",
 ) -> dict:
     """Train the control-affine Neural ODE with batched GPU integration.
 
@@ -227,6 +228,7 @@ def train_canode(
     val_fraction : float
     device : str
     verbose : bool
+    method : str
 
     Returns
     -------
@@ -265,7 +267,7 @@ def train_canode(
 
             model.set_input(t_vec, u_batch)  # (B, T, n_u)
             x0 = x_batch[:, 0]  # (B, n_x)
-            x_pred = model.integrate(x0, t_vec)  # (T, B, n_x)
+            x_pred = model.integrate(x0, t_vec, method=method)  # (T, B, n_x)
             x_pred = x_pred.permute(1, 0, 2)  # (B, T, n_x)
 
             loss = F.mse_loss(x_pred, x_batch)
@@ -288,7 +290,7 @@ def train_canode(
                 t_vec = t_batch[0].to(device)
 
                 model.set_input(t_vec, u_batch)
-                x_pred = model.integrate(x_batch[:, 0], t_vec)
+                x_pred = model.integrate(x_batch[:, 0], t_vec, method=method)
                 x_pred = x_pred.permute(1, 0, 2)
                 val_losses.append(F.mse_loss(x_pred, x_batch).item())
 

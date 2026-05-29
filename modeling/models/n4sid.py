@@ -110,8 +110,9 @@ class N4SIDModel:
         # O_i = Y_f / U_f^perp * W_p
         # Using QR or direct least squares
         top = np.vstack([U_f, W_p])  # ((i*n_u + i*(n_u+n_y)), j)
-        # Solve: Y_f = [L1 L2] @ [U_f; W_p] via least squares
-        L = Y_f @ np.linalg.pinv(top)
+        # Solve: Y_f = [L1 L2] @ [U_f; W_p] via least squares using QR decomposition
+        Q, R = np.linalg.qr(top.T, mode='reduced')
+        L = np.linalg.solve(R, (Y_f @ Q).T).T
         L2 = L[:, i * n_u :]  # coefficients for W_p
         O_i = L2 @ W_p  # oblique projection (i*n_y, j)
 
@@ -143,7 +144,9 @@ class N4SIDModel:
         # Solve [X_next; Y_curr] = [A B; C D] @ [X_curr; U_curr]
         lhs = np.vstack([X_next, Y_curr])  # (n + n_y, j-1)
         rhs = np.vstack([X_curr, U_curr])  # (n + n_u, j-1)
-        ABCD = lhs @ np.linalg.pinv(rhs)
+        # Solve: lhs = ABCD @ rhs via QR decomposition of rhs.T
+        Q_rhs, R_rhs = np.linalg.qr(rhs.T, mode='reduced')
+        ABCD = np.linalg.solve(R_rhs, (lhs @ Q_rhs).T).T
 
         self.A = ABCD[:n, :n]
         self.B = ABCD[:n, n:]

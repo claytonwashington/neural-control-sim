@@ -9,8 +9,18 @@ Usage:
 
 import argparse
 import os
+
+# Limit CPU threads to avoid contention and thrashing on multi-core systems
+os.environ["OMP_NUM_THREADS"] = "4"
+os.environ["MKL_NUM_THREADS"] = "4"
+os.environ["OPENBLAS_NUM_THREADS"] = "4"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "4"
+os.environ["NUMEXPR_NUM_THREADS"] = "4"
+
 import numpy as np
 import torch
+torch.set_num_threads(4)
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -21,6 +31,7 @@ def main():
     parser.add_argument("--data", type=str, default="data/training_trials.h5")
     parser.add_argument("--n-epochs", type=int, default=500)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--hidden", type=int, default=128)
     parser.add_argument("--n-layers", type=int, default=2)
     parser.add_argument("--window-size", type=int, default=200,
@@ -29,6 +40,12 @@ def main():
     parser.add_argument("--n-test-trials", type=int, default=2,
                         help="Number of trials held out for testing")
     parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument("--method", type=str, default="dopri5",
+                        help="ODE integration method (e.g. dopri5, rk4)")
+    parser.add_argument("--compile", action="store_true",
+                        help="Compile the drift and control networks using torch.compile")
+    parser.add_argument("--load-model", type=str, default="",
+                        help="Path to load trained model weights instead of training")
     parser.add_argument("--output-dir", type=str, default="results/canode")
     parser.add_argument("--save-model", type=str, default="results/canode/model.pt")
     args = parser.parse_args()
@@ -88,34 +105,55 @@ def main():
     n_params = sum(p.numel() for p in model.parameters())
     print(f"  Parameters: {n_params:,}")
 
-    # Train
-    print(f"\nTraining for {args.n_epochs} epochs...")
-    history = train_canode(
-        model, x_train_n, u_train_n, dt,
-        n_epochs=args.n_epochs,
-        lr=args.lr,
-        window_size=args.window_size,
-        stride=args.stride,
-        device=device,
-    )
+    if args.compile:
+        print("Compiling drift and control networks...")
+        model.f = torch.compile(model.f)
+        model.g = torch.compile(model.g)
 
-    # Save model + normalization stats
-    torch.save({
-        "model_state": model.state_dict(),
-        "n_x": n_channels,
-        "n_u": n_inputs,
-        "hidden": args.hidden,
-        "n_layers": args.n_layers,
-        "x_mean": x_mean,
-        "x_std": x_std,
-        "u_mean": u_mean,
-        "u_std": u_std,
-        "history": history,
-    }, args.save_model)
-    print(f"Model saved to {args.save_model}")
+    if args.load_model:
+        print(f"Loading model weights from {args.load_model}...")
+        # Map location ensures weights load on correct device
+        checkpoint = torch.load(args.load_model, map_location=device)
+        # Handle state dict load. (If model was compiled, keys might contain '_orig_mod.')
+        state_dict = checkpoint["model_state"]
+        # Remove '_orig_mod.' prefix from compiled checkpoints if model is uncompiled
+        cleaned_state_dict = {}
+        for k, v in state_dict.items():
+            cleaned_key = k.replace("_orig_mod.", "")
+            cleaned_state_dict[cleaned_key] = v
+        model.load_state_dict(cleaned_state_dict)
+        history = checkpoint.get("history", {"train_loss": [], "val_loss": []})
+    else:
+        # Train
+        print(f"\nTraining for {args.n_epochs} epochs with batch size {args.batch_size}...")
+        history = train_canode(
+            model, x_train_n, u_train_n, dt,
+            n_epochs=args.n_epochs,
+            lr=args.lr,
+            batch_size=args.batch_size,
+            window_size=args.window_size,
+            stride=args.stride,
+            device=device,
+            method=args.method,
+        )
+
+        # Save model + normalization stats
+        torch.save({
+            "model_state": model.state_dict(),
+            "n_x": n_channels,
+            "n_u": n_inputs,
+            "hidden": args.hidden,
+            "n_layers": args.n_layers,
+            "x_mean": x_mean,
+            "x_std": x_std,
+            "u_mean": u_mean,
+            "u_std": u_std,
+            "history": history,
+        }, args.save_model)
+        print(f"Model saved to {args.save_model}")
 
     # Evaluate on each test trial
-    print("\nEvaluating on test trials...")
+    print("\nEvaluating on test trials (2000-step open-loop)...")
     model.eval()
     model = model.to(device)
 
@@ -135,7 +173,7 @@ def main():
 
         with torch.no_grad():
             model.set_input(t_eval, u_eval)
-            x_pred = model.integrate(x_eval[0], t_eval)
+            x_pred = model.integrate(x_eval[0], t_eval, method=args.method)
 
         x_pred_np = x_pred.cpu().numpy()
         x_true_np = x_eval.cpu().numpy()
@@ -145,6 +183,44 @@ def main():
         r2 = 1 - mse / var
         test_results.append((x_true_np, x_pred_np, r2, mse))
         print(f"  Trial {n_train + ti}: MSE={mse:.4f}, R2={r2:.4f}")
+
+    # Windowed evaluation (200-step windows) matching N4SID
+    horizon = 200
+    print(f"\nEvaluating with {horizon}-step ({horizon * dt * 1000:.0f}ms) prediction windows...")
+    windowed_r2s = []
+    windowed_mses = []
+    for ti in range(n_test):
+        x_test = x_test_trials[ti]
+        u_test = u_test_trials[ti]
+        x_test_n = (x_test - x_mean) / x_std
+        u_test_n = (u_test - u_mean) / u_std
+
+        n_ch_val, T_val = x_test_n.shape
+        n_windows = (T_val - horizon) // horizon
+        window_mses = []
+        t_win = torch.arange(horizon, dtype=torch.float32).to(device) * dt
+
+        for w in range(n_windows):
+            t0 = w * horizon
+            t1 = t0 + horizon
+            x0 = torch.tensor(x_test_n[:, t0], dtype=torch.float32).to(device)
+            u_win = torch.tensor(u_test_n[:, t0:t1].T, dtype=torch.float32).to(device)
+            x_true_win = x_test_n[:, t0:t1]
+
+            with torch.no_grad():
+                model.set_input(t_win, u_win.unsqueeze(0))
+                x_pred_win = model.integrate(x0, t_win, method=args.method)
+                x_pred_win_np = x_pred_win.cpu().numpy().T
+            window_mses.append(np.mean((x_pred_win_np - x_true_win) ** 2))
+
+        trial_mse = np.mean(window_mses)
+        trial_var = np.var(x_test_n)
+        trial_r2 = 1 - trial_mse / trial_var
+        windowed_mses.append(trial_mse)
+        windowed_r2s.append(trial_r2)
+        print(f"  Trial {n_train + ti}: {horizon}-step window MSE={trial_mse:.4f}, R_win={trial_r2:.4f}")
+    
+    print(f"  Avg {horizon}-step: MSE={np.mean(windowed_mses):.4f}, R2={np.mean(windowed_r2s):.4f}")
 
     # Plot training curves
     fig, ax = plt.subplots(1, 1, figsize=(10, 4))

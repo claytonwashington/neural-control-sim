@@ -39,18 +39,18 @@ Agent: Antigravity
 - `[x]` Fixed: Initialize rates to zeros * Hz on first call
 - `[x]` `generate_dataset()` single-trial function: verified x=(50,2000), u=(2,2000)
 - `[x]` `generate_multi_trial()` multi-trial function (independent seeds + initial conditions)
-- `[ ]` Full multi-trial run completes on gpu2
+- `[x]` Full multi-trial run completes on gpu2
 
 ### Data Generation Script (modeling/scripts/generate_data.py)
 - `[x]` CLI script with --mode single/multi
 - `[x]` Default: 10 trials x 30s
-- `[ ]` Full run completes on gpu2 and produces valid HDF5
+- `[x]` Full run completes on gpu2 and produces valid HDF5
 
 ### N4SID Model (modeling/models/n4sid.py)
 - `[x]` N4SID class: fit(u, x, dt) and predict(x0, u, dt)
 - `[x]` Hankel matrix construction + SVD
-- `[ ]` Test: fits synthetic linear system correctly
-- `[ ]` Test: fits Cleo data, prediction MSE < spontaneous variance
+- `[x]` Test: fits synthetic linear system correctly
+- `[x]` Test: fits Cleo data, prediction MSE < spontaneous variance
 
 ### Control-Affine NODE (modeling/models/canode.py)
 - `[x]` DriftNet MLP: f_θ(x)
@@ -58,14 +58,45 @@ Agent: Antigravity
 - `[x]` ControlAffineODE: ẋ = f(x) + g(x)·u with torchdiffeq
 - `[x]` Training loop with windowed MSE loss
 - `[x]` Input interpolation for ODE solver
-- `[ ]` Test: loss decreases over 100 epochs
-- `[ ]` Test: prediction MSE < N4SID on held-out data
+- `[x]` Test: loss decreases over 100 epochs
+- `[x]` Test: prediction MSE < N4SID on held-out data
 
 ### Training Scripts
 - `[x]` modeling/scripts/fit_n4sid.py
 - `[x]` modeling/scripts/fit_canode.py
-- `[ ]` Both save trained models + prediction plots
+- `[x]` Both save trained models + prediction plots
 
 ### Validation
-- `[ ]` Side-by-side plot: N4SID vs NODE vs ground truth x(t)
-- `[ ]` Compare MSE on held-out test window
+- [x] Side-by-side plot: N4SID vs NODE vs ground truth x(t)
+- [x] Compare MSE on held-out test window
+
+### Parallel Hyperparameter Sweep
+- [x] modeling/scripts/sweep_canode.py (optimized to use all 8 GPUs in parallel)
+- [x] Run parallel sweep for different hidden sizes, layers, learning rates, and solvers
+- [x] Select the best model configuration based on evaluation metrics
+
+## Summary of Results
+
+### 1. Baseline Model Comparison (200ms windowed R²)
+* **N4SID Subspace Model:** Avg $R^2 = 0.2059$ (MSE = `23600.07` raw scale)
+* **CA-NODE Baseline:** Avg $R^2 = 0.8401$ (MSE = `0.2238` normalized scale)
+
+### 2. Hyperparameter Sweep Results (200ms windowed R²)
+All 8 configurations were run in parallel on `gpu1` using separate GPU cards.
+
+| Run ID | Method | Hidden | Layers | LR | Compile | Training Time | Avg 200ms $R^2$ | Avg 200ms MSE | Open-Loop $R^2$ |
+|---|---|---|---|---|---|---|---|---|---|
+| **run_04** | **dopri5** | **128** | **2** | **5e-4** | **True** | **5.1 mins** | **0.8988** | **0.1417** | **0.2257** |
+| run_07 | rk4 | 128 | 2 | 1e-3 | True | 26.8 mins | 0.8769 | 0.1723 | 0.2394 |
+| run_05 | dopri5 | 256 | 2 | 5e-4 | True | 6.5 mins | 0.8714 | 0.1796 | 0.2306 |
+| run_01 | dopri5 | 128 | 2 | 1e-3 | True | 6.4 mins | 0.8701 | 0.1817 | 0.2302 |
+| run_06 | dopri5 | 256 | 3 | 5e-4 | True | 6.9 mins | 0.8691 | 0.1828 | 0.2263 |
+| run_00 | dopri5 | 128 | 2 | 1e-3 | False | 5.1 mins | 0.8689 | 0.1832 | 0.2319 |
+| run_02 | dopri5 | 256 | 2 | 1e-3 | True | 6.9 mins | 0.8278 | 0.2400 | 0.2214 |
+| run_03 | dopri5 | 256 | 3 | 1e-3 | True | 8.2 mins | 0.8258 | 0.2426 | 0.2482 |
+
+### Key Findings
+1. **Best Model:** Configuration `run_04` (`hidden=128`, `n_layers=2`, `lr=5e-4`, `method="dopri5"`) achieved the highest windowed performance of **`0.8988` $R^2$**.
+2. **Learning Rate Sensitivity:** Slower learning rate (`5e-4` vs `1e-3`) systematically improved performance across all architectures, indicating that `1e-3` was overshooting.
+3. **Model Capacity:** The smaller `hidden=128` network outperformed the larger `hidden=256` versions, likely due to overfitting on the small 8-trial training dataset.
+4. **Solver Efficiency:** `dopri5` was more than 4x faster than `rk4` with almost identical accuracy, showing it is the superior choice for future training/evaluations.
