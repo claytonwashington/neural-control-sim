@@ -10,6 +10,17 @@ Cleo is a Python framework built on top of [Brian 2](https://brian2.readthedocs.
 > - `branches.md` — which agent owns which branch
 > - `tasks/` — detailed checklists and implementation plans per task
 
+### Workspace Isolation (Git Worktrees)
+
+To prevent file and execution collisions when multiple agents run experiments concurrently, each agent must operate in a dedicated **Git Worktree** checked out to their active branch.
+
+1. **Create the Worktree**: From the main/shared repository directory (`/snel/home/cbwash2/cleo`), create a new worktree directory and branch:
+   ```bash
+   git worktree add /snel/home/cbwash2/cleo-worktrees/<branch-name> -b feature/<branch-name>
+   ```
+2. **Register the Worktree**: Update [branches.md](branches.md) and [task.md](task.md) to document the new worktree path and branch assignment.
+3. **Shift Workspace**: Conduct all subsequent file edits, command runs (such as sweeps or tests), and git commits inside the dedicated `/snel/home/cbwash2/cleo-worktrees/<branch-name>` directory.
+
 ## Environment
 
 - **Python**: >= 3.10
