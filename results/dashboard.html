@@ -451,6 +451,7 @@
   <!-- Tabs -->
   <div class="tabs">
     <button class="tab-btn active" onclick="showTab('multirate')">Multi-Rate Sweep (6)</button>
+    <button class="tab-btn" onclick="showTab('extended')">Extended Sweep (12)</button>
     <button class="tab-btn" onclick="showTab('skiplinear')">Skip Connections Sweep (16)</button>
     <button class="tab-btn" onclick="showTab('causallatent')">Causal Latent Sweep (12)</button>
     <button class="tab-btn" onclick="showTab('sweep2')">Phase 2 Sweep (27)</button>
@@ -458,6 +459,48 @@
     <button class="tab-btn" onclick="showTab('comparison')">Model Comparison</button>
     <button class="tab-btn" onclick="showTab('plots')">Training Curves</button>
     <button class="tab-btn" onclick="showTab('log')">Experiment Log</button>
+  </div>
+
+  <!-- Tab: Extended Sweep -->
+  <div id="tab-extended" class="tab-content">
+    <div class="section">
+      <div class="section-header">
+        <h2>Phase 2.8: Extended Training Sweep (Warmup + Cosine Decay) — 12 Configs</h2>
+        <span class="badge badge-warning">In Progress</span>
+      </div>
+      <div style="margin-bottom: 20px; font-size: 0.85rem; color: var(--text-secondary);">
+        <p>Sweeping 12 configurations of the purely autonomous CA-NODE baseline on 50 trials (40 train / 10 test). Models are trained for <strong>500 epochs</strong> with a linear warmup ramp-up followed by Cosine Annealing learning rate decay. Random seed is set to 42 for exact reproducibility.</p>
+        <p style="margin-top: 8px;"><strong>Dual Checkpointing:</strong> Saves the parameters corresponding to the lowest validation loss (saved to <code>model.pt</code>) alongside the final epoch parameters (saved to <code>model_last.pt</code>) to ensure optimal generalization performance despite validation fluctuations.</p>
+      </div>
+      <div class="table-wrapper">
+        <table id="extended-table">
+          <thead>
+            <tr>
+              <th onclick="sortTable('extended-table', 0)">Run ID</th>
+              <th onclick="sortTable('extended-table', 1)">Hidden</th>
+              <th onclick="sortTable('extended-table', 2)">LR</th>
+              <th onclick="sortTable('extended-table', 3)">Warmup</th>
+              <th onclick="sortTable('extended-table', 4)">Decay</th>
+              <th onclick="sortTable('extended-table', 5)">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>run_00_h128_l2_lr0.0001_dopri5_noskip_compiled</td><td>128</td><td>1e-4</td><td>0</td><td>yes</td><td><span style="color:var(--yellow)">Running (GPU 0)</span></td></tr>
+            <tr><td>run_01_h128_l2_lr0.0001_dopri5_noskip_warm20_compiled</td><td>128</td><td>1e-4</td><td>20</td><td>yes</td><td><span style="color:var(--yellow)">Running (GPU 1)</span></td></tr>
+            <tr><td>run_02_h128_l2_lr0.0001_dopri5_noskip_warm50_compiled</td><td>128</td><td>1e-4</td><td>50</td><td>yes</td><td><span style="color:var(--yellow)">Running (GPU 2)</span></td></tr>
+            <tr><td>run_03_h128_l2_lr5e-05_dopri5_noskip_compiled</td><td>128</td><td>5e-5</td><td>0</td><td>yes</td><td><span style="color:var(--yellow)">Running (GPU 3)</span></td></tr>
+            <tr><td>run_04_h128_l2_lr5e-05_dopri5_noskip_warm20_compiled</td><td>128</td><td>5e-5</td><td>20</td><td>yes</td><td><span style="color:var(--yellow)">Running (GPU 4)</span></td></tr>
+            <tr><td>run_05_h128_l2_lr5e-05_dopri5_noskip_warm50_compiled</td><td>128</td><td>5e-5</td><td>50</td><td>yes</td><td><span style="color:var(--yellow)">Running (GPU 5)</span></td></tr>
+            <tr><td>run_06_h256_l2_lr0.0001_dopri5_noskip_compiled</td><td>256</td><td>1e-4</td><td>0</td><td>yes</td><td><span style="color:var(--yellow)">Running (GPU 6)</span></td></tr>
+            <tr><td>run_07_h256_l2_lr0.0001_dopri5_noskip_warm20_compiled</td><td>256</td><td>1e-4</td><td>20</td><td>yes</td><td><span style="color:var(--yellow)">Running (GPU 0)</span></td></tr>
+            <tr><td>run_08_h256_l2_lr0.0001_dopri5_noskip_warm50_compiled</td><td>256</td><td>1e-4</td><td>50</td><td>yes</td><td><span style="color:var(--yellow)">Running (GPU 1)</span></td></tr>
+            <tr><td>run_09_h256_l2_lr5e-05_dopri5_noskip_compiled</td><td>256</td><td>5e-5</td><td>0</td><td>yes</td><td><span style="color:var(--yellow)">Running (GPU 2)</span></td></tr>
+            <tr><td>run_10_h256_l2_lr5e-05_dopri5_noskip_warm20_compiled</td><td>256</td><td>5e-5</td><td>20</td><td>yes</td><td><span style="color:var(--yellow)">Running (GPU 3)</span></td></tr>
+            <tr><td>run_11_h256_l2_lr5e-05_dopri5_noskip_warm50_compiled</td><td>256</td><td>5e-5</td><td>50</td><td>yes</td><td><span style="color:var(--yellow)">Running (GPU 4)</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <!-- Tab: Multi-Rate Sweep -->
@@ -944,6 +987,17 @@
       <div class="section-header">
         <h2>Experiment Log</h2>
         <span class="badge badge-warning">Living Document</span>
+      </div>
+
+      <div class="log-entry" style="border-left: 3px solid var(--yellow);">
+        <div class="log-time">Jun 03<br>13:58</div>
+        <div class="log-body">
+          <h4>🚀 Phase 2.8: Extended Training Sweep (Warmup + Cosine Decay) In Progress</h4>
+          <p>Launched the 12-config extended training sweep (hidden ∈ {128, 256}, lr ∈ {1e-4, 5e-5}, lr_warmup ∈ {0, 20, 50} epochs) for 500 epochs. Fixed random seed to 42 and enforced the 40/10 train/test split. Handled machine GPU visibility constraints and launched configurations 0-6 on GPUs 0-6 (via tmux <code>sweep_extended</code>) and configurations 7-11 on GPUs 0-4 (via tmux <code>sweep_extended_part2</code>) in parallel. Dual checkpointing enabled to save both best validation and final parameters.</p>
+          <span class="log-tag tag-sweep">sweep</span>
+          <span class="log-tag tag-finding" style="margin-left:4px">running</span>
+          <span class="log-tag tag-sweep" style="margin-left:4px">phase 2.8</span>
+        </div>
       </div>
 
       <div class="log-entry" style="border-left: 3px solid var(--green);">

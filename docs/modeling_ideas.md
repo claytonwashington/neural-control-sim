@@ -32,10 +32,16 @@ This document tracks modeling hypotheses and architectures to improve prediction
 *   **Loss Formulation**:
     $$\mathcal{L} = \text{MSE}(x_{\text{pred}}, x_{\text{true}}) + \alpha \cdot \text{MSE}(|\text{FFT}(x_{\text{pred}})|, |\text{FFT}(x_{\text{true}})|)$$
 
-## 4. Latent Neural ODE (LFADS-Style) 📋 Not started
-**Hypothesis**: Fitting a high-dimensional system (50 channels) directly inside the Neural ODE integrator forces the model to fit high-frequency channel-level noise. Projecting the 50 channels to a lower-dimensional latent space ($z \in \mathbb{R}^{10}$), running the Neural ODE in latent space, and decoding back will denoise the firing rates and capture the underlying shared dynamical manifold.
+## 4. Latent Neural ODE (LFADS-Style) ✅ TESTED — ❌ Did not beat baseline
+**Hypothesis**: Fitting a high-dimensional system (50 channels) directly inside the Neural ODE integrator forces the model to fit high-frequency channel-level noise. Projecting the 50 channels to a lower-dimensional latent space ($z\_dim \in \{16, 32, 64\}$), running the Neural ODE in latent space, and decoding back will denoise the firing rates and capture the underlying shared dynamical manifold.
 *   **Flow**:
     $$x_0 \xrightarrow{\text{Encoder}} z_0 \xrightarrow{\text{ODE}(u(t))} z(t) \xrightarrow{\text{Decoder}} \hat{x}(t)$$
+*   **Results**:
+    *   **Latent Neural ODE (Standard)**: Swept latent space size $z\_dim \in \{16, 32, 64\}$, hidden MLP size $h \in \{128, 256\}$, and solver methods (`dopri5`, `rk4`).
+        *   Best configuration: $z\_dim=32, h=256$, AdamW ($lr=1\text{e-}3$, `dopri5`), which achieved an average 200ms prediction $R^2 \approx 0.5515$ (val loss $\approx 0.0617$, train loss $\approx 0.0763$).
+    *   **Latent CA-NODE** (combining control-affine dynamics and latent space representation): Swept past window sizes, learning rates, and MLP structures.
+        *   Best configuration: $z\_dim=32, h=256, past\_window=200, lr=5\text{e-}4$, which achieved an average 200ms prediction $R^2 \approx 0.4405$ (val loss $\approx 0.1009$, train loss $\approx 0.1013$).
+*   **Analysis**: While the latent space representation does succeed in denoising observations, both architectures significantly underperform compared to the baseline CA-NODE which operates directly on the 50 channels ($R^2 \approx 0.90$). This indicates that (a) compressing the 50 channels into a lower-dimensional latent space loses critical predictive information, or (b) the mapping between latent dynamics and observations is non-linear and cannot be modeled by a simple linear decoder, or (c) the encoder training is bottlenecked by the causal setup.
 
 ## 5. Multi-Scale / Multi-Rate Integration 🔄 IN PROGRESS
 **Hypothesis**: The system contains slow baseline drift and fast optogenetic responses. Splitting the state $x$ into slow variables (integrated via standard ODE) and fast variables (integrated at a much finer step size $\delta t = \Delta t / M$) will prevent the solver from smoothing out fast stimulus-driven components.
