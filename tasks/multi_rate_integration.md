@@ -48,22 +48,23 @@ For each macro time interval $[t_k, t_{k+1}]$ (where $t_{k+1} - t_k = \Delta t$)
 ## Checklist
 
 ### 1. Implementation
-- [ ] Create `MultiRateControlAffineODE` in `modeling/models/canode.py` inheriting from `nn.Module`.
-- [ ] Implement the slow dynamics networks and the fast dynamics networks.
-- [ ] Implement the sub-stepped integration loop inside the `predict()` method.
-- [ ] Support custom sub-stepping factor $M$ as an initialization argument.
-- [ ] Update `fit_canode.py` to support `--model-type multi-rate` and `--sub-steps M` arguments.
-- [ ] Update `sweep_canode.py` to support sweeping over model types and sub-steps.
+- [x] Create `MultiRateControlAffineODE` in `modeling/models/canode.py` inheriting from `nn.Module`.
+- [x] Implement the slow dynamics networks and the fast dynamics networks.
+- [x] Implement the sub-stepped integration loop inside the `predict()` method.
+- [x] Support custom sub-stepping factor $M$ as an initialization argument.
+- [x] Update `fit_canode.py` to support `--model-type multi-rate` and `--sub-steps M` arguments.
+- [x] Update `sweep_canode.py` to support sweeping over model types and sub-steps.
 
 ### 2. Verification & Testing
-- [ ] Test the forward pass and gradient backpropagation of `MultiRateControlAffineODE` on dummy inputs.
-- [ ] Run a test training for 5 epochs to verify training stability and ensure no memory leaks/slowdowns.
+- [x] Test the forward pass and gradient backpropagation of `MultiRateControlAffineODE` on dummy inputs.
+- [x] Run a test training for 5 epochs to verify training stability and ensure no memory leaks/slowdowns.
 
 ### 3. Hyperparameter Sweep
-- [ ] Run a grid sweep over sub-stepping factor $M \in \{1, 5, 10, 20\}$ to find the optimal trade-off between accuracy and training speed.
-- [ ] Run a comparative sweep of `MultiRateControlAffineODE` vs baseline `ControlAffineODE` with matching parameters on the 50-trial dataset.
+- [x] Run a grid sweep over sub-stepping factor $M \in \{1, 5, 10, 20\}$ to find the optimal trade-off between accuracy and training speed.
+- [x] Run a comparative sweep of `MultiRateControlAffineODE` vs baseline `ControlAffineODE` with matching parameters on the 50-trial dataset.
 
 ### 4. Analysis & Dashboard
-- [ ] Evaluate the best multi-rate model on the held-out test trials.
-- [ ] Generate prediction plot and compare $R^2$ performance on 200ms windows against baseline.
-- [ ] Add the multi-rate results and training curves to the results dashboard at `results/dashboard.html`.
+- [x] Evaluate the best multi-rate model on the held-out test trials.
+- [x] Generate prediction plot and compare $R^2$ performance on 200ms windows against baseline.
+- [x] Add the multi-rate results and training curves to the results dashboard at `results/dashboard.html`.
+
