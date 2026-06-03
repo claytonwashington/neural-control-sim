@@ -33,8 +33,8 @@ def main():
                         help="Maximum parallel runs (capped by active GPUs)")
     parser.add_argument("--output-dir", type=str, default="results/sweep")
     parser.add_argument("--grid", type=str, default="small",
-                        choices=["small", "large", "skip_linear", "spectral", "multirate"],
-                        help="Sweep grid size: 'small' (8 configs), 'large' (27 configs), 'skip_linear' (16 configs), 'spectral' (8 configs), or 'multirate' (6 configs)")
+                        choices=["small", "large", "skip_linear", "spectral", "multirate", "extended"],
+                        help="Sweep grid size: 'small' (8 configs), 'large' (27 configs), 'skip_linear' (16 configs), 'spectral' (8 configs), 'multirate' (6 configs), or 'extended' (12 configs)")
     args = parser.parse_args()
 
     if args.gpu_ids is not None:
@@ -125,6 +125,22 @@ def main():
                     "sub_steps": m_steps,
                     "multirate_init": init_type,
                 })
+    elif args.grid == "extended":
+        # Extended training: sweep hidden states, learning rates, and warmups
+        configs = []
+        for hidden in [128, 256]:
+            for lr in [1e-4, 5e-5]:
+                for warmup in [0, 20, 50]:
+                    configs.append({
+                        "hidden": hidden,
+                        "n_layers": 2,
+                        "lr": lr,
+                        "method": "dopri5",
+                        "compile": True,
+                        "skip": False,  # purely autonomous baseline
+                        "lr_warmup": warmup,
+                        "lr_decay": True,
+                    })
     else:
         # Small grid (Phase 1 style)
         configs = [
@@ -183,6 +199,10 @@ def main():
                         run_id += f"_swd{swd}"
                 else:
                     run_id += "_noskip"
+            if "lr_warmup" in config and config["lr_warmup"] > 0:
+                run_id += f"_warm{config['lr_warmup']}"
+            if "lr_decay" in config and not config["lr_decay"]:
+                run_id += "_nodecay"
             if config["compile"]:
                 run_id += "_compiled"
 
@@ -222,6 +242,13 @@ def main():
                 cmd += ["--sub-steps", str(config["sub_steps"])]
             if "multirate_init" in config:
                 cmd += ["--multirate-init", config["multirate_init"]]
+            if "lr_warmup" in config:
+                cmd += ["--lr-warmup", str(config["lr_warmup"])]
+            if "lr_decay" in config:
+                if config["lr_decay"]:
+                    cmd.append("--lr-decay")
+                else:
+                    cmd.append("--no-lr-decay")
 
             # Open log file
             log_file = open(log_path, "w")
@@ -307,6 +334,29 @@ def main():
             ol_r2 = f"{ol_r2_val:.4f}" if ol_r2_val is not None else "nan"
             print(f"{run['idx']+1:<4} {cfg['hidden']:<6} {cfg['n_layers']:<5} "
                   f"{cfg['lr']:<7} {cfg.get('model_type', 'mr'):<10} {cfg.get('sub_steps', 10):<5} {cfg.get('multirate_init', 'zero'):<10} {run.get('gpu_id','?'):<4} "
+                  f"{time_str:<6} {train_l:<8} {val_l:<8} {win_r2:<8} {win_mse:<8} {ol_r2:<8}")
+    elif args.grid == "extended":
+        print(f"\n{'Idx':<4} {'Hidden':<6} {'Layers':<5} {'LR':<7} {'Warmup':<6} {'Decay':<6} "
+              f"{'GPU':<4} {'Time':<6} {'Train L':<8} {'Val L':<8} "
+              f"{'Win R2':<8} {'Win MSE':<8} {'OL R2':<8}")
+        print("-" * 95)
+        for run in completed_runs:
+            cfg = run["config"]
+            time_str = f"{run['elapsed_s']/60:.1f}m"
+            train_l_val = run.get('best_train_loss')
+            train_l = f"{train_l_val:.4f}" if train_l_val is not None else "nan"
+            val_l_val = run.get('best_val_loss')
+            val_l = f"{val_l_val:.4f}" if val_l_val is not None else "nan"
+            win_r2_val = run.get('mean_windowed_r2')
+            win_r2 = f"{win_r2_val:.4f}" if win_r2_val is not None else "nan"
+            win_mse_val = run.get('mean_windowed_mse')
+            win_mse = f"{win_mse_val:.4f}" if win_mse_val is not None else "nan"
+            ol_r2_val = run.get('mean_test_r2')
+            ol_r2 = f"{ol_r2_val:.4f}" if ol_r2_val is not None else "nan"
+            warm_str = str(cfg.get("lr_warmup", 0))
+            decay_str = "yes" if cfg.get("lr_decay", True) else "no"
+            print(f"{run['idx']+1:<4} {cfg['hidden']:<6} {cfg['n_layers']:<5} "
+                  f"{cfg['lr']:<7} {warm_str:<6} {decay_str:<6} {run.get('gpu_id','?'):<4} "
                   f"{time_str:<6} {train_l:<8} {val_l:<8} {win_r2:<8} {win_mse:<8} {ol_r2:<8}")
     else:
         print(f"\n{'Idx':<4} {'Hidden':<6} {'Layers':<5} {'LR':<7} {'Skip':<8} {'SWD':<6} {'SA':<5} "

@@ -212,7 +212,8 @@ def main():
 
         # Save model + normalization stats
         torch.save({
-            "model_state": model.state_dict(),
+            "model_state": model.state_dict(),  # Restored to best validation state dict
+            "last_model_state": history.get("last_model_state"),
             "n_x": n_channels,
             "n_u": n_inputs,
             "hidden": args.hidden,
@@ -230,7 +231,30 @@ def main():
             "u_std": u_std,
             "history": history,
         }, args.save_model)
-        print(f"Model saved to {args.save_model}")
+        print(f"Best validation model saved to {args.save_model}")
+
+        if "last_model_state" in history:
+            last_save_path = args.save_model.replace(".pt", "_last.pt")
+            torch.save({
+                "model_state": history["last_model_state"],
+                "n_x": n_channels,
+                "n_u": n_inputs,
+                "hidden": args.hidden,
+                "n_layers": args.n_layers,
+                "model_type": model_type,
+                "sub_steps": sub_steps,
+                "multirate_init": multirate_init,
+                "use_skip": use_skip,
+                "skip_type": skip_type,
+                "lr_warmup": args.lr_warmup,
+                "lr_decay": args.lr_decay,
+                "x_mean": x_mean,
+                "x_std": x_std,
+                "u_mean": u_mean,
+                "u_std": u_std,
+                "history": history,
+            }, last_save_path)
+            print(f"Last epoch model saved to {last_save_path}")
 
     # Evaluate on each test trial
     print("\nEvaluating on test trials (2000-step open-loop)...")

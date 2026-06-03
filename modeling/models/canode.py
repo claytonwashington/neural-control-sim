@@ -534,6 +534,9 @@ def train_canode(
         print(f"  Dataset: {len(dataset)} windows, {n_train} train, {n_val} val")
         print(f"  Batch size: {batch_size}, batches/epoch: {len(train_loader)}")
 
+    best_val_loss = float("inf")
+    best_model_state = None
+
     for epoch in range(n_epochs):
         # --- Training ---
         model.train()
@@ -610,6 +613,11 @@ def train_canode(
         history["val_loss"].append(avg_val)
         history["val_loss_mse"].append(avg_val_mse)
         history["val_loss_fft"].append(avg_val_fft)
+
+        if not np.isnan(avg_val) and avg_val < best_val_loss:
+            best_val_loss = avg_val
+            import copy
+            best_model_state = copy.deepcopy(model.state_dict())
         
         scheduler.step()
 
@@ -623,5 +631,12 @@ def train_canode(
                 print(f"  Epoch {epoch:4d}/{n_epochs} | "
                       f"train: {avg_train:.6f} | val: {avg_val:.6f} | "
                       f"lr: {optimizer.param_groups[0]['lr']:.2e}")
+
+    if best_model_state is not None:
+        import copy
+        history["last_model_state"] = copy.deepcopy(model.state_dict())
+        model.load_state_dict(best_model_state)
+        if verbose:
+            print(f"  Restored best model state with val_loss: {best_val_loss:.6f}")
 
     return history
