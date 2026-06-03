@@ -11,24 +11,46 @@ import subprocess
 import time
 import json
 import numpy as np
+from modeling.config import DEFAULT_SEED, DEFAULT_TEST_TRIALS
 
 
 def main():
     parser = argparse.ArgumentParser(description="Parallel hyperparameter sweep for Latent CA-NODE")
     parser.add_argument("--data", type=str, default="data/training_trials.h5")
     parser.add_argument("--n-epochs", type=int, default=200)
-    parser.add_argument("--n-test-trials", type=int, default=None)
+    parser.add_argument("--n-test-trials", type=int, default=None,
+                        help="Number of test trials (defaults to DEFAULT_TEST_TRIALS in config)")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED,
+                        help="Random seed for reproducibility")
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--n-gpus", type=int, default=8)
+    parser.add_argument("--n-gpus", type=int, default=8,
+                        help="Number of GPUs available")
+    parser.add_argument("--gpu-ids", type=str, default=None,
+                        help="Comma-separated list of GPU indices to use (e.g. 1,2,3). Overrides --n-gpus")
     parser.add_argument("--max-workers", type=int, default=4,
-                        help="Maximum parallel runs (capped by n_gpus)")
+                        help="Maximum parallel runs (capped by active GPUs)")
     parser.add_argument("--output-dir", type=str, default="results/sweep_latent_canode")
     parser.add_argument("--grid", type=str, default="small",
                         choices=["small", "large"])
+    parser.add_argument("--no-wandb", action="store_true", default=False,
+                        help="Disable wandb logging for all child runs")
+    parser.add_argument("--wandb-group", type=str, default=None,
+                        help="wandb group name for sweep runs (auto-generated if not set)")
     args = parser.parse_args()
 
-    args.max_workers = min(args.max_workers, args.n_gpus)
+    # Auto-generate wandb group name for sweep
+    if not args.no_wandb and args.wandb_group is None:
+        import datetime
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        args.wandb_group = f"sweep_latent_{args.grid}_{ts}"
+
+    if args.gpu_ids is not None:
+        gpu_ids = [int(x) for x in args.gpu_ids.split(",")]
+    else:
+        gpu_ids = list(range(args.n_gpus))
+
+    args.max_workers = min(args.max_workers, len(gpu_ids))
     os.makedirs(args.output_dir, exist_ok=True)
 
     if args.grid == "large":
@@ -67,11 +89,13 @@ def main():
     active_processes = []
     completed_runs = []
     pending_configs = list(enumerate(configs))
-    free_gpus = list(range(args.n_gpus))
+    free_gpus = list(gpu_ids)
     
     n_test_flag = []
     if args.n_test_trials is not None:
         n_test_flag = ["--n-test-trials", str(args.n_test_trials)]
+
+    seed_flag = ["--seed", str(args.seed)]
 
     t_start = time.time()
 
@@ -98,7 +122,12 @@ def main():
                 "--device", args.device,
                 "--output-dir", os.path.join(args.output_dir, run_id),
                 "--save-model", model_path,
-            ] + n_test_flag
+            ] + n_test_flag + seed_flag
+
+            if not args.no_wandb:
+                cmd += ["--wandb-group", args.wandb_group, "--wandb-name", run_id]
+            else:
+                cmd += ["--no-wandb"]
 
             log_file = open(log_path, "w")
             env = os.environ.copy()
