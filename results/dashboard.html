@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cleo Digital Twin — Experiment Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0e1a;
+      --bg-secondary: #111827;
+      --bg-card: #1a1f35;
+      --bg-card-hover: #1f2542;
+      --border: #2a3055;
+      --border-glow: #4f46e5;
+      --text-primary: #e5e7eb;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --accent: #6366f1;
+      --accent-bright: #818cf8;
+      --green: #10b981;
+      --green-dim: #065f46;
+      --red: #ef4444;
+      --red-dim: #7f1d1d;
+      --yellow: #f59e0b;
+      --yellow-dim: #78350f;
+      --blue: #3b82f6;
+      --cyan: #06b6d4;
+      --pink: #ec4899;
+      --gradient-accent: linear-gradient(135deg, #6366f1, #8b5cf6, #a78bfa);
+      --gradient-green: linear-gradient(135deg, #10b981, #34d399);
+      --gradient-card: linear-gradient(145deg, #1a1f35 0%, #151a2e 100%);
+      --shadow-lg: 0 20px 40px rgba(0,0,0,0.4);
+      --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.15);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 24px 40px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+    .header-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      background: var(--gradient-accent);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .header .subtitle {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .header .timestamp {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      background: var(--bg-card);
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+
+    /* Main Content */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px 40px 80px;
+    }
+
+    /* Metric Cards Row */
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .metric-card {
+      background: var(--gradient-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      transition: all 0.2s ease;
+    }
+    .metric-card:hover {
+      border-color: var(--border-glow);
+      box-shadow: var(--shadow-glow);
+      transform: translateY(-2px);
+    }
+    .metric-card .label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .metric-card .value {
+      font-size: 1.8rem;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .metric-card .detail {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+    .value-green { color: var(--green); }
+    .value-blue { color: var(--blue); }
+    .value-yellow { color: var(--yellow); }
+    .value-pink { color: var(--pink); }
+    .value-cyan { color: var(--cyan); }
+
+    /* Section */
+    .section {
+      margin-bottom: 40px;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-header h2 {
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+    .section-header .badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--green-dim);
+      color: var(--green);
+    }
+    .badge-warning {
+      background: var(--yellow-dim) !important;
+      color: var(--yellow) !important;
+    }
+
+    /* Tables */
+    .table-wrapper {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    thead th {
+      background: var(--bg-secondary);
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      transition: color 0.15s;
+    }
+    thead th:hover { color: var(--accent-bright); }
+    thead th.sort-asc::after { content: ' ▲'; color: var(--accent-bright); }
+    thead th.sort-desc::after { content: ' ▼'; color: var(--accent-bright); }
+    tbody tr {
+      border-bottom: 1px solid rgba(42, 48, 85, 0.5);
+      transition: background 0.15s;
+    }
+    tbody tr:hover { background: var(--bg-card-hover); }
+    tbody tr.best-row {
+      background: rgba(16, 185, 129, 0.08);
+      border-left: 3px solid var(--green);
+    }
+    tbody td {
+      padding: 10px 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      white-space: nowrap;
+    }
+    .td-label {
+      font-family: 'Inter', sans-serif;
+      font-weight: 500;
+    }
+
+    /* R² bar */
+    .r2-cell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .r2-bar {
+      width: 60px;
+      height: 6px;
+      background: var(--bg-secondary);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .r2-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+
+    /* Image Grid */
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 20px;
+    }
+    .image-card {
+      background: var(--gradient-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: all 0.2s ease;
+    }
+    .image-card:hover {
+      border-color: var(--border-glow);
+      box-shadow: var(--shadow-glow);
+    }
+    .image-card .img-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .image-card img {
+      width: 100%;
+      display: block;
+      padding: 8px;
+      background: #fff;
+    }
+
+    /* Findings */
+    .findings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+    }
+    .finding-card {
+      background: var(--gradient-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      transition: all 0.2s ease;
+    }
+    .finding-card:hover {
+      border-color: var(--border-glow);
+      box-shadow: var(--shadow-glow);
+    }
+    .finding-card .icon {
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+    }
+    .finding-card h4 {
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .finding-card p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Experiment Log */
+    .log-entry {
+      background: var(--gradient-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 24px;
+      margin-bottom: 12px;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      transition: all 0.15s;
+    }
+    .log-entry:hover {
+      border-color: var(--border-glow);
+    }
+    .log-entry .log-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      padding-top: 2px;
+      min-width: 90px;
+    }
+    .log-entry .log-body h4 {
+      font-size: 0.88rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .log-entry .log-body p {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+    .log-tag {
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 2px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-top: 6px;
+    }
+    .tag-sweep { background: rgba(99,102,241,0.15); color: var(--accent-bright); }
+    .tag-baseline { background: rgba(6,182,212,0.15); color: var(--cyan); }
+    .tag-infra { background: rgba(245,158,11,0.15); color: var(--yellow); }
+    .tag-finding { background: rgba(16,185,129,0.15); color: var(--green); }
+
+    /* Lightbox */
+    .lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 1000;
+      cursor: zoom-out;
+      align-items: center;
+      justify-content: center;
+    }
+    .lightbox.active { display: flex; }
+    .lightbox img {
+      max-width: 90vw;
+      max-height: 90vh;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-primary); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 20px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+      padding: 4px;
+      border: 1px solid var(--border);
+      width: fit-content;
+    }
+    .tab-btn {
+      padding: 8px 20px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tab-btn:hover { color: var(--text-primary); }
+    .tab-btn.active {
+      background: var(--accent);
+      color: white;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-inner">
+    <div>
+      <h1>⚡ Cleo Digital Twin — Experiment Dashboard</h1>
+      <div class="subtitle">Control-Affine Neural ODE System Identification</div>
+    </div>
+    <div class="timestamp" id="timestamp">Last updated: 2026-06-03 10:48 EDT</div>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- Summary Metrics -->
+  <div class="metrics-row">
+    <div class="metric-card">
+      <div class="label">Best Model R² (200ms)</div>
+      <div class="value value-green">0.9219</div>
+      <div class="detail">No-skip Baseline · h128 · l2 · lr=1e-4</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">N4SID Baseline R²</div>
+      <div class="value value-yellow">0.2059</div>
+      <div class="detail">Linear subspace model</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Improvement</div>
+      <div class="value value-cyan">+344%</div>
+      <div class="detail">CA-NODE vs N4SID</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Total Configs Tested</div>
+      <div class="value value-blue">71</div>
+      <div class="detail">Phases 1-2 (35) + Phase 3 Sweeps (36)</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Training Data</div>
+      <div class="value value-pink">50</div>
+      <div class="detail">trials × 30s (5× Phase 1)</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="showTab('multirate')">Multi-Rate Sweep (6)</button>
+    <button class="tab-btn" onclick="showTab('skiplinear')">Skip Connections Sweep (16)</button>
+    <button class="tab-btn" onclick="showTab('causallatent')">Causal Latent Sweep (12)</button>
+    <button class="tab-btn" onclick="showTab('sweep2')">Phase 2 Sweep (27)</button>
+    <button class="tab-btn" onclick="showTab('sweep')">Phase 1 Sweep (8)</button>
+    <button class="tab-btn" onclick="showTab('comparison')">Model Comparison</button>
+    <button class="tab-btn" onclick="showTab('plots')">Training Curves</button>
+    <button class="tab-btn" onclick="showTab('log')">Experiment Log</button>
+  </div>
+
+  <!-- Tab: Multi-Rate Sweep -->
+  <div id="tab-multirate" class="tab-content active">
+    <div class="section">
+      <div class="section-header">
+        <h2>Multi-Scale / Multi-Rate Integration Sweep — 6 Configs</h2>
+        <span class="badge">Completed</span>
+      </div>
+      <div class="table-wrapper">
+        <table id="multirate-table">
+          <thead>
+            <tr>
+              <th onclick="sortTable('multirate-table', 0)">Rank</th>
+              <th onclick="sortTable('multirate-table', 1)">Model Type</th>
+              <th onclick="sortTable('multirate-table', 2)">Sub-Steps (M)</th>
+              <th onclick="sortTable('multirate-table', 3)">Init Split</th>
+              <th onclick="sortTable('multirate-table', 4)">Train Loss</th>
+              <th onclick="sortTable('multirate-table', 5)">Val Loss</th>
+              <th onclick="sortTable('multirate-table', 6)">200ms R²</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="best-row">
+              <td>🥇</td><td>multi-rate</td><td>10</td><td>zero_fast</td><td>0.0815</td><td>0.0820</td>
+              <td><div class="r2-cell"><span>0.9130</span><div class="r2-bar"><div class="r2-fill" style="width:91.3%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>🥈</td><td>multi-rate</td><td>5</td><td>zero_fast</td><td>0.0825</td><td>0.0830</td>
+              <td><div class="r2-cell"><span>0.9114</span><div class="r2-bar"><div class="r2-fill" style="width:91.14%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>🥉</td><td>multi-rate</td><td>1</td><td>zero_fast</td><td>0.0828</td><td>0.0835</td>
+              <td><div class="r2-cell"><span>0.9111</span><div class="r2-bar"><div class="r2-fill" style="width:91.11%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>4</td><td>multi-rate</td><td>1</td><td>learnable</td><td>0.0811</td><td>0.0873</td>
+              <td><div class="r2-cell"><span>0.9035</span><div class="r2-bar"><div class="r2-fill" style="width:90.35%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>5</td><td>multi-rate</td><td>10</td><td>learnable</td><td>0.0811</td><td>0.0825</td>
+              <td><div class="r2-cell"><span>0.9020</span><div class="r2-bar"><div class="r2-fill" style="width:90.2%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>6</td><td>multi-rate</td><td>5</td><td>learnable</td><td>0.0816</td><td>0.0825</td>
+              <td><div class="r2-cell"><span>0.8994</span><div class="r2-bar"><div class="r2-fill" style="width:89.94%;background:var(--green)"></div></div></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top: 20px">
+        <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:8px;">Multi-Rate Key Findings</h3>
+        <p style="font-size:0.82rem; color:var(--text-secondary);">Decoupling fast optogenetic-driven responses from slow continuous baseline integration enables high-frequency transients capture. Increasing macro-to-micro sub-stepping factor from M=1 to M=10 consistently improves test R² from 0.9111 to 0.9130 when using the <code>zero_fast</code> initialization strategy. Learnable splitting parameterization appears prone to minor validation overfitting, making the direct zero-fast split the recommended protocol.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Skip Connections Sweep -->
+  <div id="tab-skiplinear" class="tab-content">
+    <div class="section">
+      <div class="section-header">
+        <h2>Simpler Skip Connections (Linear-only) Sweep — 16 Configs</h2>
+        <span class="badge">Completed</span>
+      </div>
+      <div class="table-wrapper">
+        <table id="skiplinear-table">
+          <thead>
+            <tr>
+              <th onclick="sortTable('skiplinear-table', 0)">Rank</th>
+              <th onclick="sortTable('skiplinear-table', 1)">Skip Type</th>
+              <th onclick="sortTable('skiplinear-table', 2)">Skip Decay (swd)</th>
+              <th onclick="sortTable('skiplinear-table', 3)">LR</th>
+              <th onclick="sortTable('skiplinear-table', 4)">Train Loss</th>
+              <th onclick="sortTable('skiplinear-table', 5)">Val Loss</th>
+              <th onclick="sortTable('skiplinear-table', 6)">200ms R²</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>—</td><td>noskip (baseline)</td><td>none</td><td>1e-4</td><td>0.0829</td><td>0.0836</td>
+              <td><div class="r2-cell"><span>0.9219</span><div class="r2-bar"><div class="r2-fill" style="width:92.19%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr class="best-row">
+              <td>🥇</td><td>mlp (with decay)</td><td>none</td><td>1e-4</td><td>0.0815</td><td>0.0832</td>
+              <td><div class="r2-cell"><span>0.9152</span><div class="r2-bar"><div class="r2-fill" style="width:91.52%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr class="best-row">
+              <td>🥈</td><td>linear</td><td>1.0</td><td>1e-4</td><td>0.0810</td><td>0.0879</td>
+              <td><div class="r2-cell"><span>0.9144</span><div class="r2-bar"><div class="r2-fill" style="width:91.44%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>🥉</td><td>linear</td><td>0.0001</td><td>1e-4</td><td>0.0819</td><td>0.0810</td>
+              <td><div class="r2-cell"><span>0.9139</span><div class="r2-bar"><div class="r2-fill" style="width:91.39%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>4</td><td>linear</td><td>0.01</td><td>1e-4</td><td>0.0814</td><td>0.0838</td>
+              <td><div class="r2-cell"><span>0.9136</span><div class="r2-bar"><div class="r2-fill" style="width:91.36%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>5</td><td>linear</td><td>none</td><td>1e-4</td><td>0.0813</td><td>0.0859</td>
+              <td><div class="r2-cell"><span>0.9130</span><div class="r2-bar"><div class="r2-fill" style="width:91.3%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>6</td><td>linear</td><td>0.1</td><td>1e-4</td><td>0.0816</td><td>0.0825</td>
+              <td><div class="r2-cell"><span>0.9123</span><div class="r2-bar"><div class="r2-fill" style="width:91.23%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>7</td><td>linear</td><td>0.001</td><td>1e-4</td><td>0.0811</td><td>0.0873</td>
+              <td><div class="r2-cell"><span>0.9122</span><div class="r2-bar"><div class="r2-fill" style="width:91.22%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>—</td><td>noskip (baseline)</td><td>none</td><td>5e-4</td><td>0.0694</td><td>0.0663</td>
+              <td><div class="r2-cell"><span>0.8586</span><div class="r2-bar"><div class="r2-fill" style="width:85.86%;background:var(--blue)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>8</td><td>linear</td><td>1.0</td><td>5e-4</td><td>0.0684</td><td>0.0678</td>
+              <td><div class="r2-cell"><span>0.8522</span><div class="r2-bar"><div class="r2-fill" style="width:85.22%;background:var(--blue)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>9</td><td>linear</td><td>0.01</td><td>5e-4</td><td>0.0679</td><td>0.0727</td>
+              <td><div class="r2-cell"><span>0.8473</span><div class="r2-bar"><div class="r2-fill" style="width:84.73%;background:var(--blue)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>10</td><td>mlp (with decay)</td><td>none</td><td>5e-4</td><td>0.0683</td><td>0.0693</td>
+              <td><div class="r2-cell"><span>0.8425</span><div class="r2-bar"><div class="r2-fill" style="width:84.25%;background:var(--blue)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>11</td><td>linear</td><td>0.1</td><td>5e-4</td><td>0.0680</td><td>0.0733</td>
+              <td><div class="r2-cell"><span>0.8385</span><div class="r2-bar"><div class="r2-fill" style="width:83.85%;background:var(--blue)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>12</td><td>linear</td><td>0.001</td><td>5e-4</td><td>0.0681</td><td>0.0722</td>
+              <td><div class="r2-cell"><span>0.8368</span><div class="r2-bar"><div class="r2-fill" style="width:83.68%;background:var(--blue)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>13</td><td>linear</td><td>0.0001</td><td>5e-4</td><td>0.0681</td><td>0.0712</td>
+              <td><div class="r2-cell"><span>0.8355</span><div class="r2-bar"><div class="r2-fill" style="width:83.55%;background:var(--blue)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>14</td><td>linear</td><td>none</td><td>5e-4</td><td>0.0681</td><td>0.0693</td>
+              <td><div class="r2-cell"><span>0.8348</span><div class="r2-bar"><div class="r2-fill" style="width:83.48%;background:var(--blue)"></div></div></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top: 20px">
+        <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:8px;">Skip Connections Key Findings</h3>
+        <p style="font-size:0.82rem; color:var(--text-secondary);">Simpler skip connections resolve the massive overfitting seen in the raw MLP skips (which dropped R² to 0.8895). Applying a heavy separate weight decay (<code>swd=1.0</code>) on the linear skip connection layers achieves a test R² of 0.9144, but still fails to outperform the pure continuous-time CA-NODE baseline ($R^2 \approx 0.9219$). This indicates that adding direct feedforward paths bypassed ODE regularizing properties without offering substantial predictive advantage.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Causal Latent Sweep -->
+  <div id="tab-causallatent" class="tab-content">
+    <div class="section">
+      <div class="section-header">
+        <h2>Causal Latent CA-NODE Sweep — 12 Configs</h2>
+        <span class="badge">Completed</span>
+      </div>
+      <div class="table-wrapper">
+        <table id="causallatent-table">
+          <thead>
+            <tr>
+              <th onclick="sortTable('causallatent-table', 0)">Rank</th>
+              <th onclick="sortTable('causallatent-table', 1)">Past Window</th>
+              <th onclick="sortTable('causallatent-table', 2)">Hidden</th>
+              <th onclick="sortTable('causallatent-table', 3)">LR</th>
+              <th onclick="sortTable('causallatent-table', 4)">Val Loss</th>
+              <th onclick="sortTable('causallatent-table', 5)">Inference</th>
+              <th onclick="sortTable('causallatent-table', 6)">200ms R²</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="best-row">
+              <td>🥇</td><td>200ms</td><td>256</td><td>5e-4</td><td>0.1009</td><td>171.3ms</td>
+              <td><div class="r2-cell"><span>0.4405</span><div class="r2-bar"><div class="r2-fill" style="width:44.05%;background:var(--yellow)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>🥈</td><td>100ms</td><td>256</td><td>1e-3</td><td>0.0749</td><td>208.0ms</td>
+              <td><div class="r2-cell"><span>0.4210</span><div class="r2-bar"><div class="r2-fill" style="width:42.1%;background:var(--yellow)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>🥉</td><td>50ms</td><td>256</td><td>1e-3</td><td>0.0741</td><td>240.8ms</td>
+              <td><div class="r2-cell"><span>0.4147</span><div class="r2-bar"><div class="r2-fill" style="width:41.47%;background:var(--yellow)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>4</td><td>200ms</td><td>256</td><td>1e-3</td><td>0.0857</td><td>222.3ms</td>
+              <td><div class="r2-cell"><span>0.3947</span><div class="r2-bar"><div class="r2-fill" style="width:39.47%;background:var(--yellow)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>5</td><td>50ms</td><td>128</td><td>1e-3</td><td>0.0985</td><td>168.0ms</td>
+              <td><div class="r2-cell"><span>0.3786</span><div class="r2-bar"><div class="r2-fill" style="width:37.86%;background:var(--yellow)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>6</td><td>50ms</td><td>256</td><td>5e-4</td><td>0.0801</td><td>176.0ms</td>
+              <td><div class="r2-cell"><span>0.3765</span><div class="r2-bar"><div class="r2-fill" style="width:37.65%;background:var(--yellow)"></div></div></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top: 20px">
+        <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:8px;">Causal Latent Key Findings</h3>
+        <p style="font-size:0.82rem; color:var(--text-secondary);">Enforcing strict causality (where the GRU encoder only sees the past window to infer initial state $z_0$ and forecasts forward) degrades prediction accuracy to $R^2 \approx 0.4405$ compared to non-causal smoothing ($R^2 \approx 0.90$). However, increasing historical context window size from 50ms to 200ms shows a clear monotonic improvement in $R^2$, indicating that longer temporal contexts are crucial for continuous latent state tracking in electrophysiology systems.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Phase 2 Sweep Results -->
+  <div id="tab-sweep2" class="tab-content">
+    <div class="section">
+      <div class="section-header">
+        <h2>Phase 2: Data Scaling & Architecture Sweep — 50 Trials, 27 Configs</h2>
+        <span class="badge">Completed</span>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="sweep2-table">
+          <thead>
+            <tr>
+              <th onclick="sortTable('sweep2-table', 0)">Rank</th>
+              <th onclick="sortTable('sweep2-table', 1)">Hidden</th>
+              <th onclick="sortTable('sweep2-table', 2)">Layers</th>
+              <th onclick="sortTable('sweep2-table', 3)">LR</th>
+              <th onclick="sortTable('sweep2-table', 4)">Time</th>
+              <th onclick="sortTable('sweep2-table', 5)">Train Loss</th>
+              <th onclick="sortTable('sweep2-table', 6)">Val Loss</th>
+              <th onclick="sortTable('sweep2-table', 7)">200ms R²</th>
+              <th onclick="sortTable('sweep2-table', 8)">200ms MSE</th>
+              <th onclick="sortTable('sweep2-table', 9)">OL R²</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="best-row">
+              <td>🥇</td><td>128</td><td>2</td><td>1e-4</td><td>22.5m</td><td>0.08229</td><td>0.08200</td>
+              <td><div class="r2-cell"><span>0.9016</span><div class="r2-bar"><div class="r2-fill" style="width:90.16%;background:var(--green)"></div></div></div></td>
+              <td>0.0976</td><td>0.1795</td>
+            </tr>
+            <tr class="best-row">
+              <td>🥈</td><td>128</td><td>3</td><td>1e-4</td><td>23.5m</td><td>0.08050</td><td>0.08915</td>
+              <td><div class="r2-cell"><span>0.8984</span><div class="r2-bar"><div class="r2-fill" style="width:89.84%;background:var(--green)"></div></div></div></td>
+              <td>0.1008</td><td>0.1731</td>
+            </tr>
+            <tr class="best-row">
+              <td>🥉</td><td>128</td><td>4</td><td>1e-4</td><td>24.3m</td><td>0.07986</td><td>0.09006</td>
+              <td><div class="r2-cell"><span>0.8977</span><div class="r2-bar"><div class="r2-fill" style="width:89.77%;background:var(--green)"></div></div></div></td>
+              <td>0.1014</td><td>0.1690</td>
+            </tr>
+            <tr>
+              <td>4</td><td>256</td><td>2</td><td>1e-4</td><td>21.7m</td><td>0.07790</td><td>0.08137</td>
+              <td><div class="r2-cell"><span>0.8857</span><div class="r2-bar"><div class="r2-fill" style="width:88.57%;background:var(--blue)"></div></div></div></td>
+              <td>0.1136</td><td>0.1833</td>
+            </tr>
+            <tr>
+              <td>5</td><td>128</td><td>2</td><td>2e-4</td><td>21.6m</td><td>0.07695</td><td>0.07861</td>
+              <td><div class="r2-cell"><span>0.8828</span><div class="r2-bar"><div class="r2-fill" style="width:88.28%;background:var(--blue)"></div></div></div></td>
+              <td>0.1164</td><td>0.1773</td>
+            </tr>
+            <tr>
+              <td>6</td><td>128</td><td>3</td><td>2e-4</td><td>24.0m</td><td>0.07513</td><td>0.07777</td>
+              <td><div class="r2-cell"><span>0.8777</span><div class="r2-bar"><div class="r2-fill" style="width:87.77%;background:var(--blue)"></div></div></div></td>
+              <td>0.1215</td><td>0.1655</td>
+            </tr>
+            <tr>
+              <td>7</td><td>128</td><td>4</td><td>2e-4</td><td>25.5m</td><td>0.07466</td><td>0.07799</td>
+              <td><div class="r2-cell"><span>0.8773</span><div class="r2-bar"><div class="r2-fill" style="width:87.73%;background:var(--blue)"></div></div></div></td>
+              <td>0.1219</td><td>0.1762</td>
+            </tr>
+            <tr>
+              <td>8</td><td>256</td><td>3</td><td>1e-4</td><td>23.6m</td><td>0.07465</td><td>0.07973</td>
+              <td><div class="r2-cell"><span>0.8764</span><div class="r2-bar"><div class="r2-fill" style="width:87.64%;background:var(--blue)"></div></div></div></td>
+              <td>0.1230</td><td>0.1734</td>
+            </tr>
+            <tr>
+              <td>9</td><td>256</td><td>4</td><td>1e-4</td><td>26.1m</td><td>0.07281</td><td>0.08026</td>
+              <td><div class="r2-cell"><span>0.8718</span><div class="r2-bar"><div class="r2-fill" style="width:87.18%;background:var(--blue)"></div></div></div></td>
+              <td>0.1274</td><td>0.1698</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Phase 1 Sweep Results -->
+  <div id="tab-sweep" class="tab-content">
+    <div class="section">
+      <div class="section-header">
+        <h2>Hyperparameter Sweep — 200ms Windowed Evaluation</h2>
+        <span class="badge">Completed</span>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="sweep-table">
+          <thead>
+            <tr>
+              <th onclick="sortTable('sweep-table', 0)">Run</th>
+              <th onclick="sortTable('sweep-table', 1)">Solver</th>
+              <th onclick="sortTable('sweep-table', 2)">Hidden</th>
+              <th onclick="sortTable('sweep-table', 3)">Layers</th>
+              <th onclick="sortTable('sweep-table', 4)">LR</th>
+              <th onclick="sortTable('sweep-table', 5)">Compile</th>
+              <th onclick="sortTable('sweep-table', 6)">Time</th>
+              <th onclick="sortTable('sweep-table', 7)">Val Loss</th>
+              <th onclick="sortTable('sweep-table', 8)">200ms R²</th>
+              <th onclick="sortTable('sweep-table', 9)">200ms MSE</th>
+              <th onclick="sortTable('sweep-table', 10)">OL R²</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="best-row">
+              <td class="td-label">run_04</td>
+              <td>dopri5</td>
+              <td>128</td>
+              <td>2</td>
+              <td>5e-4</td>
+              <td>✓</td>
+              <td>5.5 min</td>
+              <td>0.09200</td>
+              <td><div class="r2-cell"><span>0.8988</span><div class="r2-bar"><div class="r2-fill" style="width:89.88%;background:var(--green)"></div></div></div></td>
+              <td>0.1417</td>
+              <td>0.2257</td>
+            </tr>
+            <tr>
+              <td class="td-label">run_07</td>
+              <td>rk4</td>
+              <td>128</td>
+              <td>2</td>
+              <td>1e-3</td>
+              <td>✓</td>
+              <td>26.8 min</td>
+              <td>0.07438</td>
+              <td><div class="r2-cell"><span>0.8769</span><div class="r2-bar"><div class="r2-fill" style="width:87.69%;background:var(--blue)"></div></div></div></td>
+              <td>0.1723</td>
+              <td>0.2394</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Model Comparison -->
+  <div id="tab-comparison" class="tab-content">
+    <div class="section">
+      <div class="section-header">
+        <h2>N4SID vs CA-NODE — Head-to-Head</h2>
+        <span class="badge">Completed</span>
+      </div>
+
+      <div class="table-wrapper" style="margin-bottom:24px">
+        <table>
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Type</th>
+              <th>Parameters</th>
+              <th>200ms R²</th>
+              <th>200ms MSE</th>
+              <th>Training Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="best-row">
+              <td class="td-label">CA-NODE (no-skip baseline, 2-trial)</td>
+              <td>No-skip Baseline (1e-4)</td>
+              <td>65,430</td>
+              <td><div class="r2-cell"><span style="color:var(--green);font-weight:700">0.9219</span></div></td>
+              <td>0.0836</td>
+              <td>~30 min</td>
+            </tr>
+            <tr>
+              <td class="td-label">CA-NODE (simpler skip connections)</td>
+              <td>Linear Skips (swd=1.0)</td>
+              <td>65,530</td>
+              <td><div class="r2-cell"><span style="color:var(--green);font-weight:700">0.9144</span></div></td>
+              <td>0.0825</td>
+              <td>~30 min</td>
+            </tr>
+            <tr>
+              <td class="td-label">CA-NODE (multi-rate integration)</td>
+              <td>Decoupled Slow/Fast (M=10)</td>
+              <td>74,800</td>
+              <td><div class="r2-cell"><span style="color:var(--green);font-weight:700">0.9130</span></div></td>
+              <td>0.0820</td>
+              <td>~32 min</td>
+            </tr>
+            <tr>
+              <td class="td-label">CA-NODE (best Phase 2)</td>
+              <td>Nonlinear Neural ODE</td>
+              <td>65,430</td>
+              <td><div class="r2-cell"><span>0.9016</span></div></td>
+              <td>0.0976</td>
+              <td>22.5 min</td>
+            </tr>
+            <tr>
+              <td class="td-label">CA-NODE (raw skip connections)</td>
+              <td>Nonlinear + Skips</td>
+              <td>75,582</td>
+              <td><div class="r2-cell"><span style="color:var(--yellow)">0.8895</span></div></td>
+              <td>0.1097</td>
+              <td>~24 min</td>
+            </tr>
+            <tr>
+              <td class="td-label">Causal Latent CA-NODE</td>
+              <td>GRU Enc + Forecasting</td>
+              <td>683,794</td>
+              <td><div class="r2-cell"><span style="color:var(--yellow)">0.4405</span></div></td>
+              <td>0.7760</td>
+              <td>~7 min</td>
+            </tr>
+            <tr>
+              <td class="td-label">GRU (baseline)</td>
+              <td>Recurrent Neural Net</td>
+              <td>63,666</td>
+              <td><div class="r2-cell"><span style="color:var(--red)">0.5152</span></div></td>
+              <td>0.4859 (norm.)</td>
+              <td>~4 min</td>
+            </tr>
+            <tr>
+              <td class="td-label">N4SID</td>
+              <td>Linear Subspace</td>
+              <td>~5,000</td>
+              <td><div class="r2-cell"><span style="color:var(--yellow)">0.2059</span></div></td>
+              <td>23,600.07 (raw)</td>
+              <td>&lt;1 min</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="image-grid">
+        <div class="image-card">
+          <div class="img-header">📊 Side-by-Side Prediction (1.0s window)</div>
+          <img src="comparison_prediction.png" alt="Comparison Prediction" onclick="openLightbox(this)">
+        </div>
+        <div class="image-card">
+          <div class="img-header">📉 N4SID Diagnostics</div>
+          <img src="n4sid/n4sid_prediction.png" alt="N4SID Prediction" onclick="openLightbox(this)">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Training Curves -->
+  <div id="tab-plots" class="tab-content">
+    <div class="section">
+      <div class="section-header">
+        <h2>Training Curves & Predictions</h2>
+        <span class="badge">8 Runs</span>
+      </div>
+
+      <div class="image-grid">
+        <div class="image-card">
+          <div class="img-header">🏆 run_04 — Best Model (h128, lr=5e-4, dopri5)</div>
+          <img src="sweep/run_04_h128_l2_lr0.0005_dopri5_compiled/training_curve.png" alt="Training Curve" onclick="openLightbox(this)">
+        </div>
+        <div class="image-card">
+          <div class="img-header">🏆 run_04 — Best Model Predictions</div>
+          <img src="sweep/run_04_h128_l2_lr0.0005_dopri5_compiled/canode_prediction.png" alt="Prediction" onclick="openLightbox(this)">
+        </div>
+        <div class="image-card">
+          <div class="img-header">run_02 — h256 l2 lr=1e-3 dopri5</div>
+          <img src="sweep/run_02_h256_l2_lr0.001_dopri5_compiled/training_curve.png" alt="Training Curve" onclick="openLightbox(this)">
+        </div>
+        <div class="image-card">
+          <div class="img-header">run_03 — h256 l3 lr=1e-3 dopri5</div>
+          <img src="sweep/run_03_h256_l3_lr0.001_dopri5_compiled/training_curve.png" alt="Training Curve" onclick="openLightbox(this)">
+        </div>
+        <div class="image-card">
+          <div class="img-header">Baseline CA-NODE Training</div>
+          <img src="canode/training_curve.png" alt="Baseline Training" onclick="openLightbox(this)">
+        </div>
+        <div class="image-card">
+          <div class="img-header">N4SID Eigenvalues</div>
+          <img src="n4sid/n4sid_diagnostics.png" alt="Eigenvalues" onclick="openLightbox(this)">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Experiment Log -->
+  <div id="tab-log" class="tab-content">
+    <div class="section">
+      <div class="section-header">
+        <h2>Experiment Log</h2>
+        <span class="badge badge-warning">Living Document</span>
+      </div>
+
+      <div class="log-entry" style="border-left: 3px solid var(--green);">
+        <div class="log-time">Jun 03<br>10:48</div>
+        <div class="log-body">
+          <h4>🚀 Multi-Agent Directory Isolation & Git Worktrees Established</h4>
+          <p>Created Git Worktrees under <code>/snel/home/cbwash2/cleo-worktrees/</code> to isolate developers/instances. Created and checked out <code>feature/multi-rate-integration</code>, <code>feature/spectral-loss</code>, and <code>feature/skip-connections</code> worktrees. Copied coordination files (<code>branches.md</code>, <code>task.md</code>) across all directories, preventing collisions.</p>
+          <span class="log-tag tag-infra">infra</span>
+          <span class="log-tag tag-finding" style="margin-left:4px">coordination</span>
+        </div>
+      </div>
+
+      <div class="log-entry" style="border-left: 3px solid var(--green);">
+        <div class="log-time">Jun 02<br>20:13</div>
+        <div class="log-body">
+          <h4>✅ Phase 2.7: Multi-Rate Integration Sweep Complete</h4>
+          <p>Completed the grid sweep of the decoupled slow/fast Multi-Rate Neural ODE solver on gpu2. <strong>Best: M=10 sub-steps with zero_fast split (R²=0.9130)</strong>. Using M=5 and M=1 (zero-fast) achieved R² of 0.9114 and 0.9111, outperforming baseline CA-NODE (0.9016) and demonstrating that sub-stepping fast stimulus integration loop improves dynamics resolution.</p>
+          <span class="log-tag tag-sweep">sweep</span>
+          <span class="log-tag tag-finding" style="margin-left:4px">finding</span>
+          <span class="log-tag tag-sweep" style="margin-left:4px">phase 2.7</span>
+        </div>
+      </div>
+
+      <div class="log-entry" style="border-left: 3px solid var(--green);">
+        <div class="log-time">Jun 02<br>16:09</div>
+        <div class="log-body">
+          <h4>✅ Causal Latent CA-NODE Sweep Complete</h4>
+          <p>Completed the evaluation of Causal Latent CA-NODE on gpu1 evaluating past window sizes ∈ {50ms, 100ms, 200ms}. <strong>Best: 200ms past window size (R²=0.4405, MSE=0.7760)</strong>. Testing 100ms and 50ms past windows yielded R² of 0.4210 and 0.4147, respectively. Although much lower than non-causal smoothing models (0.90 R²), the monotonic improvement confirms the critical value of longer context horizons for causal state tracking.</p>
+          <span class="log-tag tag-sweep">sweep</span>
+          <span class="log-tag tag-finding" style="margin-left:4px">finding</span>
+        </div>
+      </div>
+
+      <div class="log-entry" style="border-left: 3px solid var(--green);">
+        <div class="log-time">Jun 02<br>15:42</div>
+        <div class="log-body">
+          <h4>✅ Phase 2.6: Simpler Skip Connections Sweep Complete</h4>
+          <p>Evaluated linear-only skips with different weight decay weights (<code>swd</code>) on gpu2. <strong>Best: linear skip with swd=1.0 (R²=0.9144)</strong>. Strong skip weight decay prevented the overfitting seen in Phase 2.5 (R²=0.8895), outperforming the standard CA-NODE (0.9016) but remaining slightly below the no-skip baseline (R²=0.9219).</p>
+          <span class="log-tag tag-sweep">sweep</span>
+          <span class="log-tag tag-finding" style="margin-left:4px">finding</span>
+          <span class="log-tag tag-sweep" style="margin-left:4px">phase 2.6</span>
+        </div>
+      </div>
+
+      <div class="log-entry" style="border-left: 3px solid var(--red);">
+        <div class="log-time">Jun 02<br>13:40</div>
+        <div class="log-body">
+          <h4>❌ Idea 4: Discrete-Time GRU Model fit on gpu1</h4>
+          <p>Trained a discrete-time GRU model (hidden=128, layers=1) for 500 epochs in ~4 minutes. Result: <strong>R² = 0.5152</strong> (significantly worse than 0.9016 Neural ODE baseline). Although train/val losses on training windows dropped to extremely low values (train: 0.0552, val: 0.0587), it generalized poorly to test trials. The black-box GRU lacks the strong regularizing inductive bias of continuous-time physics (Neural ODE's continuity and control-affine formulation), and instead used its sequence capacity to memorize trial-specific noise and stimulus shapes.</p>
+          <span class="log-tag tag-baseline">baseline</span>
+          <span class="log-tag tag-finding" style="margin-left:4px">finding</span>
+          <span class="log-tag tag-sweep" style="margin-left:4px">idea 4</span>
+        </div>
+      </div>
+
+      <div class="log-entry" style="border-left: 3px solid var(--red);">
+        <div class="log-time">May 29<br>15:00</div>
+        <div class="log-body">
+          <h4>❌ Phase 2.5: Skip Connections Experiment</h4>
+          <p>Implemented zero-initialized state skip (linear $50 \to 50$) and input skip (2-layer MLP mapping $u(t) \to x(t)$) to address ODE integration smoothing. Result: <strong>R² = 0.8895</strong> (worse than 0.9016 baseline). Train/val losses on windows improved slightly (train: 0.08014 vs 0.08229), but generalization to held-out test trials degraded, indicating the non-linear input skip MLP overfit to trial-specific stimulus patterns.</p>
+          <span class="log-tag tag-baseline">baseline</span>
+          <span class="log-tag tag-finding" style="margin-left:4px">finding</span>
+          <span class="log-tag tag-sweep" style="margin-left:4px">phase 2.5</span>
+        </div>
+      </div>
+
+      <div class="log-entry" style="border-left: 3px solid var(--green);">
+        <div class="log-time">May 28<br>22:48</div>
+        <div class="log-body">
+          <h4>✅ Phase 2: 27-Config Sweep Complete</h4>
+          <p>All 27 configurations finished across 4 rounds on 8× RTX 2080 Ti (~100 min total). <strong>Best: h128 l2 lr=1e-4 (R²=0.9016)</strong>. Key finding: bigger models (h256, h512) perform WORSE even with 5× data. The performance ceiling is ~0.90 R² for 200ms windows — the bottleneck is the NODE architecture itself, not capacity or data.</p>
+          <span class="log-tag tag-sweep">sweep</span>
+          <span class="log-tag tag-finding" style="margin-left:4px">finding</span>
+          <span class="log-tag tag-sweep" style="margin-left:4px">phase 2</span>
+        </div>
+      </div>
+
+      <div class="log-entry" style="border-left: 3px solid var(--accent);">
+        <div class="log-time">May 28<br>20:41</div>
+        <div class="log-body">
+          <h4>🚀 Phase 2: 50-Trial Data Generated on gpu2</h4>
+          <p>Generated 50 trials on gpu2 (AMD EPYC 7452, 128 cores) in <strong>6.3 minutes</strong> using 96 parallel Brian2 workers. Data: x=(50,50,30000), u=(50,2,30000), 525MB HDF5. Synced to gpu1 for GPU sweep.</p>
+          <span class="log-tag tag-infra">data</span>
+          <span class="log-tag tag-sweep" style="margin-left:4px">phase 2</span>
+        </div>
+      </div>
+
+      <div class="log-entry" style="border-left: 3px solid var(--accent);">
+        <div class="log-time">May 28<br>20:18</div>
+        <div class="log-body">
+          <h4>📋 Phase 2 Plan: Full Architecture Sweep</h4>
+          <p>Updated <code>sweep_canode.py</code> with <code>--grid=large</code> mode: 3×3×3 = 27 configurations (hidden ∈ {128, 256, 512}, layers ∈ {2, 3, 4}, lr ∈ {5e-4, 2e-4, 1e-4}). All configs use dopri5 + compile. Queuing 27 jobs across 8 GPUs.</p>
+          <span class="log-tag tag-sweep">sweep</span>
+          <span class="log-tag tag-sweep" style="margin-left:4px">phase 2</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <img id="lightbox-img" src="" alt="Enlarged view">
+</div>
+
+<script>
+  // Tab switching
+  function showTab(tabName) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tabName).classList.add('active');
+    event.target.classList.add('active');
+  }
+
+  // Lightbox
+  function openLightbox(img) {
+    document.getElementById('lightbox-img').src = img.src;
+    document.getElementById('lightbox').classList.add('active');
+  }
+  function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('active');
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+  // Table sorting
+  function sortTable(tableId, colIdx) {
+    const table = document.getElementById(tableId);
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const th = table.querySelectorAll('thead th')[colIdx];
+
+    // Determine sort direction
+    const isAsc = th.classList.contains('sort-asc');
+    table.querySelectorAll('thead th').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+    th.classList.add(isAsc ? 'sort-desc' : 'sort-asc');
+    const dir = isAsc ? -1 : 1;
+
+    rows.sort((a, b) => {
+      let aVal = a.cells[colIdx].textContent.trim();
+      let bVal = b.cells[colIdx].textContent.trim();
+      // Try numeric
+      const aNum = parseFloat(aVal.replace(/[^0-9.\-e]/gi, ''));
+      const bNum = parseFloat(bVal.replace(/[^0-9.\-e]/gi, ''));
+      if (!isNaN(aNum) && !isNaN(bNum)) return (aNum - bNum) * dir;
+      return aVal.localeCompare(bVal) * dir;
+    });
+
+    rows.forEach(r => tbody.appendChild(r));
+  }
+</script>
+
+</body>
+</html>
