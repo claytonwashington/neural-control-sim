@@ -26,5 +26,5 @@ Validation loss fluctuates due to adaptive integration steps in Neural ODEs. To 
 - [x] Implement linear warmup + cosine decay scheduler in `train_canode` or `fit_canode.py`
 - [x] Verify learning rate scheduler behavior with a short run
 - [x] Add extended grid sweep configuration to `sweep_canode.py`
-- [ ] Launch extended training sweep in tmux
-- [ ] Update results dashboard and coordination files
+- [x] Launch extended training sweep in tmux
+- [x] Update results dashboard and coordination files

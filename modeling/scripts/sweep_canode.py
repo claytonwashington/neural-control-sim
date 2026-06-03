@@ -35,6 +35,8 @@ def main():
     parser.add_argument("--grid", type=str, default="small",
                         choices=["small", "large", "skip_linear", "spectral", "multirate", "extended"],
                         help="Sweep grid size: 'small' (8 configs), 'large' (27 configs), 'skip_linear' (16 configs), 'spectral' (8 configs), 'multirate' (6 configs), or 'extended' (12 configs)")
+    parser.add_argument("--run-only", type=str, default=None,
+                        help="Comma-separated list of configuration indices to run (0-based)")
     args = parser.parse_args()
 
     if args.gpu_ids is not None:
@@ -154,9 +156,16 @@ def main():
             {"hidden": 128, "n_layers": 2, "lr": 1e-3, "method": "rk4", "compile": True},
         ]
 
+    # Queue up configurations
+    if args.run_only is not None:
+        run_indices = [int(x) for x in args.run_only.split(",")]
+        pending_configs = [(idx, configs[idx]) for idx in run_indices]
+    else:
+        pending_configs = list(enumerate(configs))
+
     n_configs = len(configs)
     print("=" * 70)
-    print(f"Starting CA-NODE Parallel Sweep (Total configurations: {n_configs})")
+    print(f"Starting CA-NODE Parallel Sweep (Total configurations: {n_configs}, running: {len(pending_configs)})")
     print(f"Max parallel workers: {args.max_workers} across GPUs {gpu_ids}")
     print(f"Dataset: {args.data}")
     print(f"Epochs per run: {args.n_epochs}")
@@ -165,9 +174,6 @@ def main():
 
     active_processes = []
     completed_runs = []
-
-    # Queue up configurations
-    pending_configs = list(enumerate(configs))
 
     # Keep track of which GPU indices are free
     free_gpus = list(gpu_ids)
@@ -386,8 +392,23 @@ def main():
 
     # Write summary json
     summary_path = os.path.join(args.output_dir, "sweep_summary.json")
+    final_runs = completed_runs
+    if os.path.exists(summary_path):
+        try:
+            with open(summary_path, "r") as f:
+                existing_runs = json.load(f)
+            merged = {run["run_id"]: run for run in existing_runs}
+            for run in completed_runs:
+                run_id = run["run_id"]
+                if run_id not in merged or run.get("best_val_loss") is not None:
+                    merged[run_id] = run
+            final_runs = list(merged.values())
+            final_runs.sort(key=lambda r: -r.get("mean_windowed_r2", -999))
+        except Exception as e:
+            print(f"Warning: Failed to merge with existing summary: {e}")
+            
     with open(summary_path, "w") as f:
-        json.dump(completed_runs, f, indent=2)
+        json.dump(final_runs, f, indent=2)
     print(f"\nSaved sweep summary to {summary_path}")
 
 
