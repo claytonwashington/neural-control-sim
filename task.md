@@ -34,6 +34,11 @@ To ensure coordinate development across different agents (IDE, 2.0 CLI, Jules, G
   - Worktree: `/snel/home/cbwash2/cleo-worktrees/multi-rate-integration`
   - Agent: Antigravity (Instance 3)
   - Decouple slow baseline dynamics and fast optogenetic responses with sub-stepped fast integration.
+- `[ ]` Phase 2.8: Extended Training Sweep (Cosine Decay + Linear Warmup) ([details](file:///snel/home/cbwash2/cleo-worktrees/extended-training/tasks/extended_training.md))
+  - Branch: `feature/extended-training`
+  - Worktree: `/snel/home/cbwash2/cleo-worktrees/extended-training`
+  - Agent: Antigravity (Instance 4)
+  - Train for 500–1000 epochs with cosine decay and initial linear warmup to confirm if slower learning rates converge to a higher global optimum.
 - `[x]` Causal Latent CA-NODE: Causal encoding and forward forecasting sweep (Completed R²=0.4405)
   - Branch: `feature/digital-twin-phase1` (Main repo / local sync)
   - Agent: Antigravity (Primary)
@@ -42,5 +47,4 @@ To ensure coordinate development across different agents (IDE, 2.0 CLI, Jules, G
 ### Backlog — Ideas to Break the R²≈0.90 Ceiling
 
 - `[ ]` Latent NODE: encoder (50ch → ~10 latent) → ODE in latent space → decoder (LFADS-style)
-- `[ ]` Longer training: 500–1000 epochs with warmup (200 may be insufficient)
 - `[ ]` Discrete-time model: replace ODE integrator with a GRU/LSTM to avoid integration smoothing entirely

@@ -14,6 +14,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
+from modeling.config import DEFAULT_SEED
 
 
 class GRUModel(nn.Module):
@@ -158,6 +159,7 @@ def train_sequence_model(
     val_fraction: float = 0.1,
     device: str = "cuda",
     verbose: bool = True,
+    seed: int = DEFAULT_SEED,
 ) -> dict:
     """Train the sequence model with batched sequence learning.
 
@@ -175,6 +177,8 @@ def train_sequence_model(
     val_fraction : float
     device : str
     verbose : bool
+    seed : int
+        Random seed for validation split.
 
     Returns
     -------
@@ -188,7 +192,8 @@ def train_sequence_model(
     
     n_val = max(1, int(len(dataset) * val_fraction))
     n_train = len(dataset) - n_val
-    train_set, val_set = torch.utils.data.random_split(dataset, [n_train, n_val])
+    g = torch.Generator().manual_seed(seed)
+    train_set, val_set = torch.utils.data.random_split(dataset, [n_train, n_val], generator=g)
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True,
                                pin_memory=True, drop_last=True)

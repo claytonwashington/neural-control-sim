@@ -24,6 +24,7 @@ torch.set_num_threads(4)
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from modeling.config import DEFAULT_SEED, DEFAULT_TEST_TRIALS, set_seed
 
 
 def main():
@@ -37,8 +38,10 @@ def main():
     parser.add_argument("--window-size", type=int, default=200,
                         help="Time steps per training window")
     parser.add_argument("--stride", type=int, default=100)
-    parser.add_argument("--n-test-trials", type=int, default=2,
+    parser.add_argument("--n-test-trials", type=int, default=DEFAULT_TEST_TRIALS,
                         help="Number of trials held out for testing")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED,
+                        help="Random seed for reproducibility")
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--method", type=str, default="dopri5",
                         help="ODE integration method (e.g. dopri5, rk4)")
@@ -58,6 +61,12 @@ def main():
                         help="Weight decay for base model parameters (default: 1e-5)")
     parser.add_argument("--skip-weight-decay", type=float, default=None,
                         help="Separate weight decay for skip parameters (default: None)")
+    parser.add_argument("--lr-warmup", type=int, default=0,
+                        help="Number of epochs for linear learning rate warmup (default: 0)")
+    parser.add_argument("--lr-decay", action="store_true", default=True,
+                        help="Decay learning rate with cosine annealing (default: True)")
+    parser.add_argument("--no-lr-decay", dest="lr_decay", action="store_false",
+                        help="Disable cosine annealing learning rate decay")
     parser.add_argument("--spectral-alpha", type=float, default=0.0,
                         help="Coefficient for frequency-aware spectral loss (default: 0.0)")
     parser.add_argument("--model-type", type=str, default="standard", choices=["standard", "multi-rate"],
@@ -67,6 +76,7 @@ def main():
     parser.add_argument("--multirate-init", type=str, default="zero_fast", choices=["zero_fast", "learnable"],
                         help="Initial state split for multi-rate ODE (default: zero_fast)")
     args = parser.parse_args()
+    set_seed(args.seed)
 
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -195,6 +205,9 @@ def main():
             weight_decay=args.weight_decay,
             skip_weight_decay=args.skip_weight_decay,
             spectral_alpha=args.spectral_alpha,
+            lr_warmup=args.lr_warmup,
+            lr_decay=args.lr_decay,
+            seed=args.seed,
         )
 
         # Save model + normalization stats
@@ -209,6 +222,8 @@ def main():
             "multirate_init": multirate_init,
             "use_skip": use_skip,
             "skip_type": skip_type,
+            "lr_warmup": args.lr_warmup,
+            "lr_decay": args.lr_decay,
             "x_mean": x_mean,
             "x_std": x_std,
             "u_mean": u_mean,

@@ -14,6 +14,7 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from modeling.config import DEFAULT_SEED, DEFAULT_TEST_TRIALS, set_seed
 
 
 def windowed_prediction(model, x_test, u_test, window_size=200):
@@ -87,12 +88,15 @@ def main():
                         help="Latent state dimension")
     parser.add_argument("--n-block-rows", type=int, default=30,
                         help="Block Hankel matrix rows")
-    parser.add_argument("--n-test-trials", type=int, default=2,
+    parser.add_argument("--n-test-trials", type=int, default=DEFAULT_TEST_TRIALS,
                         help="Number of trials held out for testing")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED,
+                        help="Random seed for reproducibility")
     parser.add_argument("--eval-horizon", type=int, default=200,
                         help="Prediction horizon for evaluation (steps = ms at 1kHz)")
     parser.add_argument("--output-dir", type=str, default="results/n4sid")
     args = parser.parse_args()
+    set_seed(args.seed)
 
     os.makedirs(args.output_dir, exist_ok=True)
 

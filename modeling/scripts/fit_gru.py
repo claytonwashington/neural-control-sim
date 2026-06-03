@@ -24,6 +24,7 @@ torch.set_num_threads(4)
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from modeling.config import DEFAULT_SEED, DEFAULT_TEST_TRIALS, set_seed
 
 
 def main():
@@ -40,8 +41,10 @@ def main():
     parser.add_argument("--window-size", type=int, default=200,
                         help="Time steps per training window")
     parser.add_argument("--stride", type=int, default=100)
-    parser.add_argument("--n-test-trials", type=int, default=2,
+    parser.add_argument("--n-test-trials", type=int, default=DEFAULT_TEST_TRIALS,
                         help="Number of trials held out for testing")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED,
+                        help="Random seed for reproducibility")
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--compile", action="store_true",
                         help="Compile the model using torch.compile")
@@ -52,6 +55,7 @@ def main():
     parser.add_argument("--save-model", type=str, default="auto",
                         help="Save model path (defaults based on model type)")
     args = parser.parse_args()
+    set_seed(args.seed)
 
     # Assign dynamic defaults for output paths
     if args.output_dir == "auto":
@@ -151,6 +155,7 @@ def main():
             window_size=args.window_size,
             stride=args.stride,
             device=device,
+            seed=args.seed,
         )
 
         # Save model + normalization stats

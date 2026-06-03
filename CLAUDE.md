@@ -82,6 +82,7 @@ Some tutorials require additional packages beyond core Cleo:
 - Multi-device interactions: use `DeviceInteractionRegistry`
 - Visualization: use `cleo.viz`
 - All Python commands should run within the appropriate conda env (`cleo` or `dtmodeling`)
+- **Reproducibility & Data Split**: Always use a 40/10 train/test split (10 test trials out of 50 total trials) when training digital twin models (CA-NODE, GRU, N4SID). Set and pass a fixed random seed (default: `42`, configured centrally in [config.py](file:///snel/home/cbwash2/cleo-worktrees/extended-training/modeling/config.py)) to all random number generators to ensure complete reproducibility of train/val dataset splits and network parameter initialization.
 - **Always explain actions and rationale beforehand**: Under no circumstances should you call any tool or execute any shell command without first outputting a message explaining what you are doing, why you are doing it, and what you expect to achieve. Do not perform actions silently.
 - **Always use tmux for long-running jobs**: Any model training, evaluation, or benchmarking runs MUST be executed inside a `tmux` session (e.g., using `tmux new-session -d -s <session_name>`). This ensures the processes survive network disconnection and can be monitored easily. This applies to both the primary agent and any subagents spawned. If you delegate tasks to subagents, ensure their prompts explicitly instruct them to run commands inside a `tmux` session.
 

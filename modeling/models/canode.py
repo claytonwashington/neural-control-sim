@@ -17,6 +17,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from torchdiffeq import odeint
+from modeling.config import DEFAULT_SEED
 
 
 class DriftNet(nn.Module):
@@ -435,6 +436,9 @@ def train_canode(
     weight_decay: float = 1e-5,
     skip_weight_decay: float | None = None,
     spectral_alpha: float = 0.0,
+    lr_warmup: int = 0,
+    lr_decay: bool = True,
+    seed: int = DEFAULT_SEED,
 ) -> dict:
     """Train the control-affine Neural ODE with batched GPU integration.
 
@@ -460,6 +464,12 @@ def train_canode(
         Separate weight decay for skip parameters.
     spectral_alpha : float
         Coefficient for frequency-aware spectral loss.
+    lr_warmup : int
+        Number of epochs for linear learning rate warmup.
+    lr_decay : bool
+        Whether to decay learning rate with cosine annealing.
+    seed : int
+        Random seed for train/validation split.
 
     Returns
     -------
@@ -470,7 +480,8 @@ def train_canode(
     dataset = TrajectoryWindowDataset(x, u, dt, window_size, stride)
     n_val = max(1, int(len(dataset) * val_fraction))
     n_train = len(dataset) - n_val
-    train_set, val_set = torch.utils.data.random_split(dataset, [n_train, n_val])
+    g = torch.Generator().manual_seed(seed)
+    train_set, val_set = torch.utils.data.random_split(dataset, [n_train, n_val], generator=g)
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True,
                               pin_memory=True, drop_last=True)
@@ -495,7 +506,20 @@ def train_canode(
     else:
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
+    if lr_warmup > 0 or lr_decay:
+        def lr_lambda(epoch):
+            if epoch < lr_warmup:
+                return (epoch + 1) / lr_warmup
+            if lr_decay:
+                epochs_left = n_epochs - lr_warmup
+                if epochs_left <= 0:
+                    return 1.0
+                t = epoch - lr_warmup
+                return 0.5 * (1.0 + np.cos(np.pi * t / epochs_left))
+            return 1.0
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+    else:
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 1.0)
 
     history = {
         "train_loss": [],
