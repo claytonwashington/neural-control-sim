@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 from modeling.data import load_trials_h5
 from modeling.models.canode import TrajectoryWindowDataset
 from modeling.models.latent_node import LatentNeuralODE
+from modeling.config import DEFAULT_SEED, DEFAULT_TEST_TRIALS, set_seed
 
 
 def train_latent_node(
@@ -44,13 +45,16 @@ def train_latent_node(
     verbose: bool = True,
     method: str = "dopri5",
     kl_weight: float = 1.0,
+    seed: int = DEFAULT_SEED,
 ) -> dict:
     model = model.to(device)
 
     dataset = TrajectoryWindowDataset(x, u, dt, window_size, stride)
     n_val = max(1, int(len(dataset) * val_fraction))
     n_train = len(dataset) - n_val
-    train_set, val_set = torch.utils.data.random_split(dataset, [n_train, n_val])
+    train_set, val_set = torch.utils.data.random_split(
+        dataset, [n_train, n_val], generator=torch.Generator().manual_seed(seed)
+    )
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True,
                               pin_memory=True, drop_last=True)
@@ -144,13 +148,18 @@ def main():
     parser.add_argument("--n-layers", type=int, default=2)
     parser.add_argument("--window-size", type=int, default=200)
     parser.add_argument("--stride", type=int, default=100)
-    parser.add_argument("--n-test-trials", type=int, default=2)
+    parser.add_argument("--n-test-trials", type=int, default=DEFAULT_TEST_TRIALS,
+                        help="Number of trials held out for testing")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED,
+                        help="Random seed for reproducibility")
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--method", type=str, default="dopri5")
     parser.add_argument("--kl-weight", type=float, default=1.0)
     parser.add_argument("--output-dir", type=str, default="results/latent_node")
     parser.add_argument("--save-model", type=str, default="results/latent_node/model.pt")
     args = parser.parse_args()
+
+    set_seed(args.seed)
 
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -212,6 +221,7 @@ def main():
         device=device,
         method=args.method,
         kl_weight=args.kl_weight,
+        seed=args.seed,
     )
 
     # Save
