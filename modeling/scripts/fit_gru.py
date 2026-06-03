@@ -1,16 +1,16 @@
 #!/usr/bin/env python
-"""Train control-affine Neural ODE on generated Cleo data.
+"""Train discrete-time GRU model on generated Cleo data.
 
-Uses trial-level train/test split: last 2 trials held out for testing.
+Uses trial-level train/test split matching CA-NODE.
 
 Usage:
-    python -m modeling.scripts.fit_canode [--data data/training_trials.h5]
+    python -m modeling.scripts.fit_gru [--data data/training_trials.h5]
 """
 
 import argparse
 import os
 
-# Limit CPU threads to avoid contention and thrashing on multi-core systems
+# Limit CPU threads
 os.environ["OMP_NUM_THREADS"] = "4"
 os.environ["MKL_NUM_THREADS"] = "4"
 os.environ["OPENBLAS_NUM_THREADS"] = "4"
@@ -27,46 +27,37 @@ import matplotlib.pyplot as plt
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train control-affine Neural ODE")
+    parser = argparse.ArgumentParser(description="Train discrete-time sequence models")
+    parser.add_argument("--model", type=str, default="gru", choices=["gru", "discrete-ca"],
+                        help="Model architecture: 'gru' or 'discrete-ca' (Euler-discretized Neural ODE)")
     parser.add_argument("--data", type=str, default="data/training_trials.h5")
     parser.add_argument("--n-epochs", type=int, default=500)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--hidden", type=int, default=128)
-    parser.add_argument("--n-layers", type=int, default=2)
+    parser.add_argument("--n-layers", type=int, default=1,
+                        help="Number of layers (for GRU) or depth (for discrete-ca)")
     parser.add_argument("--window-size", type=int, default=200,
                         help="Time steps per training window")
     parser.add_argument("--stride", type=int, default=100)
     parser.add_argument("--n-test-trials", type=int, default=2,
                         help="Number of trials held out for testing")
     parser.add_argument("--device", type=str, default="auto")
-    parser.add_argument("--method", type=str, default="dopri5",
-                        help="ODE integration method (e.g. dopri5, rk4)")
     parser.add_argument("--compile", action="store_true",
-                        help="Compile the drift and control networks using torch.compile")
+                        help="Compile the model using torch.compile")
     parser.add_argument("--load-model", type=str, default="",
                         help="Path to load trained model weights instead of training")
-    parser.add_argument("--output-dir", type=str, default="results/canode")
-    parser.add_argument("--save-model", type=str, default="results/canode/model.pt")
-    parser.add_argument("--skip", action="store_true", default=True,
-                        help="Use skip connections (default: True)")
-    parser.add_argument("--no-skip", dest="skip", action="store_false",
-                        help="Disable skip connections")
-    parser.add_argument("--skip-type", type=str, default="mlp", choices=["mlp", "linear"],
-                        help="Type of skip connection (default: mlp)")
-    parser.add_argument("--weight-decay", type=float, default=1e-5,
-                        help="Weight decay for base model parameters (default: 1e-5)")
-    parser.add_argument("--skip-weight-decay", type=float, default=None,
-                        help="Separate weight decay for skip parameters (default: None)")
-    parser.add_argument("--spectral-alpha", type=float, default=0.0,
-                        help="Coefficient for frequency-aware spectral loss (default: 0.0)")
-    parser.add_argument("--model-type", type=str, default="standard", choices=["standard", "multi-rate"],
-                        help="Model type to train (default: standard)")
-    parser.add_argument("--sub-steps", type=int, default=10,
-                        help="Number of sub-steps for multi-rate ODE (default: 10)")
-    parser.add_argument("--multirate-init", type=str, default="zero_fast", choices=["zero_fast", "learnable"],
-                        help="Initial state split for multi-rate ODE (default: zero_fast)")
+    parser.add_argument("--output-dir", type=str, default="auto",
+                        help="Output directory (defaults based on model type)")
+    parser.add_argument("--save-model", type=str, default="auto",
+                        help="Save model path (defaults based on model type)")
     args = parser.parse_args()
+
+    # Assign dynamic defaults for output paths
+    if args.output_dir == "auto":
+        args.output_dir = f"results/{args.model}"
+    if args.save_model == "auto":
+        args.save_model = f"results/{args.model}/model.pt"
 
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -77,7 +68,7 @@ def main():
     print(f"Using device: {device}")
 
     from modeling.data import load_trials_h5
-    from modeling.models.canode import ControlAffineODE, train_canode
+    from modeling.models.sequence import GRUModel, DiscreteControlAffineModel, train_sequence_model
 
     # Load data: x is (n_trials, n_channels, n_steps)
     print("Loading data...")
@@ -111,69 +102,38 @@ def main():
     x_train_n = (x_train - x_mean) / x_std
     u_train_n = (u_train - u_mean) / u_std
 
-    # Build model configuration, taking values from checkpoint if loading
-    model_type = args.model_type
-    sub_steps = args.sub_steps
-    multirate_init = args.multirate_init
-    use_skip = args.skip
-    skip_type = args.skip_type
-    if args.load_model:
-        print(f"Loading checkpoint metadata from {args.load_model}...")
-        checkpoint_meta = torch.load(args.load_model, map_location=device)
-        model_type = checkpoint_meta.get("model_type", model_type)
-        sub_steps = checkpoint_meta.get("sub_steps", sub_steps)
-        multirate_init = checkpoint_meta.get("multirate_init", multirate_init)
-        use_skip = checkpoint_meta.get("use_skip", use_skip)
-        skip_type = checkpoint_meta.get("skip_type", skip_type)
-        print(f"  Checkpoint metadata: type={model_type}, sub_steps={sub_steps}, init={multirate_init}, skip={use_skip}")
-
     # Build model
-    if model_type == "multi-rate":
-        from modeling.models.canode import MultiRateControlAffineODE
-        print(f"\nBuilding Multi-Rate CA-NODE: n_x={n_channels}, n_u={n_inputs}, "
-              f"hidden={args.hidden}, layers={args.n_layers}, sub_steps={sub_steps}, init={multirate_init}")
-        model = MultiRateControlAffineODE(
+    print(f"\nBuilding {args.model.upper()} Model: n_x={n_channels}, n_u={n_inputs}, "
+          f"hidden={args.hidden}, layers={args.n_layers}")
+    if args.model == "gru":
+        model = GRUModel(
             n_x=n_channels,
             n_u=n_inputs,
             hidden=args.hidden,
-            n_layers=args.n_layers,
-            sub_steps=sub_steps,
-            init_type=multirate_init,
+            num_layers=args.n_layers,
         )
-    else:
-        print(f"\nBuilding CA-NODE: n_x={n_channels}, n_u={n_inputs}, "
-              f"hidden={args.hidden}, layers={args.n_layers}, skip={use_skip}, skip_type={skip_type}")
-        model = ControlAffineODE(
+    elif args.model == "discrete-ca":
+        model = DiscreteControlAffineModel(
             n_x=n_channels,
             n_u=n_inputs,
             hidden=args.hidden,
             n_layers=args.n_layers,
-            use_skip=use_skip,
-            skip_type=skip_type,
         )
     n_params = sum(p.numel() for p in model.parameters())
     print(f"  Parameters: {n_params:,}")
 
     if args.compile:
         print("Compiling networks...")
-        if model_type == "multi-rate":
-            model.f_slow = torch.compile(model.f_slow)
-            model.g_slow = torch.compile(model.g_slow)
-            model.f_fast = torch.compile(model.f_fast)
-            model.g_fast_net = torch.compile(model.g_fast_net)
-        else:
+        if args.model == "gru":
+            model = torch.compile(model)
+        elif args.model == "discrete-ca":
             model.f = torch.compile(model.f)
             model.g = torch.compile(model.g)
-            if use_skip:
-                model.skip_state = torch.compile(model.skip_state)
-                model.skip_input = torch.compile(model.skip_input)
 
     if args.load_model:
         print(f"Loading model weights from {args.load_model}...")
         checkpoint = torch.load(args.load_model, map_location=device)
-        # Handle state dict load. (If model was compiled, keys might contain '_orig_mod.')
         state_dict = checkpoint["model_state"]
-        # Remove '_orig_mod.' prefix from compiled checkpoints if model is uncompiled
         cleaned_state_dict = {}
         for k, v in state_dict.items():
             cleaned_key = k.replace("_orig_mod.", "")
@@ -183,7 +143,7 @@ def main():
     else:
         # Train
         print(f"\nTraining for {args.n_epochs} epochs with batch size {args.batch_size}...")
-        history = train_canode(
+        history = train_sequence_model(
             model, x_train_n, u_train_n, dt,
             n_epochs=args.n_epochs,
             lr=args.lr,
@@ -191,10 +151,6 @@ def main():
             window_size=args.window_size,
             stride=args.stride,
             device=device,
-            method=args.method,
-            weight_decay=args.weight_decay,
-            skip_weight_decay=args.skip_weight_decay,
-            spectral_alpha=args.spectral_alpha,
         )
 
         # Save model + normalization stats
@@ -204,11 +160,6 @@ def main():
             "n_u": n_inputs,
             "hidden": args.hidden,
             "n_layers": args.n_layers,
-            "model_type": model_type,
-            "sub_steps": sub_steps,
-            "multirate_init": multirate_init,
-            "use_skip": use_skip,
-            "skip_type": skip_type,
             "x_mean": x_mean,
             "x_std": x_std,
             "u_mean": u_mean,
@@ -238,7 +189,7 @@ def main():
 
         with torch.no_grad():
             x_pred = model.predict(
-                x_eval[0].unsqueeze(0), t_eval, u_eval.unsqueeze(0), method=args.method
+                x_eval[0].unsqueeze(0), t_eval, u_eval.unsqueeze(0)
             )  # (1, T, n_x)
 
         x_pred_np = x_pred[0].cpu().numpy().T  # (n_x, T) -> transpose to match
@@ -275,7 +226,7 @@ def main():
 
             with torch.no_grad():
                 x_pred_win = model.predict(
-                    x0.unsqueeze(0), t_win, u_win.unsqueeze(0), method=args.method
+                    x0.unsqueeze(0), t_win, u_win.unsqueeze(0)
                 )  # (1, T, n_x)
                 x_pred_win_np = x_pred_win[0].cpu().numpy().T  # (n_x, T)
             window_mses.append(np.mean((x_pred_win_np - x_true_win) ** 2))
@@ -291,17 +242,11 @@ def main():
 
     # Plot training curves
     fig, ax = plt.subplots(1, 1, figsize=(10, 4))
-    ax.semilogy(history["train_loss"], label="Train (Total)")
-    ax.semilogy(history["val_loss"], label="Validation (Total)")
-    if "train_loss_mse" in history and len(history["train_loss_mse"]) > 0:
-        ax.semilogy(history["train_loss_mse"], ":", alpha=0.7, label="Train (MSE)")
-        ax.semilogy(history["val_loss_mse"], ":", alpha=0.7, label="Val (MSE)")
-    if "train_loss_fft" in history and len(history["train_loss_fft"]) > 0:
-        ax.semilogy(history["train_loss_fft"], "--", alpha=0.7, label="Train (FFT)")
-        ax.semilogy(history["val_loss_fft"], "--", alpha=0.7, label="Val (FFT)")
+    ax.semilogy(history["train_loss"], label="Train")
+    ax.semilogy(history["val_loss"], label="Validation")
     ax.set_xlabel("Epoch")
-    ax.set_ylabel("Loss")
-    ax.set_title("CA-NODE Training")
+    ax.set_ylabel("MSE Loss")
+    ax.set_title("GRU Model Training")
     ax.legend()
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
@@ -316,14 +261,14 @@ def main():
     for i in range(n_plot_ch):
         ax = axes[i] if n_plot_ch > 1 else axes
         ax.plot(t_plot, x_true_np[:, i], "k", alpha=0.7, lw=0.8, label="Ground truth")
-        ax.plot(t_plot, x_pred_np[:, i], "r", alpha=0.7, lw=0.8, label="CA-NODE")
+        ax.plot(t_plot, x_pred_np[:, i], "r", alpha=0.7, lw=0.8, label="GRU")
         ax.set_ylabel(f"Ch {i}")
         if i == 0:
             ax.legend()
     axes[-1].set_xlabel("Time (s)")
-    fig2.suptitle(f"CA-NODE Prediction (R\u00b2 = {r2:.3f})")
+    fig2.suptitle(f"GRU Model Prediction (R\u00b2 = {r2:.3f})")
     fig2.tight_layout()
-    fig2.savefig(os.path.join(args.output_dir, "canode_prediction.png"), dpi=150)
+    fig2.savefig(os.path.join(args.output_dir, "gru_prediction.png"), dpi=150)
     print(f"  Plots saved to {args.output_dir}/")
 
     print("Done.")

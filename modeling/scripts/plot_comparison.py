@@ -60,7 +60,9 @@ def main():
         n_x=checkpoint["n_x"],
         n_u=checkpoint["n_u"],
         hidden=checkpoint["hidden"],
-        n_layers=checkpoint["n_layers"]
+        n_layers=checkpoint["n_layers"],
+        use_skip=checkpoint.get("use_skip", True),
+        skip_type=checkpoint.get("skip_type", "mlp")
     )
     canode_model.load_state_dict(cleaned_state_dict)
     canode_model = canode_model.to(device)

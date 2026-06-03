@@ -10,6 +10,17 @@ Cleo is a Python framework built on top of [Brian 2](https://brian2.readthedocs.
 > - `branches.md` — which agent owns which branch
 > - `tasks/` — detailed checklists and implementation plans per task
 
+### Workspace Isolation (Git Worktrees)
+
+To prevent file and execution collisions when multiple agents run experiments concurrently, each agent must operate in a dedicated **Git Worktree** checked out to their active branch.
+
+1. **Create the Worktree**: From the main/shared repository directory (`/snel/home/cbwash2/cleo`), create a new worktree directory and branch:
+   ```bash
+   git worktree add /snel/home/cbwash2/cleo-worktrees/<branch-name> -b feature/<branch-name>
+   ```
+2. **Register the Worktree**: Update [branches.md](branches.md) and [task.md](task.md) to document the new worktree path and branch assignment.
+3. **Shift Workspace**: Conduct all subsequent file edits, command runs (such as sweeps or tests), and git commits inside the dedicated `/snel/home/cbwash2/cleo-worktrees/<branch-name>` directory.
+
 ## Environment
 
 - **Python**: >= 3.10
@@ -73,6 +84,22 @@ Some tutorials require additional packages beyond core Cleo:
 - All Python commands should run within the appropriate conda env (`cleo` or `dtmodeling`)
 - **Always explain actions and rationale beforehand**: Under no circumstances should you call any tool or execute any shell command without first outputting a message explaining what you are doing, why you are doing it, and what you expect to achieve. Do not perform actions silently.
 - **Always use tmux for long-running jobs**: Any model training, evaluation, or benchmarking runs MUST be executed inside a `tmux` session (e.g., using `tmux new-session -d -s <session_name>`). This ensures the processes survive network disconnection and can be monitored easily. This applies to both the primary agent and any subagents spawned. If you delegate tasks to subagents, ensure their prompts explicitly instruct them to run commands inside a `tmux` session.
+- **Log all experiment results in the HTML dashboard**: All model training results, hyperparameter sweeps, and comparison benchmarks MUST be logged in [`results/dashboard.html`](results/dashboard.html). This is the single source of truth for experiment tracking. See the "Experiment / Sweep" workflow below for details.
+
+## Results Dashboard
+
+The project maintains a living results dashboard at **`results/dashboard.html`**. This is how we operate:
+
+1. **Single source of truth**: All experiment metrics, sweep tables, training curves, and key findings go here.
+2. **Open locally**: `open results/dashboard.html` (macOS) or view in any browser. Images are referenced via relative paths from `results/`.
+3. **Structure**: The dashboard has tabs for sweep results, model comparisons, training curves, and a chronological experiment log.
+4. **Updating**: When you complete an experiment or sweep, update the dashboard by:
+   - Adding rows to the sweep results table (sorted by primary metric)
+   - Adding image cards for new training curves / prediction plots
+   - Appending a log entry with date, summary, and tags
+   - Updating the summary metric cards at the top if records are broken
+5. **Convention**: Save all plots as `.png` files in `results/` subdirectories. Use relative paths in the HTML.
+6. **Sweep scripts**: Training scripts should save a `sweep_summary.json` alongside logs. The dashboard can embed this data directly.
 
 ## Agent Workflows
 
@@ -94,3 +121,12 @@ Some tutorials require additional packages beyond core Cleo:
 3. Add unit tests in `tests/` and tutorial in `docs/tutorials/` if appropriate
 4. Validate: `conda run -n cleo pytest`
 5. Update docstrings
+
+### Experiment / Sweep
+1. Write or update the training script with CLI arguments for all hyperparameters
+2. Run inside a `tmux` session on the appropriate GPU machine
+3. Save model checkpoints, training curves, and prediction plots to `results/<experiment_name>/`
+4. Save a `sweep_summary.json` with structured metrics
+5. **Update `results/dashboard.html`** with the new results: table rows, plots, log entries, and summary metrics
+6. Sync the dashboard to the remote machine via `scp`
+
