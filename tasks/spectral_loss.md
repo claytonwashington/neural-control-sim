@@ -20,21 +20,21 @@ where:
 ## Checklist
 
 ### Implementation
-- `[ ]` Implement FFT-magnitude MSE loss in `train_canode` or a separate utility.
-- `[ ]` Add `--spectral-alpha` argument to `fit_canode.py` (default: `0.0` to preserve baseline behavior).
-- `[ ]` Ensure the training/validation curves and log output report both time-domain MSE and spectral loss components.
-- `[ ]` Update `sweep_canode.py` to support sweeping `--spectral-alpha`.
+- `[x]` Implement FFT-magnitude MSE loss in `train_canode` or a separate utility.
+- `[x]` Add `--spectral-alpha` argument to `fit_canode.py` (default: `0.0` to preserve baseline behavior).
+- `[x]` Ensure the training/validation curves and log output report both time-domain MSE and spectral loss components.
+- `[x]` Update `sweep_canode.py` to support sweeping `--spectral-alpha`.
 
 ### Verification & Testing
-- `[ ]` Test implementation locally with `alpha = 0.0` to verify identical behavior to baseline.
-- `[ ]` Run a trial training with `alpha = 0.1` and `alpha = 1.0` inside a `tmux` session to ensure stability and convergence.
+- `[x]` Test implementation locally with `alpha = 0.0` to verify identical behavior to baseline.
+- `[x]` Run a trial training with `alpha = 0.1` and `alpha = 1.0` inside a `tmux` session to ensure stability and convergence.
 
 ### Hyperparameter Sweep
-- `[ ]` Run a sweep over different values of $\alpha$ (e.g., `0.01`, `0.05`, `0.1`, `0.2`, `0.5`, `1.0`, `2.0`) to find the optimal spectral weight.
-- `[ ]` Compare training speed and stability across different values.
+- `[x]` Run a sweep over different values of $\alpha$ (e.g., `0.01`, `0.05`, `0.1`, `0.2`, `0.5`, `1.0`, `2.0`) to find the optimal spectral weight.
+- `[x]` Compare training speed and stability across different values.
 
 ### Analysis & Dashboard
-- `[ ]` Compare the best 200ms windowed $R^2$ to the baseline (without spectral loss, $R^2 \approx 0.9016$).
-- `[ ]` Plot the frequency spectrum (Power Spectral Density / FFT magnitude) of true vs. predicted signals to confirm high-frequency alignment.
-- `[ ]` Update the results dashboard at `results/dashboard.html` with results from the sweep.
-- `[ ]` Update `walkthrough.md` and commit changes.
+- `[x]` Compare the best 200ms windowed $R^2$ to the baseline (without spectral loss, $R^2 \approx 0.9016$).
+- `[x]` Plot the frequency spectrum (Power Spectral Density / FFT magnitude) of true vs. predicted signals to confirm high-frequency alignment.
+- `[x]` Update the results dashboard at `results/dashboard.html` with results from the sweep.
+- `[x]` Update `walkthrough.md` and commit changes.

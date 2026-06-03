@@ -20,18 +20,27 @@ To ensure coordinate development across different agents (IDE, 2.0 CLI, Jules, G
 - `[x]` Phase 2.5: Skip Connections (R²=0.8895 — worse, overfits)
   - state skip (linear) + input skip (MLP) bypassing ODE integrator
   - Train loss improved but generalization degraded → skip_input MLP overfits
-- `[ ]` Frequency-Aware Loss: Spectral Loss to break R² ceiling ([details](file:///snel/home/cbwash2/cleo/tasks/spectral_loss.md))
+- `[x]` Phase 2.6: Simpler Skip Connections (Linear-only, completed R²=0.9144)
+  - Branch: `feature/skip-connections`
+  - Worktree: `/snel/home/cbwash2/cleo-worktrees/skip-connections`
+  - Linear-only state/input skip connections. Overfitting was avoided by applying separate weight decay (best: `swd=1.0` got R²=0.9144), but still did not beat the pure CA-NODE baseline (R²=0.9219).
+- `[x]` Frequency-Aware Loss: Spectral Loss to break R² ceiling ([details](file:///snel/home/cbwash2/cleo/tasks/spectral_loss.md))
   - Branch: `feature/spectral-loss`
-  - Agent: Antigravity
+  - Worktree: `/snel/home/cbwash2/cleo-worktrees/spectral-loss`
+  - Agent: Antigravity (Instance 2)
   - Penalize errors in FFT magnitude domain to capture high-frequency transients.
 - `[ ]` Multi-Scale / Multi-Rate Integration: Decoupled slow/fast step sizes ([details](file:///snel/home/cbwash2/cleo/tasks/multi_rate_integration.md))
   - Branch: `feature/multi-rate-integration`
-  - Agent: Antigravity
+  - Worktree: `/snel/home/cbwash2/cleo-worktrees/multi-rate-integration`
+  - Agent: Antigravity (Instance 3)
   - Decouple slow baseline dynamics and fast optogenetic responses with sub-stepped fast integration.
+- `[x]` Causal Latent CA-NODE: Causal encoding and forward forecasting sweep (Completed R²=0.4405)
+  - Branch: `feature/digital-twin-phase1` (Main repo / local sync)
+  - Agent: Antigravity (Primary)
+  - Inferred initial latent state causally via GRU encoder on past window, integrated 200ms forward. Best $R^2 \approx 0.4405$ (200ms past window, h256, lr=0.0005).
 
 ### Backlog — Ideas to Break the R²≈0.90 Ceiling
 
-- `[ ]` Simpler skip connections: linear-only (no MLP), or state-skip only, with stronger regularization
 - `[ ]` Latent NODE: encoder (50ch → ~10 latent) → ODE in latent space → decoder (LFADS-style)
 - `[ ]` Longer training: 500–1000 epochs with warmup (200 may be insufficient)
 - `[ ]` Discrete-time model: replace ODE integrator with a GRU/LSTM to avoid integration smoothing entirely
