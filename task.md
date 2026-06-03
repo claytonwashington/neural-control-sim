@@ -29,20 +29,28 @@ To ensure coordinate development across different agents (IDE, 2.0 CLI, Jules, G
   - Worktree: `/snel/home/cbwash2/cleo-worktrees/spectral-loss`
   - Agent: Antigravity (Instance 2)
   - Penalize errors in FFT magnitude domain to capture high-frequency transients.
-- `[ ]` Multi-Scale / Multi-Rate Integration: Decoupled slow/fast step sizes ([details](file:///snel/home/cbwash2/cleo/tasks/multi_rate_integration.md))
-  - Branch: `feature/multi-rate-integration`
+- `[x]` Multi-Scale / Multi-Rate Integration: Decoupled slow/fast step sizes ([details](file:///snel/home/cbwash2/cleo/tasks/multi_rate_integration.md))
+  - Branch: `feature/multi-rate-integration` → merged to `feature/digital-twin-phase1`
   - Worktree: `/snel/home/cbwash2/cleo-worktrees/multi-rate-integration`
   - Agent: Antigravity (Instance 3)
   - Decouple slow baseline dynamics and fast optogenetic responses with sub-stepped fast integration.
-- `[ ]` Phase 2.8: Extended Training Sweep (Cosine Decay + Linear Warmup) ([details](file:///snel/home/cbwash2/cleo-worktrees/extended-training/tasks/extended_training.md))
-  - Branch: `feature/extended-training`
+- `[x]` Phase 2.8: Extended Training Sweep (Cosine Decay + Linear Warmup)
+  - Branch: `feature/extended-training` → merged to `feature/digital-twin-phase1`
   - Worktree: `/snel/home/cbwash2/cleo-worktrees/extended-training`
   - Agent: Antigravity (Instance 4)
-  - Train for 500–1000 epochs with cosine decay and initial linear warmup to confirm if slower learning rates converge to a higher global optimum.
+  - Train for 500–1000 epochs with cosine decay and initial linear warmup. Best R²=0.9219 (noskip baseline, 48/2 split).
 - `[x]` Causal Latent CA-NODE: Causal encoding and forward forecasting sweep (Completed R²=0.4405)
   - Branch: `feature/digital-twin-phase1` (Main repo / local sync)
   - Agent: Antigravity (Primary)
   - Inferred initial latent state causally via GRU encoder on past window, integrated 200ms forward. Best $R^2 \approx 0.4405$ (200ms past window, h256, lr=0.0005).
+- `[x]` GRU / Discrete-CA Sequence Models (Completed R²=0.5152 — did not beat baseline)
+  - Branch: `feature/digital-twin-phase1`
+  - Agent: Antigravity
+  - Discrete-time sequence models (GRU, Euler-discretized CA). Overfits severely; lacks physical inductive bias.
+- `[x]` wandb Experiment Tracking Integration
+  - Branch: `feature/digital-twin-phase1`
+  - Agent: Antigravity
+  - Added `modeling/wandb_utils.py` shared utilities. Integrated into `fit_canode.py`, `fit_gru.py`, `sweep_canode.py`.
 
 ### Backlog — Ideas to Break the R²≈0.90 Ceiling
 

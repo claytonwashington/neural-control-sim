@@ -10,6 +10,14 @@ Cleo is a Python framework built on top of [Brian 2](https://brian2.readthedocs.
 > - `branches.md` — which agent owns which branch
 > - `tasks/` — detailed checklists and implementation plans per task
 
+
+### Source of Truth
+
+> [!IMPORTANT]
+> The **remote NAS** at `/snel/home/cbwash2/cleo/` is the **canonical source of truth** for all code.
+> The local path `/Users/claywashington/code/gpu2/cleo/` is a **sync mirror only** — do not edit
+> files locally and expect them to persist. All edits must be made on the remote via `ssh gpu2`.
+
 ### Workspace Isolation (Git Worktrees)
 
 To prevent file and execution collisions when multiple agents run experiments concurrently, each agent must operate in a dedicated **Git Worktree** checked out to their active branch.

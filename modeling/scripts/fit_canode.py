@@ -8,6 +8,7 @@ Usage:
 """
 
 import argparse
+import time
 import os
 
 # Limit CPU threads to avoid contention and thrashing on multi-core systems
@@ -75,6 +76,8 @@ def main():
                         help="Number of sub-steps for multi-rate ODE (default: 10)")
     parser.add_argument("--multirate-init", type=str, default="zero_fast", choices=["zero_fast", "learnable"],
                         help="Initial state split for multi-rate ODE (default: zero_fast)")
+    from modeling.wandb_utils import add_wandb_args
+    add_wandb_args(parser)
     args = parser.parse_args()
     set_seed(args.seed)
 
@@ -164,6 +167,9 @@ def main():
     n_params = sum(p.numel() for p in model.parameters())
     print(f"  Parameters: {n_params:,}")
 
+    from modeling.wandb_utils import wandb_init, wandb_log, wandb_log_image, wandb_summary, wandb_finish
+    wandb_init(args, model=model, script_name="fit_canode")
+
     if args.compile:
         print("Compiling networks...")
         if model_type == "multi-rate":
@@ -193,6 +199,7 @@ def main():
     else:
         # Train
         print(f"\nTraining for {args.n_epochs} epochs with batch size {args.batch_size}...")
+        t_train_start = time.time()
         history = train_canode(
             model, x_train_n, u_train_n, dt,
             n_epochs=args.n_epochs,
@@ -209,6 +216,7 @@ def main():
             lr_decay=args.lr_decay,
             seed=args.seed,
         )
+        train_time_s = time.time() - t_train_start
 
         # Save model + normalization stats
         torch.save({
@@ -231,6 +239,10 @@ def main():
             "history": history,
         }, args.save_model)
         print(f"Model saved to {args.save_model}")
+
+        # Log per-epoch metrics to wandb
+        for epoch_i, (tl, vl) in enumerate(zip(history["train_loss"], history["val_loss"])):
+            wandb_log({"train/loss": tl, "val/loss": vl}, step=epoch_i)
 
     # Evaluate on each test trial
     print("\nEvaluating on test trials (2000-step open-loop)...")
@@ -304,6 +316,18 @@ def main():
     
     print(f"  Avg {horizon}-step: MSE={np.mean(windowed_mses):.4f}, R2={np.mean(windowed_r2s):.4f}")
 
+    # Log summary metrics to wandb
+    wandb_summary({
+        "test/mean_r2_openloop": float(np.mean([r[2] for r in test_results])),
+        "test/mean_mse_openloop": float(np.mean([r[3] for r in test_results])),
+        "test/mean_r2_windowed": float(np.mean(windowed_r2s)),
+        "test/mean_mse_windowed": float(np.mean(windowed_mses)),
+        "train/best_train_loss": float(min(history["train_loss"])),
+        "train/best_val_loss": float(min(history["val_loss"])),
+        "train/time_seconds": train_time_s if 'train_time_s' in dir() else 0,
+        "model/n_params": n_params,
+    })
+
     # Plot training curves
     fig, ax = plt.subplots(1, 1, figsize=(10, 4))
     ax.semilogy(history["train_loss"], label="Train (Total)")
@@ -321,6 +345,7 @@ def main():
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     fig.savefig(os.path.join(args.output_dir, "training_curve.png"), dpi=150)
+    wandb_log_image("plots/training_curve", os.path.join(args.output_dir, "training_curve.png"), caption="Training curve")
 
     # Plot predictions for first test trial
     x_true_np, x_pred_np, r2, mse = test_results[0]
@@ -339,8 +364,10 @@ def main():
     fig2.suptitle(f"CA-NODE Prediction (R\u00b2 = {r2:.3f})")
     fig2.tight_layout()
     fig2.savefig(os.path.join(args.output_dir, "canode_prediction.png"), dpi=150)
+    wandb_log_image("plots/prediction", os.path.join(args.output_dir, "canode_prediction.png"), caption=f"CA-NODE Prediction (R²={r2:.3f})")
     print(f"  Plots saved to {args.output_dir}/")
 
+    wandb_finish()
     print("Done.")
 
 

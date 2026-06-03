@@ -4,7 +4,7 @@ This document tracks modeling hypotheses and architectures to improve prediction
 
 ---
 
-## 1. Discrete-Time Sequence Models (GRU/LSTM)
+## 1. Discrete-Time Sequence Models (GRU/LSTM) ✅ TESTED — ❌ Did not beat baseline
 **Hypothesis**: The continuous-time integration in the Neural ODE ($\int (f(x) + g(x)u)dt$) acts as a low-pass filter, smoothing out high-frequency neural firing transients. Replacing the ODE solver with a discrete-time RNN (e.g., GRU or LSTM) operating at the 1ms sampling rate can capture sharp transitions and fast stim-onsets without integration smoothing.
 *   **Architecture**:
     $$h_t = \text{GRU}(h_{t-1}, [x_{t-1}, u_t])$$
@@ -21,23 +21,23 @@ This document tracks modeling hypotheses and architectures to improve prediction
     This model preserves the strong control-affine physical bias (which prevents overfitting) but avoids the adaptive multi-step numerical smoothing of `dopri5`. It trains extremely fast and can capture step-by-step high-frequency transitions directly.
 
 
-## 2. Regularized & Simpler Skip Connections
+## 2. Regularized & Simpler Skip Connections ✅ TESTED — ❌ Did not beat baseline (R²=0.9144 vs 0.9219 baseline)
 **Hypothesis**: High-frequency dynamics can bypass the ODE integrator via skip paths. In Phase 2.5, a 2-layer MLP input-skip connection ($u(t) \to x(t)$) overfit to trial-specific stimulus patterns. Restricting the skip paths to be **purely linear** ($u(t) \to x(t)$ and $x_{\text{ode}}(t) \to x(t)$) or utilizing L2 regularization (weight decay) on the skip parameters will prevent overfitting.
 *   **Formulation**:
     $$\hat{x}(t) = x_{\text{ode}}(t) + W_x x_{\text{ode}}(t) + W_u u(t)$$
     with zero initialization for $W_x$ and $W_u$.
 
-## 3. Frequency-Aware Loss (Spectral Loss)
+## 3. Frequency-Aware Loss (Spectral Loss) 🔄 IN PROGRESS
 **Hypothesis**: Standard MSE loss in the time domain is dominated by large-scale low-frequency signals. Adding an FFT-magnitude penalty forces the optimizer to align predictions with the high-frequency spectral components of the true multi-unit activity.
 *   **Loss Formulation**:
     $$\mathcal{L} = \text{MSE}(x_{\text{pred}}, x_{\text{true}}) + \alpha \cdot \text{MSE}(|\text{FFT}(x_{\text{pred}})|, |\text{FFT}(x_{\text{true}})|)$$
 
-## 4. Latent Neural ODE (LFADS-Style)
+## 4. Latent Neural ODE (LFADS-Style) 📋 Not started
 **Hypothesis**: Fitting a high-dimensional system (50 channels) directly inside the Neural ODE integrator forces the model to fit high-frequency channel-level noise. Projecting the 50 channels to a lower-dimensional latent space ($z \in \mathbb{R}^{10}$), running the Neural ODE in latent space, and decoding back will denoise the firing rates and capture the underlying shared dynamical manifold.
 *   **Flow**:
     $$x_0 \xrightarrow{\text{Encoder}} z_0 \xrightarrow{\text{ODE}(u(t))} z(t) \xrightarrow{\text{Decoder}} \hat{x}(t)$$
 
-## 5. Multi-Scale / Multi-Rate Integration
+## 5. Multi-Scale / Multi-Rate Integration 🔄 IN PROGRESS
 **Hypothesis**: The system contains slow baseline drift and fast optogenetic responses. Splitting the state $x$ into slow variables (integrated via standard ODE) and fast variables (integrated at a much finer step size $\delta t = \Delta t / M$) will prevent the solver from smoothing out fast stimulus-driven components.
 *   **Formulation**:
     $$\hat{x}(t) = x_{\text{slow}}(t) + x_{\text{fast}}(t)$$
@@ -54,5 +54,5 @@ This document tracks modeling hypotheses and architectures to improve prediction
         $$x_{\text{fast}}(0) = W_{\text{fast}} x_0 + b_{\text{fast}}$$
         where $W_{\text{slow}}, W_{\text{fast}} \in \mathbb{R}^{n_x \times n_x}$ and $b_{\text{slow}}, b_{\text{fast}} \in \mathbb{R}^{n_x}$ are learnable parameters. They are initialized close to identity and zero respectively, allowing the network to learn how to optimaly split the initial observed state between slow and fast dynamics.
 
-## 6. Extended Training Sweep with LR Warmup
+## 6. Extended Training Sweep with LR Warmup ✅ TESTED — R²=0.9219 (noskip baseline, unfair 48/2 split)
 **Hypothesis**: Slower learning rates (like $\eta = 1\text{e-}4$, the best from Phase 2) prevent gradient explosion during integration but require more epochs to converge. Training for 500–1000 epochs (instead of 200) with a cosine decay and initial linear warmup will ensure the model converges to the true global optimum.

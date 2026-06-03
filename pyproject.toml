@@ -42,6 +42,12 @@ dev = [
     "marimo>=0.11.20,<1.0.0",
     "cvxpy>=1.6.5,<2.0.0",
 ]
+modeling = [
+    "wandb>=0.16.0",
+    "torch>=2.0.0",
+    "torchdiffeq>=0.2.3",
+    "h5py>=3.8.0",
+]
 
 [tool.poetry]
 packages = [{ include = "cleo" }]

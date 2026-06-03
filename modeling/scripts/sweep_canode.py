@@ -35,7 +35,17 @@ def main():
     parser.add_argument("--grid", type=str, default="small",
                         choices=["small", "large", "skip_linear", "spectral", "multirate"],
                         help="Sweep grid size: 'small' (8 configs), 'large' (27 configs), 'skip_linear' (16 configs), 'spectral' (8 configs), or 'multirate' (6 configs)")
+    parser.add_argument("--no-wandb", action="store_true", default=False,
+                        help="Disable wandb logging for all child runs")
+    parser.add_argument("--wandb-group", type=str, default=None,
+                        help="wandb group name for sweep runs (auto-generated if not set)")
     args = parser.parse_args()
+
+    # Auto-generate wandb group name for sweep
+    if not args.no_wandb and args.wandb_group is None:
+        import datetime
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        args.wandb_group = f"sweep_{args.grid}_{ts}"
 
     if args.gpu_ids is not None:
         gpu_ids = [int(x) for x in args.gpu_ids.split(",")]
@@ -203,6 +213,12 @@ def main():
                 "--output-dir", os.path.join(args.output_dir, run_id),
                 "--save-model", model_path,
             ] + n_test_flag
+            # Forward wandb arguments to child process
+            if not args.no_wandb:
+                cmd += ["--wandb-group", args.wandb_group]
+                cmd += ["--wandb-name", run_id]
+            else:
+                cmd.append("--no-wandb")
             if config["compile"]:
                 cmd.append("--compile")
             if "skip" in config:

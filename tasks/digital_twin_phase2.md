@@ -45,26 +45,26 @@ This phase tests the hypothesis that **scaling data unlocks bigger architectures
 ## Checklist
 
 ### Data Generation
-- `[ ]` Generate 50-trial dataset on gpu1 (48 CPUs, ~20 min est.)
-- `[ ]` Save as `data/training_trials_50.h5`
-- `[ ]` Verify shapes: x=(50, 50, 30000), u=(50, 2, 30000)
+- `[x]` Generate 50-trial dataset on gpu1 (48 CPUs, ~20 min est.)
+- `[x]` Save as `data/training_trials_50.h5`
+- `[x]` Verify shapes: x=(50, 50, 30000), u=(50, 2, 30000)
 
 ### Sweep Script Updates
-- `[ ]` Update `sweep_canode.py` to accept `--configs-file` or expand grid inline
-- `[ ]` Add `--n-test-trials` arg to control train/test split
-- `[ ]` Verify GPU distribution works for >8 configs (queue system)
+- `[x]` Update `sweep_canode.py` to accept `--configs-file` or expand grid inline
+- `[x]` Add `--n-test-trials` arg to control train/test split
+- `[x]` Verify GPU distribution works for >8 configs (queue system)
 
 ### Parallel Sweep Execution
-- `[ ]` Launch 27-config sweep on gpu1 (8 GPUs, queued)
-- `[ ]` Monitor and collect results in `results/sweep_v2/`
-- `[ ]` Parse all logs for 200ms windowed R² metrics
+- `[x]` Launch 27-config sweep on gpu1 (8 GPUs, queued)
+- `[x]` Monitor and collect results in `results/sweep_v2/`
+- `[x]` Parse all logs for 200ms windowed R² metrics
 
 ### Analysis
-- `[ ]` Compare best R² across hidden sizes: does 256/512 beat 128 with 5× data?
-- `[ ]` Plot scaling curves: R² vs hidden size, R² vs n_layers
-- `[ ]` Identify the Pareto frontier (accuracy vs training time)
-- `[ ]` Update `results/dashboard.html` with Phase 2 results
+- `[x]` Compare best R² across hidden sizes: does 256/512 beat 128 with 5× data?
+- `[x]` Plot scaling curves: R² vs hidden size, R² vs n_layers
+- `[x]` Identify the Pareto frontier (accuracy vs training time)
+- `[x]` Update `results/dashboard.html` with Phase 2 results
 
 ### Documentation
-- `[ ]` Update walkthrough.md
-- `[ ]` Commit to feature branch
+- `[x]` Update walkthrough.md
+- `[x]` Commit to feature branch
