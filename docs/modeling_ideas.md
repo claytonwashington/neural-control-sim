@@ -83,6 +83,7 @@ This document tracks modeling hypotheses and architectures to improve prediction
 **Branch/Worktree**: `feature/grokking` / `cleo-worktrees/grokking`
 
 ### 11. Ensemble Kalman Filter (EnKF)
+> **⚠️ PREVIOUS RESULTS INVALID**: R²=0.9997 used per-timestep observation updates (filtering), not blind prediction. Re-running with observation rate sweep to get fair comparison. See eval_enkf_obsrate.py.
 **Status**: ✅ TESTED — ✅ BEST OVERALL (not real-time)
 **Results dir**: `results/enkf/` (2080 Ti), `results/enkf_a100_N*/` (A100)
 **Branch/Worktree**: `feature/kalman-filter` / `cleo-worktrees/kalman-filter` and `feature/enkf-a100` / `cleo-worktrees/enkf-a100`
