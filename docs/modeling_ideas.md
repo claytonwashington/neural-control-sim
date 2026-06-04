@@ -1,11 +1,11 @@
 # Digital Twin Modeling Ideas
 
-This document tracks modeling hypotheses and architectures to improve prediction accuracy ($R^2$ on 200ms prediction windows) for the Cleo digital twin spiking neural network model. All results below use the **standardized 40/10 train/test split** on `data/training_trials.h5` with `seed=42`.
+This document tracks modeling hypotheses and architectures to improve prediction accuracy for the Cleo digital twin spiking neural network model. All results use the **standardized 40/10 train/test split** on `data/training_trials.h5` with `seed=42`.
 
-**Current best overall: EnKF (Q=0.1, R=0.01, N=64) → R²=0.9997** (1127ms inference on 2080 Ti)
-**Current best acausal: Latent NODE z=64, h=256, lr=5e-4 → R²=0.9387**
-**Current best causal/deployable: Causal Latent CA-NODE z=64, h128, lr=3e-4 → R²=0.8252** (173ms inference)
-**Channel-level baseline: CA-NODE h=128, l=2, lr=1e-4 → R²=0.9009**
+**Current best overall: EnKF (Q=0.1, R=0.01, N=64) → R²=0.9997** (1183ms inference — not real-time)
+**Current best acausal: Latent NODE z=64, h=256 → R²=0.9387**
+**Current best deployable: Causal Latent CA-NODE z=64, h128, lr=3e-4 → R²=0.8252** (173ms)
+**Channel-level baseline: CA-NODE h=128, l=2 → R²=0.9009**
 
 ---
 
@@ -15,108 +15,102 @@ This document tracks modeling hypotheses and architectures to improve prediction
 **Status**: ✅ TESTED — ❌ Did not beat baseline
 **Results dir**: `results/sweep_sequence_40_10/`
 **Branch**: `modeling-dev`
-- Best GRU: h128, lr=1e-4 → **R²=0.5798** ❌
-- Best Discrete CA-NODE (Euler): h128, lr=5e-5 → **R²=0.8968**
-- Control-affine inductive bias is essential (+29.5% R² over GRU).
+- Best GRU: h128, lr=1e-4 → R²=0.5798
+- Best Discrete CA-NODE (Euler): h128, lr=5e-5 → R²=0.8968
 
 ### 2. Skip Connections
 **Status**: ✅ TESTED — ❌ Did not beat baseline
 **Results dir**: `results/sweep_skip_40_10/`
-**Branch**: `feature/skip-connections` → `cleo-worktrees/skip-connections`
-- No-skip baseline: **R²=0.9009** ✅
-- Best skip (linear, swd=1.0): **R²=0.8911** ❌ (-1.1%)
-- All skip paths hurt due to overfitting.
+**Branch/Worktree**: `feature/skip-connections` / `cleo-worktrees/skip-connections`
+- Best (linear, swd=1.0): R²=0.8911 ❌ (-1.1%)
 
 ### 3. Spectral Loss
 **Status**: ✅ TESTED — ❌ Did not beat baseline
 **Results dir**: `results/sweep_spectral_40_10/`
-**Branch**: `feature/spectral-loss` → `cleo-worktrees/spectral-loss`
-- Best spectral (α=2.0): **R²=0.8993** ❌
-- Zero improvement. Time-domain MSE already captures frequency content.
+**Branch/Worktree**: `feature/spectral-loss` / `cleo-worktrees/spectral-loss`
+- Best (α=2.0): R²=0.8993 ❌
 
 ### 4. Multi-Rate Integration
 **Status**: ✅ TESTED — ❌ No benefit
 **Results dir**: `results/sweep_multirate_40_10/`
-**Branch**: `feature/multi-rate-integration` → `cleo-worktrees/multi-rate-integration`
-- M=1,5,10 all give **R²=0.8907** (identical)
-- 1ms timestep already resolves the dynamics; sub-ms sub-stepping adds nothing.
-- Weights differ across M but converge to same solution.
+**Branch/Worktree**: `feature/multi-rate-integration` / `cleo-worktrees/multi-rate-integration`
+- M=1,5,10 all give R²=0.8907 (identical)
 
 ---
 
 ## Phase 3: Latent Space Models (Complete)
 
-### 5. Latent Neural ODE (LFADS-Style) — Non-Causal
-**Status**: ✅ TESTED — ✅ BEST ACAUSAL MODEL
+### 5. Latent Neural ODE — Non-Causal
+**Status**: ✅ TESTED — ✅ BEST ACAUSAL
 **Results dir**: `results/sweep_latent_node_40_10/`
 **Branch**: `modeling-dev`
-- z=64, h=256, lr=5e-4 → **R²=0.9387** 🏆 (acausal, offline only)
-- z=64, h=128, lr=1e-3 → **R²=0.9340**
-- z=32 → R²≈0.44–0.63 (too compressed)
-- **Key insight**: z=64 is the critical latent dimension.
+- z=64, h=256 → R²=0.9387 🏆
 
 ### 6. Causal Latent CA-NODE
-**Status**: ✅ TESTED — ✅ BEST DEPLOYABLE LATENT MODEL
-**Results dir**: `results/sweep_latent_canode_40_10/` (z=32), `results/causal_z64_*` (z=64)
+**Status**: ✅ TESTED — ✅ BEST DEPLOYABLE LATENT
+**Results dir**: `results/causal_z64_*/`, `results/causal_z128_*/`
 **Branch**: `modeling-dev`
-- z=32, pw=200, h128 → **R²=0.5531** ❌ (initial, wrong z_dim)
-- z=64, h128, lr=3e-4, pw=200 → **R²=0.8252** ✅ (173ms inference)
-- z=64, h128, lr=5e-4, pw=500 → **R²=0.8203** (longer window, marginal)
-- z=64, h256, lr=5e-4, pw=200 → **R²=0.7091** (overfitting)
-- **Key insight**: z=32→z=64 caused +47% R² jump; must match acausal z_dim.
+- z=64, h128, lr=3e-4 → R²=0.8252 ✅ (173ms)
+- z=64, h128, pw=500 → R²=0.8203
+- z=128, h128, lr=3e-4 → R²=0.8430 ✅ (142ms) — marginal +2% from doubling z
 
 ---
 
 ## Phase 4: Closing the Causal-Acausal Gap (Active)
 
 ### 7. Encoder Distillation (Acausal Teacher → Causal Student)
-**Status**: 🔄 IN PROGRESS — training on gpu1:4
+**Status**: ✅ TESTED — ❌ Below directly-trained causal model
 **Results dir**: `results/distill_encoder/`
-**Branch**: `feature/encoder-distillation` → `cleo-worktrees/encoder-distillation`
-**Hypothesis**: Freeze acausal ODE+decoder, train causal GRU encoder to match z₀_teacher targets.
+**Branch/Worktree**: `feature/encoder-distillation` / `cleo-worktrees/encoder-distillation`
+- R²=0.6639, Inference=64.73ms
+- Frozen ODE too sensitive to z₀ distribution mismatch — small encoder errors compound through ODE integration.
 
 ### 8. Hybrid Distillation
-**Status**: 🔄 IN PROGRESS — launching α sweep on gpu1:0,1,2,7
+**Status**: 🔄 PENDING (subagent launching)
 **Results dir**: `results/hybrid_distill_aN/`
-**Branch**: `feature/hybrid-distillation` → `cleo-worktrees/hybrid-distillation`
-**Hypothesis**: Combined loss α·MSE(z₀_student, z₀_teacher) + (1-α)·MSE(x̂, x_true).
+**Branch/Worktree**: `feature/hybrid-distillation` / `cleo-worktrees/hybrid-distillation`
+- Loss = α·MSE(z₀_student, z₀_teacher) + (1-α)·MSE(x̂, x_true)
+- Sweep α ∈ {0.1, 0.3, 0.5, 0.7, 0.9}
 
 ### 9. Causal Grokking (500 Trials, 1000 Epochs)
-**Status**: 🔄 IN PROGRESS — training on gpu2:0
+**Status**: 🔄 IN PROGRESS — gpu2:0
 **Results dir**: `results/grok_causal_z64/`
-**Branch**: `feature/grokking` → `cleo-worktrees/grokking`
-**Hypothesis**: 10× more data + 5× more epochs + higher weight decay → causal encoder grokking.
+**Branch/Worktree**: `feature/grokking` / `cleo-worktrees/grokking`
 
 ### 10. Acausal Grokking (Better Teacher)
-**Status**: 🔄 IN PROGRESS — training on gpu2:1
+**Status**: 🔄 IN PROGRESS — gpu2:1
 **Results dir**: `results/grok_acausal_z128/`
-**Branch**: `feature/grokking` → `cleo-worktrees/grokking`
-**Hypothesis**: z=128, h=512 on 500 trials → push acausal R² from 0.94 → 0.97+.
+**Branch/Worktree**: `feature/grokking` / `cleo-worktrees/grokking`
 
-### 11. Ensemble Kalman Filter (EnKF) — RTX 2080 Ti
-**Status**: ✅ TESTED — ✅ BEST OVERALL MODEL (but slow)
-**Results dir**: `results/enkf/`
-**Branch**: `feature/kalman-filter` → `cleo-worktrees/kalman-filter`
-- Q=0.1, R=0.01, N=64 → **R²=0.9997** (1127ms inference ❌)
-- Q=0.01, R=0.01, N=64 → **R²=0.9937** (1141ms inference ❌)
-- Q=0.1, R=0.1, N=64 → **R²=0.9936** (1126ms inference ❌)
-- **Key insight**: EnKF with learned ODE dynamics essentially solves the problem. Bottleneck is inference speed (64 parallel ODE solves per step).
+### 11. Ensemble Kalman Filter (EnKF)
+**Status**: ✅ TESTED — ✅ BEST OVERALL (not real-time)
+**Results dir**: `results/enkf/` (2080 Ti), `results/enkf_a100_N*/` (A100)
+**Branch/Worktree**: `feature/kalman-filter` / `cleo-worktrees/kalman-filter` and `feature/enkf-a100` / `cleo-worktrees/enkf-a100`
+- Best (N=64, Q=0.1, R=0.01): R²=0.9997 — but ~1.2s inference (both 2080 Ti and A100)
+- N=16 still achieves R²=0.984 at same inference cost
+- Bottleneck is ODE integration count, not GPU speed
+- Key insight: reducing ODE solver tolerance or using fixed-step Euler for EnKF predict step could dramatically speed this up
 
 ### 12. Delayed Residual Correction (Complementary Filter)
-**Status**: 🔄 IN PROGRESS — training on gpu1:6
+**Status**: ✅ TESTED — ⚠️ Cross-architecture mismatch limits gains
 **Results dir**: `results/residual_correction/`
-**Branch**: `feature/residual-correction` → `cleo-worktrees/residual-correction`
-**Hypothesis**: MLP predicts acausal−causal z₀ residual at 100ms lag. Smith Predictor analogy.
+**Branch/Worktree**: `feature/residual-correction` / `cleo-worktrees/residual-correction`
+- R²=0.3445 (cross-arch: causal encoder z₀ → acausal ODE)
+- Closed 59% of gap between cross-arch and oracle
+- MLP adds only +2ms latency
+- Would need same-architecture ODE to be a fair test
 
-### 13. EnKF A100 Sweep (Speed Optimization)
-**Status**: 🔄 IN PROGRESS — sweeping ensemble sizes on gpu2:5
+### 13. EnKF A100 Speed Sweep
+**Status**: ✅ TESTED — ❌ No speedup from A100
 **Results dir**: `results/enkf_a100_N*/`
-**Branch**: `feature/enkf-a100` → `cleo-worktrees/enkf-a100`
-**Hypothesis**: A100 GPUs are ~3-4× faster than 2080 Ti. Sweeping ensemble sizes N∈{16,32,64,128} to find the speed/accuracy Pareto frontier. Goal: get inference under 200ms while maintaining R²>0.95.
+**Branch/Worktree**: `feature/enkf-a100` / `cleo-worktrees/enkf-a100`
+- All ensemble sizes (16-128) give ~1.2s inference on A100
+- Bottleneck is sequential ODE integration via dopri5, not GPU parallelism
+- **Next step**: Try fixed-step Euler integration in EnKF predict step to eliminate adaptive solver overhead
 
 ### 14. Additional Causal Sweeps
-**Status**: 🔄 IN PROGRESS — on gpu2:2,3,4
+**Status**: 🔄 PARTIAL — z=128 done, z=64 500ep and pw=1000 still running
 **Results dir**: `results/causal_z128_*`, `results/causal_z64_500ep_*`, `results/causal_z64_pw1000_*`
-- z=128, h128, pw200 → testing if z>64 helps further
-- z=64, 500ep, wd=5e-5 → grokking-lite on 50 trials
-- z=64, pw=1000 → does 1 second of context dramatically help?
+- z=128: R²=0.8430, 142ms ✅ (marginal +2% over z=64)
+- z=64, 500ep, wd=5e-5: 🔄 running on gpu2:3
+- z=64, pw=1000: 🔄 running on gpu2:4

@@ -4,20 +4,26 @@
 
 | Branch | Worktree | Experiment | Status | GPU |
 |--------|----------|------------|--------|-----|
-| feature/encoder-distillation | cleo-worktrees/encoder-distillation | Exp 2: Encoder Distillation | Running | gpu1:4 |
-| feature/hybrid-distillation | cleo-worktrees/hybrid-distillation | Exp 3: Hybrid Distillation | Starting | gpu1:0,1,2,7 |
-| feature/grokking | cleo-worktrees/grokking | Exp 4+5: Grokking (causal+acausal) | Running | gpu2:0-1 |
-| feature/kalman-filter | cleo-worktrees/kalman-filter | Exp 6: EnKF (2080 Ti) | Done | gpu1:5 |
-| feature/residual-correction | cleo-worktrees/residual-correction | Exp 7: Residual Correction | Done | gpu1:6 |
-| feature/enkf-a100 | cleo-worktrees/enkf-a100 | Exp 13: EnKF A100 Speed Sweep | Running | gpu2:5 |
+| feature/hybrid-distillation | cleo-worktrees/hybrid-distillation | Exp 8: Hybrid Distillation | Pending launch | gpu1 |
+| feature/grokking | cleo-worktrees/grokking | Exp 9: Causal Grokking | Running | gpu2:0 |
+| feature/grokking | cleo-worktrees/grokking | Exp 10: Acausal Grokking | Running | gpu2:1 |
 
-## Additional Causal Sweeps (in progress)
+## Completed Phase 4 Experiments
 
-| Config | tmux session | GPU | Status |
-|--------|-------------|-----|--------|
-| z=128, h128, pw200, lr=3e-4 | causal_z128 | gpu2:2 | Running |
-| z=64, h128, pw200, 500ep, wd=5e-5 | causal_z64_500ep | gpu2:3 | Running |
-| z=64, h128, pw1000, lr=3e-4 | causal_z64_pw1000 | gpu2:4 | Running |
+| Branch | Worktree | Experiment | Result |
+|--------|----------|------------|--------|
+| feature/encoder-distillation | cleo-worktrees/encoder-distillation | Exp 7: Encoder Distill | R2=0.6639 (worse than direct) |
+| feature/kalman-filter | cleo-worktrees/kalman-filter | Exp 11: EnKF (2080 Ti) | R2=0.9997 (1.1s, not RT) |
+| feature/residual-correction | cleo-worktrees/residual-correction | Exp 12: Residual Corr | R2=0.34 (cross-arch limit) |
+| feature/enkf-a100 | cleo-worktrees/enkf-a100 | Exp 13: EnKF A100 | R2=1.0 but no speed gain |
+
+## Additional Runs (no new scripts needed)
+
+| Config | tmux | GPU | Status | Result |
+|--------|------|-----|--------|--------|
+| z=128, h128 | - | gpu2:2 | Done | R2=0.8430, 142ms |
+| z=64, 500ep, wd=5e-5 | causal_z64_500ep | gpu2:3 | Running | - |
+| z=64, pw=1000 | causal_z64_pw1000 | gpu2:4 | Running | - |
 
 ## Completed Phase 2-3 Experiments
 
