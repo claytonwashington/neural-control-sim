@@ -33,51 +33,67 @@ See also: [control_layer_analysis.md] in the conversation artifacts.
 
 ---
 
-## 2. Residual Prediction Hierarchical Neural ODEs
+## 2. Continuous PredNet — Hierarchical Neural ODE (Path A)
 
-**Priority**: MEDIUM — novel architecture idea
+**Priority**: HIGH — novel architecture, principled approach to causal state estimation
+**Full spec**: [architecture_specs.md](docs/architecture_specs.md)
 
 ### Concept
-Instead of a single monolithic ODE, use a hierarchy of ODEs that predict residuals at multiple timescales:
+A stacked hierarchy of lightweight Neural ODEs communicating via **continuous prediction errors**.
+Lower layers track fast sensory dynamics; upper layers track slow abstract intent.
+The prediction error forcing term `g_φ(x(t) - D(z(t)))` is a **learned, nonlinear Kalman innovation**.
 
 ```
-Level 0 (slow dynamics):   dz0/dt = f0(z0) + g0(z0)u        (timescale ~100ms)
-Level 1 (fast residual):   dz1/dt = f1(z0, z1) + g1(z0, z1)u (timescale ~10ms)
-Level 2 (ultra-fast):      dz2/dt = f2(z0, z1, z2) + g2(...)u (timescale ~1ms)
-
-Prediction: x_hat = decoder(z0 + z1 + z2)
+Layer 0 (sensory):     dz⁰/dt = f_θ⁰(z⁰) + g_φ⁰(x(t) - D(z⁰))
+Layer 1 (abstraction): dz¹/dt = f_θ¹(z¹) + g_φ¹(z⁰ - proj(z¹))
 ```
 
-### Why This Might Work
-- Neural circuits operate at multiple timescales (slow NMDA, fast AMPA, ultra-fast GABAa)
-- Residual connections prevent gradient issues in deep hierarchies
-- Each level can use a different ODE solver tolerance (slow = coarse, fast = fine)
-- The hierarchy naturally separates control-relevant slow dynamics from noise-like fast dynamics
-- Could enable faster inference: skip Level 2 during control (only need slow dynamics for MPC)
+### Why This Is Promising
+- **Self-contained at deployment** — no teacher or acausal model needed
+- The g_φ terms are learned versions of the EnKF's Kalman update
+- Joint ODE integration means the hierarchy is differentiable end-to-end
+- Natural multiscale decomposition (fast sensory + slow behavioral)
+- Training uses acausal z_true for TOP layer only; intermediate layers self-organize
 
-### Relationship to Existing Work
-- Multi-rate integration (Idea 4) tried sub-stepping but within a single ODE — this is fundamentally different
-- Neural ODE with skip connections (Idea 2) added residual paths but not hierarchical dynamics
-- This is closer to the clock-hierarchical RNN literature (Chung et al. 2016, Hierarchical Multiscale RNNs)
-- Also relates to "slow feature analysis" and the idea that control-relevant features change slowly
+### Concerns
+- Joint integration of [z⁰, z¹] creates a potentially stiff ODE system
+- Training stability through coupled ODEs may be challenging
+- Unclear if the hierarchy helps with the core z₀ estimation problem
 
-### Implementation Sketch
-- 3-level hierarchy with z_dim = [32, 16, 16] (total = 64, matching current best)
-- Level 0 uses Euler integration with dt=10ms (fast)
-- Level 1 uses Euler with dt=1ms
-- Level 2 uses dopri5 with dt=1ms (only when accuracy matters)
-- Training: each level has its own loss term targeting residuals at its timescale
-- For MPC: only integrate Level 0 + 1 (skip Level 2) — much faster inference
+---
 
-### Open Questions
-- How to define the "target residual" for each level during training?
-- Should levels share parameters or be completely independent?
-- Does the hierarchy help with causal state estimation (the main bottleneck)?
-- What is the right decomposition of timescales for our specific neural circuit?
+## 2b. Continuous Delayed Distillation (Path B)
+
+**Priority**: HIGH — fixes the exact failure mode of our residual correction experiment
+**Full spec**: [architecture_specs.md](docs/architecture_specs.md)
+
+### Concept
+Run causal + acausal models in parallel during deployment. The acausal model operates
+at a Δ ms lag. As it completes, its outputs become delayed ground-truth for online
+gradient updates to a small residual MLP.
+
+```
+Real-time:  ẑ(t) = z_fast(t) + MLP_ψ(z_fast(t))
+Delayed:    z_true(t) = Encoder_acausal(x[t-W:t+Δ])
+Online:     L = || (z_true - z_fast) - MLP_ψ(z_fast) ||²
+```
+
+### Why This Fixes Our Previous Failure
+- Our Exp 12 (residual correction) used **cross-architecture** evaluation
+  (causal encoder z₀ → acausal ODE), causing R²=-0.51 baseline
+- Path B keeps MLP_ψ operating on **same-architecture** z_fast
+- Online learning adapts to biological drift (a real deployment concern)
+- Only MLP_ψ trains (67K params) — no memory leak risk
+
+### Key Advantage Over Path A
+- **Adaptability**: Path A is frozen at deployment; Path B adapts in real-time
+- Handles electrode drift, pharmacological changes, plasticity
+- Much simpler to implement and debug
 
 ---
 
 ## 3. Optimal Experimental Design
+
 
 **Priority**: MEDIUM — improves data efficiency
 
