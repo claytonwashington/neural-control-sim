@@ -139,3 +139,60 @@ The project maintains a living results dashboard at **`results/dashboard.html`**
 5. **Update `results/dashboard.html`** with the new results: table rows, plots, log entries, and summary metrics
 6. Sync the dashboard to the remote machine via `scp`
 
+
+### Results Digestion Protocol
+
+Every new set of experiment results **MUST** be digested through a structured git commit that updates all tracking artifacts. No results are considered "landed" until this process completes.
+
+#### Required Steps
+
+1. **Parse results** from the sweep log/JSON:
+   - Extract R², MSE, training time, and any hyperparameters
+   - Verify results are plausible (sanity check against known baselines)
+   - Flag any suspicious patterns (e.g., identical metrics across configs that should differ)
+
+2. **Update `results/dashboard.html`**:
+   - Add/update rows in the relevant sweep tab (sorted by R²)
+   - Update the Model Comparison tab if rankings changed
+   - Update summary metric cards (Best R², configs tested, etc.)
+   - Update the Experiment Log tab with a dated entry
+   - Update the Key Findings tab if new conclusions emerged
+   - Set the "Last updated" timestamp
+
+3. **Update `docs/modeling_ideas.md`**:
+   - Mark the tested idea with status: ✅ TESTED, ❌ Did not beat baseline, or 🔄 IN PROGRESS
+   - Include the R² result and comparison to baseline
+   - Add any new insights under the idea's notes
+
+4. **Update `task.md`** (local artifact or repo-level):
+   - Mark completed items as `[x]`
+   - Add new items if the results suggest follow-up experiments
+
+5. **Commit atomically**:
+   ```bash
+   git add -f results/dashboard.html docs/modeling_ideas.md task.md
+   git commit -m 'results(<sweep_name>): <brief summary with best R²>'
+   ```
+   Example: `results(latent-node): 8/8 complete, best R²=0.9387 (z=64, h256, lr=5e-4)`
+
+6. **Verification checklist** (include in commit message body):
+   - [ ] Dashboard has no ⏳ placeholders for completed runs
+   - [ ] Model Comparison tab reflects current leaderboard
+   - [ ] modeling_ideas.md status markers are accurate
+   - [ ] No stale numbers from old train/test splits
+
+#### For Autonomous Agents
+
+When a subagent completes a sweep or training run, it MUST:
+1. Parse its own results
+2. Produce a structured JSON summary (saved to `results/<sweep_name>/sweep_summary.json`)
+3. Report results back to the parent agent with: model name, R², MSE, key hyperparameters
+4. The **parent agent** (or a dedicated results-digestion agent) then performs steps 2-6 above
+
+**Never leave results un-digested.** If a sweep finishes but the dashboard hasn't been updated, the results effectively don't exist for the project.
+
+#### Standardization Rules
+
+- **All results MUST use the 40/10 train/test split** on `data/training_trials.h5` with `seed=42`
+- Results on other splits (e.g., old 48/2) must be clearly marked as non-comparable and should not appear in the main leaderboard
+- The CA-NODE baseline (R²=0.9009) is the reference point for all comparisons
