@@ -90,7 +90,10 @@ This document tracks modeling hypotheses and architectures to improve prediction
 - Best (N=64, Q=0.1, R=0.01): R²=0.9997 — but ~1.2s inference (both 2080 Ti and A100)
 - N=16 still achieves R²=0.984 at same inference cost
 - Bottleneck is ODE integration count, not GPU speed
-- Key insight: reducing ODE solver tolerance or using fixed-step Euler for EnKF predict step could dramatically speed this up
+- Key insight: ALL R2=0.9997 results are from filtering (seeing observations), not prediction
+- Observation rate sweep shows R2=0.9997 at ALL K values (1 through 999) — single Kalman update at t=0 does all the work
+- The acausal encoder z0 + 1 observation correction + ODE rollout = near-perfect
+- NEXT: test with CAUSAL encoder init to see if EnKF rescues R2=0.82
 
 ### 12. Delayed Residual Correction (Complementary Filter)
 **Status**: ✅ TESTED — ⚠️ Cross-architecture mismatch limits gains
