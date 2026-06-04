@@ -196,3 +196,32 @@ When a subagent completes a sweep or training run, it MUST:
 - **All results MUST use the 40/10 train/test split** on `data/training_trials.h5` with `seed=42`
 - Results on other splits (e.g., old 48/2) must be clearly marked as non-comparable and should not appear in the main leaderboard
 - The CA-NODE baseline (R²=0.9009) is the reference point for all comparisons
+
+#### Required Metrics Per Model
+
+Every results digestion must capture and report:
+1. **R²** (200ms windowed) — primary metric
+2. **MSE** (200ms windowed) — secondary metric
+3. **Causality** — is the model causal (real-time deployable) or acausal (offline only)?
+4. **Inference time** — wall-clock time for a single 200ms prediction step (ms). Mark as "acausal" for models that require the full trial.
+5. **Training time** — total elapsed training time
+6. **Number of parameters** — for fair capacity comparisons
+
+Training scripts SHOULD measure and log inference time. Add this to `sweep_summary.json`:
+```python
+# After training, measure inference time
+import time
+model.eval()
+with torch.no_grad():
+    dummy_x = torch.randn(1, n_x).to(device)
+    dummy_u = torch.randn(1, 200, n_u).to(device)
+    # Warmup
+    for _ in range(10):
+        _ = model(dummy_x, dummy_u)
+    torch.cuda.synchronize()
+    t0 = time.time()
+    for _ in range(100):
+        _ = model(dummy_x, dummy_u)
+    torch.cuda.synchronize()
+    inference_time_ms = (time.time() - t0) / 100 * 1000
+```
