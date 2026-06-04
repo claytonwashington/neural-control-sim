@@ -46,6 +46,7 @@ def train_latent_node(
     method: str = "dopri5",
     kl_weight: float = 1.0,
     seed: int = DEFAULT_SEED,
+    weight_decay: float = 1e-5,
 ) -> dict:
     model = model.to(device)
 
@@ -61,7 +62,7 @@ def train_latent_node(
     val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False,
                             pin_memory=True)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-5)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
 
     history = {"train_loss": [], "val_loss": [], "train_recon": [], "train_kl": []}
@@ -155,6 +156,8 @@ def main():
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--method", type=str, default="dopri5")
     parser.add_argument("--kl-weight", type=float, default=1.0)
+    parser.add_argument("--weight-decay", type=float, default=1e-5,
+                        help="AdamW weight decay")
     parser.add_argument("--output-dir", type=str, default="results/latent_node")
     parser.add_argument("--save-model", type=str, default="results/latent_node/model.pt")
     args = parser.parse_args()
@@ -222,6 +225,7 @@ def main():
         method=args.method,
         kl_weight=args.kl_weight,
         seed=args.seed,
+        weight_decay=args.weight_decay,
     )
 
     # Save
