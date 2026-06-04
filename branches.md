@@ -1,12 +1,27 @@
-# Active Git Branches & Agents
+# Branch ↔ Worktree ↔ Experiment Mapping
 
-This file tracks which branch is being used by which agent for what task. **All agents must check this file before starting work, register their active branch here, and keep it updated.**
+## Active Phase 4 Experiments
 
-| Branch Name | Agent / Worktree Path | Task/Goal Description | Status / PR Link | Last Updated |
-| ----------- | --------------------- | --------------------- | ---------------- | ------------ |
-| `main`      | N/A | Production branch | Active | 2026-05-26 |
-| `feature/digital-twin-phase1` | Antigravity | Phase 1 digital twin: Cleo plant, OU data generation, N4SID + control-affine NODE system ID. Also: GRU models, wandb integration, extended training (merged). | Active | 2026-06-03 |
-| `feature/skip-connections` | Antigravity (Instance 1) <br> `/snel/home/cbwash2/cleo-worktrees/skip-connections` | Simpler skip connections: linear-only (no MLP) with stronger regularization | Completed (Sweep Done) | 2026-06-03 |
-| `feature/spectral-loss` | Antigravity (Instance 2) <br> `/snel/home/cbwash2/cleo-worktrees/spectral-loss` | Frequency-Aware (Spectral) Loss for CA-NODE | Active | 2026-06-03 |
-| `feature/multi-rate-integration` | Antigravity (Instance 3) <br> `/snel/home/cbwash2/cleo-worktrees/multi-rate-integration` | Multi-Scale / Multi-Rate Integration for CA-NODE | Completed (Merged) | 2026-06-03 |
-| `feature/extended-training` | Antigravity (Instance 4) <br> `/snel/home/cbwash2/cleo-worktrees/extended-training` | Extended training sweep with cosine decay and learning rate warmup | Completed (Merged) | 2026-06-03 |
+| Branch | Worktree Path | Experiment | Status | GPU |
+|--------|---------------|------------|--------|-----|
+|  |  | Exp 2: Encoder Distillation | 🔄 Running | gpu1:4 |
+|  |  | Exp 3: Hybrid Distillation (α sweep) | 🔄 Running | gpu1:0-2,7 |
+|  |  | Exp 4+5: Causal+Acausal Grokking | 🔄 Running | gpu2:0-1 |
+|  |  | Exp 6: EnKF State Estimation | 🔄 Running | gpu1:5 |
+|  |  | Exp 7: Delayed Residual Correction | 🔄 Running | gpu1:6 |
+
+## Additional Causal Sweep (on grokking branch)
+| Config | tmux | GPU |
+|--------|------|-----|
+| z=128, h128, pw200, lr=3e-4 | causal_z128 | gpu2:2 |
+| z=64, h128, pw200, 500ep, wd=5e-5 | causal_z64_500ep | gpu2:3 |
+| z=64, h128, pw1000, lr=3e-4 | causal_z64_pw1000 | gpu2:4 |
+
+## Completed Phase 3 Experiments
+
+| Branch | Status | Result |
+|--------|--------|--------|
+|  | ✅ Completed | Merged to modeling-dev |
+|  | ✅ Completed | R²=0.8907 (no benefit) |
+|  | ✅ Completed | R²=0.8911 (hurt) |
+|  | ✅ Completed | R²=0.899 (no effect) |
