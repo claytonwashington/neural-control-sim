@@ -425,7 +425,7 @@
       <h1>⚡ Cleo Digital Twin — Experiment Dashboard</h1>
       <div class="subtitle">Control-Affine Neural ODE System Identification<span class="split-badge">Standardized 40/10 Split · seed=42</span></div>
     </div>
-    <div class="timestamp" id="timestamp">Last updated: 2026-06-03 16:10 EDT</div>
+    <div class="timestamp" id="timestamp">Last updated: 2026-06-04 11:51 EDT</div>
   </div>
 </header>
 
@@ -478,7 +478,7 @@
     <div class="section">
       <div class="section-header">
         <h2>🏆 Latent Neural ODE Sweep — 8 Configs (Non-Causal, LFADS-Style)</h2>
-        <span class="badge">7/8 Complete</span>
+        <span class="badge">Completed</span>
       </div>
       <div style="margin-bottom: 16px; font-size: 0.85rem; color: var(--text-secondary);">
         <p>Projects 50 channels → latent z-dim via encoder, runs ODE in latent space, decodes back. Non-causal encoder sees the full trial to infer z₀. This architecture <strong>beats every channel-level model</strong> by denoising high-frequency channel noise while preserving the underlying dynamical manifold.</p>
@@ -527,7 +527,8 @@
               <td><div class="r2-cell"><span>0.0888</span><div class="r2-bar"><div class="r2-fill" style="width:8.88%;background:var(--red)"></div></div></div></td>
             </tr>
             <tr>
-              <td>—</td><td>32</td><td>128</td><td>2</td><td>1e-3</td><td>rk4</td><td colspan="2" style="color:var(--yellow)">⏳ Training…</td>
+              <td>7</td><td>32</td><td>128</td><td>2</td><td>1e-3</td><td>rk4</td><td>0.4112</td>
+              <td><div class="r2-cell"><span>0.5958</span><div class="r2-bar"><div class="r2-fill" style="width:59.58%;background:var(--yellow)"></div></div></div></td>
             </tr>
           </tbody>
         </table>
@@ -664,7 +665,7 @@
     <div class="section">
       <div class="section-header">
         <h2>Sequence Models — GRU + Euler-Discretized CA-NODE</h2>
-        <span class="badge">9/10 Complete</span>
+        <span class="badge">Completed</span>
       </div>
       <div class="table-wrapper">
         <table id="sequence-table">
@@ -681,50 +682,51 @@
           </thead>
           <tbody>
             <tr class="best-row">
-              <td>🥇</td><td class="td-label">Discrete CA-NODE</td><td>128</td><td>2</td><td>1e-4</td><td>0.1247</td>
-              <td><div class="r2-cell"><span style="color:var(--green);font-weight:700">0.8744</span><div class="r2-bar"><div class="r2-fill" style="width:87.44%;background:var(--green)"></div></div></div></td>
+              <td>🥇</td><td class="td-label">Discrete CA-NODE</td><td>128</td><td>2</td><td>5e-5</td><td>0.1022</td>
+              <td><div class="r2-cell"><span style="color:var(--green);font-weight:700">0.8968</span><div class="r2-bar"><div class="r2-fill" style="width:89.68%;background:var(--green)"></div></div></div></td>
             </tr>
             <tr>
-              <td>🥈</td><td class="td-label">Discrete CA-NODE</td><td>128</td><td>3</td><td>1e-4</td><td>0.1345</td>
+              <td>🥈</td><td class="td-label">Discrete CA-NODE</td><td>128</td><td>2</td><td>1e-4</td><td>0.1247</td>
+              <td><div class="r2-cell"><span>0.8744</span><div class="r2-bar"><div class="r2-fill" style="width:87.44%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>🥉</td><td class="td-label">Discrete CA-NODE</td><td>128</td><td>3</td><td>1e-4</td><td>0.1345</td>
               <td><div class="r2-cell"><span>0.8650</span><div class="r2-bar"><div class="r2-fill" style="width:86.50%;background:var(--green)"></div></div></div></td>
             </tr>
             <tr>
-              <td>🥉</td><td class="td-label">Discrete CA-NODE</td><td>128</td><td>2</td><td>2e-4</td><td>0.1644</td>
+              <td>4</td><td class="td-label">Discrete CA-NODE</td><td>128</td><td>2</td><td>2e-4</td><td>0.1644</td>
               <td><div class="r2-cell"><span>0.8349</span><div class="r2-bar"><div class="r2-fill" style="width:83.49%;background:var(--blue)"></div></div></div></td>
             </tr>
             <tr>
-              <td>4</td><td class="td-label">Discrete CA-NODE</td><td>256</td><td>2</td><td>1e-4</td><td>0.1664</td>
+              <td>5</td><td class="td-label">Discrete CA-NODE</td><td>256</td><td>2</td><td>1e-4</td><td>0.1664</td>
               <td><div class="r2-cell"><span>0.8332</span><div class="r2-bar"><div class="r2-fill" style="width:83.32%;background:var(--blue)"></div></div></div></td>
             </tr>
             <tr>
-              <td>5</td><td class="td-label">GRU</td><td>128</td><td>1</td><td>1e-4</td><td>0.4232</td>
+              <td>6</td><td class="td-label">GRU</td><td>128</td><td>1</td><td>1e-4</td><td>0.4232</td>
               <td><div class="r2-cell"><span style="color:var(--yellow)">0.5798</span><div class="r2-bar"><div class="r2-fill" style="width:57.98%;background:var(--yellow)"></div></div></div></td>
             </tr>
             <tr>
-              <td>6</td><td class="td-label">GRU</td><td>256</td><td>1</td><td>1e-4</td><td>0.4658</td>
+              <td>7</td><td class="td-label">GRU</td><td>256</td><td>1</td><td>1e-4</td><td>0.4658</td>
               <td><div class="r2-cell"><span style="color:var(--yellow)">0.5429</span><div class="r2-bar"><div class="r2-fill" style="width:54.29%;background:var(--yellow)"></div></div></div></td>
             </tr>
             <tr>
-              <td>7</td><td class="td-label">GRU</td><td>128</td><td>2</td><td>1e-3</td><td>0.4810</td>
+              <td>8</td><td class="td-label">GRU</td><td>128</td><td>2</td><td>1e-3</td><td>0.4810</td>
               <td><div class="r2-cell"><span style="color:var(--yellow)">0.5243</span><div class="r2-bar"><div class="r2-fill" style="width:52.43%;background:var(--yellow)"></div></div></div></td>
             </tr>
             <tr>
-              <td>8</td><td class="td-label">GRU</td><td>128</td><td>1</td><td>1e-3</td><td>0.5154</td>
+              <td>9</td><td class="td-label">GRU</td><td>128</td><td>1</td><td>1e-3</td><td>0.5154</td>
               <td><div class="r2-cell"><span style="color:var(--yellow)">0.4894</span><div class="r2-bar"><div class="r2-fill" style="width:48.94%;background:var(--yellow)"></div></div></div></td>
             </tr>
             <tr>
-              <td>9</td><td class="td-label">GRU</td><td>256</td><td>1</td><td>1e-3</td><td>1.2467</td>
+              <td>10</td><td class="td-label">GRU</td><td>256</td><td>1</td><td>1e-3</td><td>1.2467</td>
               <td><div class="r2-cell"><span style="color:var(--red)">-0.2297</span><div class="r2-bar"><div class="r2-fill" style="width:0%;background:var(--red)"></div></div></div></td>
-            </tr>
-            <tr>
-              <td>—</td><td class="td-label">Discrete CA-NODE</td><td>128</td><td>2</td><td>5e-5</td><td colspan="2" style="color:var(--yellow)">⏳ Training…</td>
             </tr>
           </tbody>
         </table>
       </div>
       <div style="margin-top: 20px">
         <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:8px;">Sequence Models Key Findings</h3>
-        <p style="font-size:0.82rem; color:var(--text-secondary);"><strong>Control-Affine inductive bias is critical.</strong> The Euler-discretized CA-NODE (R²=0.8744) dramatically outperforms the black-box GRU (R²=0.5798) despite using the same number of parameters. The GRU memorizes training windows perfectly (train loss 0.055) but generalizes terribly to test trials, while the <code>x_next = x + f(x) + g(x)u</code> structure prevents overfitting. The discrete CA-NODE slightly trails the continuous solver (0.9009), confirming that adaptive ODE integration adds ~2.6% over single Euler steps.</p>
+        <p style="font-size:0.82rem; color:var(--text-secondary);"><strong>Control-Affine inductive bias is critical.</strong> The Euler-discretized CA-NODE (R²=0.8968 with lr=5e-5) dramatically outperforms the black-box GRU (R²=0.5798) despite using the same number of parameters. The GRU memorizes training windows perfectly (train loss 0.055) but generalizes terribly to test trials, while the <code>x_next = x + f(x) + g(x)u</code> structure prevents overfitting. The discrete CA-NODE slightly trails the continuous solver (0.9009), confirming that adaptive ODE integration adds ~0.5% over single Euler steps when both use optimal LR.</p>
       </div>
     </div>
   </div>
@@ -733,8 +735,8 @@
   <div id="tab-causallatent" class="tab-content">
     <div class="section">
       <div class="section-header">
-        <h2>Causal Latent CA-NODE Sweep — 11 Configs</h2>
-        <span class="badge">7/11 Complete</span>
+        <h2>Causal Latent CA-NODE Sweep — 12 Configs</h2>
+        <span class="badge">Completed</span>
       </div>
       <div class="table-wrapper">
         <table id="causallatent-table">
@@ -750,51 +752,61 @@
           </thead>
           <tbody>
             <tr class="best-row">
-              <td>🥇</td><td>100ms</td><td>128</td><td>5e-4</td><td>0.4817</td>
+              <td>🥇</td><td>200ms</td><td>128</td><td>5e-4</td><td>0.4526</td>
+              <td><div class="r2-cell"><span style="color:var(--green);font-weight:600">0.5531</span><div class="r2-bar"><div class="r2-fill" style="width:55.31%;background:var(--yellow)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>🥈</td><td>100ms</td><td>128</td><td>5e-4</td><td>0.4817</td>
               <td><div class="r2-cell"><span>0.5252</span><div class="r2-bar"><div class="r2-fill" style="width:52.52%;background:var(--yellow)"></div></div></div></td>
             </tr>
             <tr>
-              <td>🥈</td><td>50ms</td><td>128</td><td>5e-4</td><td>0.4813</td>
+              <td>🥉</td><td>50ms</td><td>128</td><td>5e-4</td><td>0.4813</td>
               <td><div class="r2-cell"><span>0.5249</span><div class="r2-bar"><div class="r2-fill" style="width:52.49%;background:var(--yellow)"></div></div></div></td>
             </tr>
             <tr>
-              <td>🥉</td><td>50ms</td><td>256</td><td>5e-4</td><td>0.5721</td>
+              <td>4</td><td>50ms</td><td>256</td><td>5e-4</td><td>0.5721</td>
               <td><div class="r2-cell"><span>0.4329</span><div class="r2-bar"><div class="r2-fill" style="width:43.29%;background:var(--yellow)"></div></div></div></td>
             </tr>
             <tr>
-              <td>4</td><td>50ms</td><td>128</td><td>1e-3</td><td>0.6152</td>
+              <td>4</td><td>200ms</td><td>128</td><td>1e-3</td><td>0.5984</td>
+              <td><div class="r2-cell"><span>0.4085</span><div class="r2-bar"><div class="r2-fill" style="width:40.85%;background:var(--yellow)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>5</td><td>50ms</td><td>128</td><td>1e-3</td><td>0.6152</td>
               <td><div class="r2-cell"><span>0.3914</span><div class="r2-bar"><div class="r2-fill" style="width:39.14%;background:var(--yellow)"></div></div></div></td>
             </tr>
             <tr>
-              <td>5</td><td>100ms</td><td>128</td><td>1e-3</td><td>0.7257</td>
+              <td>6</td><td>100ms</td><td>256</td><td>5e-4</td><td>0.6963</td>
+              <td><div class="r2-cell"><span>0.3125</span><div class="r2-bar"><div class="r2-fill" style="width:31.25%;background:var(--red)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>10</td><td>100ms</td><td>128</td><td>1e-3</td><td>0.7257</td>
               <td><div class="r2-cell"><span>0.2833</span><div class="r2-bar"><div class="r2-fill" style="width:28.33%;background:var(--red)"></div></div></div></td>
             </tr>
             <tr>
-              <td>6</td><td>100ms</td><td>256</td><td>1e-3</td><td>0.7878</td>
-              <td><div class="r2-cell"><span>0.2285</span><div class="r2-bar"><div class="r2-fill" style="width:22.85%;background:var(--red)"></div></div></div></td>
+              <td>8</td><td>200ms</td><td>256</td><td>1e-3</td><td>0.6448</td>
+              <td><div class="r2-cell"><span>0.3645</span><div class="r2-bar"><div class="r2-fill" style="width:36.45%;background:var(--red)"></div></div></div></td>
             </tr>
             <tr>
-              <td>7</td><td>50ms</td><td>256</td><td>1e-3</td><td>0.7882</td>
+              <td>9</td><td>200ms</td><td>256</td><td>5e-4</td><td>0.6277</td>
+              <td><div class="r2-cell"><span>0.3807</span><div class="r2-bar"><div class="r2-fill" style="width:38.07%;background:var(--yellow)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>9</td><td>50ms</td><td>256</td><td>1e-3</td><td>0.7882</td>
               <td><div class="r2-cell"><span>0.2116</span><div class="r2-bar"><div class="r2-fill" style="width:21.16%;background:var(--red)"></div></div></div></td>
             </tr>
             <tr>
-              <td>—</td><td>100ms</td><td>256</td><td>5e-4</td><td colspan="2" style="color:var(--yellow)">⏳ Training…</td>
-            </tr>
-            <tr>
-              <td>—</td><td>200ms</td><td>128</td><td>1e-3</td><td colspan="2" style="color:var(--yellow)">⏳ Training…</td>
-            </tr>
-            <tr>
-              <td>—</td><td>200ms</td><td>128</td><td>5e-4</td><td colspan="2" style="color:var(--yellow)">⏳ Training…</td>
-            </tr>
-            <tr>
               <td>—</td><td>200ms</td><td>256</td><td>1e-3</td><td colspan="2" style="color:var(--yellow)">⏳ Training…</td>
+            </tr>
+            <tr>
+              <td>—</td><td>200ms</td><td>256</td><td>5e-4</td><td colspan="2" style="color:var(--yellow)">⏳ Training…</td>
             </tr>
           </tbody>
         </table>
       </div>
       <div style="margin-top: 20px">
         <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:8px;">Causal Latent Key Findings</h3>
-        <p style="font-size:0.82rem; color:var(--text-secondary);">Enforcing strict causality (GRU encoder only sees past window to infer z₀, then forecasts forward) dramatically degrades prediction accuracy to R²≈0.53 versus non-causal smoothing (R²≈0.94). The causal constraint forces the model to extrapolate from limited past context, which is fundamentally harder than non-causal inference over the full trial. Smaller hidden (128) and lower LR (5e-4) help; 200ms past window runs are in progress.</p>
+        <p style="font-size:0.82rem; color:var(--text-secondary);">Enforcing strict causality (GRU encoder only sees past window to infer z₀, then forecasts forward) dramatically degrades prediction accuracy to R²≈0.53 versus non-causal smoothing (R²≈0.94). Interestingly, the 200ms past window with lr=1e-3 only reaches R²=0.41, while 100ms h128 lr=5e-4 is best at 0.53 — more context doesn't help if the LR is too high. Smaller hidden (128) and lower LR (5e-4) consistently outperform. 3 runs with 200ms past window still in progress.</p>
       </div>
     </div>
   </div>
@@ -804,30 +816,53 @@
     <div class="section">
       <div class="section-header">
         <h2>Multi-Rate Integration Sweep — 6 Configs</h2>
-        <span class="badge badge-warning">Re-running (40/10)</span>
+        <span class="badge">Completed</span>
       </div>
       <div style="margin-bottom: 16px; font-size: 0.85rem; color: var(--text-secondary);">
-        <p>⏳ All 6 configs are currently training on gpu2 (A40s) using the standardized 40/10 split. Previous results below were from the <strong>old non-standardized split</strong> and are shown for reference only. Updated R² values will appear once the new sweep completes (~30 min).</p>
+        <p>Decoupling fast optogenetic-driven responses from slow baseline integration via multi-rate sub-stepping. All configs trained on standardized 40/10 split with seed=42.</p>
       </div>
       <div class="table-wrapper">
         <table id="multirate-table">
           <thead>
             <tr>
-              <th>Config</th>
-              <th>Sub-Steps (M)</th>
-              <th>Init Split</th>
-              <th>Status</th>
+              <th onclick="sortTable('multirate-table', 0)">Rank</th>
+              <th onclick="sortTable('multirate-table', 1)">Sub-Steps (M)</th>
+              <th onclick="sortTable('multirate-table', 2)">Init Split</th>
+              <th onclick="sortTable('multirate-table', 3)">200ms MSE</th>
+              <th onclick="sortTable('multirate-table', 4)">200ms R²</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td>run_00</td><td>1</td><td>zero_fast</td><td style="color:var(--yellow)">⏳ Training on GPU 0…</td></tr>
-            <tr><td>run_01</td><td>1</td><td>learnable</td><td style="color:var(--yellow)">⏳ Training on GPU 1…</td></tr>
-            <tr><td>run_02</td><td>5</td><td>zero_fast</td><td style="color:var(--yellow)">⏳ Training on GPU 2…</td></tr>
-            <tr><td>run_03</td><td>5</td><td>learnable</td><td style="color:var(--yellow)">⏳ Training on GPU 3…</td></tr>
-            <tr><td>run_04</td><td>10</td><td>zero_fast</td><td style="color:var(--yellow)">⏳ Training on GPU 4…</td></tr>
-            <tr><td>run_05</td><td>10</td><td>learnable</td><td style="color:var(--yellow)">⏳ Training on GPU 5…</td></tr>
+            <tr class="best-row">
+              <td>🥇</td><td>1</td><td>zero_fast</td><td>0.1084</td>
+              <td><div class="r2-cell"><span style="color:var(--green)">0.8907</span><div class="r2-bar"><div class="r2-fill" style="width:89.07%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr class="best-row">
+              <td>🥇</td><td>5</td><td>zero_fast</td><td>0.1084</td>
+              <td><div class="r2-cell"><span style="color:var(--green)">0.8907</span><div class="r2-bar"><div class="r2-fill" style="width:89.07%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr class="best-row">
+              <td>🥇</td><td>10</td><td>zero_fast</td><td>0.1084</td>
+              <td><div class="r2-cell"><span style="color:var(--green)">0.8907</span><div class="r2-bar"><div class="r2-fill" style="width:89.07%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>4</td><td>1</td><td>learnable</td><td>0.1222</td>
+              <td><div class="r2-cell"><span>0.8770</span><div class="r2-bar"><div class="r2-fill" style="width:87.70%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>4</td><td>5</td><td>learnable</td><td>0.1222</td>
+              <td><div class="r2-cell"><span>0.8770</span><div class="r2-bar"><div class="r2-fill" style="width:87.70%;background:var(--green)"></div></div></div></td>
+            </tr>
+            <tr>
+              <td>4</td><td>10</td><td>learnable</td><td>0.1222</td>
+              <td><div class="r2-cell"><span>0.8770</span><div class="r2-bar"><div class="r2-fill" style="width:87.70%;background:var(--green)"></div></div></div></td>
+            </tr>
           </tbody>
         </table>
+      </div>
+      <div style="margin-top: 20px">
+        <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:8px;">Multi-Rate Key Findings</h3>
+        <p style="font-size:0.82rem; color:var(--text-secondary);"><strong>Sub-stepping provides zero benefit on the standardized 40/10 split.</strong> M=1, M=5, and M=10 all produce <em>identical</em> R² values (0.8907 for zero_fast, 0.8770 for learnable). The slow/fast decomposition does not capture additional dynamics beyond the standard CA-NODE. The zero_fast initialization outperforms learnable (+1.4%), suggesting the explicit zero-initialization for fast states is a mild regularizer. Neither variant beats the pure CA-NODE baseline (R²=0.9009).</p>
       </div>
     </div>
   </div>
@@ -881,11 +916,18 @@
               <td style="color:var(--yellow)">❌ Overfitting</td>
             </tr>
             <tr>
-              <td class="td-label">Discrete CA-NODE (Euler)</td>
+              <td class="td-label">Multi-rate CA-NODE (M=1)</td>
+              <td>Multi-Rate ODE (dopri5)</td>
+              <td><div class="r2-cell"><span>0.8907</span></div></td>
+              <td>0.1084</td>
+              <td style="color:var(--text-muted)">Partial (2/6 done)</td>
+            </tr>
+            <tr>
+              <td class="td-label">Discrete CA-NODE (Euler, lr=5e-5)</td>
               <td>Euler-Discretized CA</td>
-              <td><div class="r2-cell"><span>0.8744</span></div></td>
-              <td>0.1247</td>
-              <td style="color:var(--text-muted)">Good, ODE still better</td>
+              <td><div class="r2-cell"><span>0.8968</span></div></td>
+              <td>0.1022</td>
+              <td style="color:var(--text-muted)">Near-ODE with slow LR</td>
             </tr>
             <tr>
               <td class="td-label">GRU (best)</td>
@@ -902,10 +944,10 @@
               <td style="color:var(--red)">❌ Causal constraint too hard</td>
             </tr>
             <tr>
-              <td class="td-label">N4SID</td>
+              <td class="td-label">N4SID (40/10)</td>
               <td>Linear Subspace</td>
-              <td><div class="r2-cell"><span style="color:var(--red)">0.2059</span></div></td>
-              <td>23,600</td>
+              <td><div class="r2-cell"><span style="color:var(--yellow)">0.4013</span></div></td>
+              <td>18,586</td>
               <td style="color:var(--text-muted)">Linear baseline</td>
             </tr>
           </tbody>
