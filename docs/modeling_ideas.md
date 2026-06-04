@@ -51,3 +51,31 @@ This document tracks modeling hypotheses and architectures to improve prediction
 ## 6. Extended Training Sweep with LR Warmup 🔄 IN PROGRESS
 **Hypothesis**: Slower learning rates with longer training (500 epochs) + warmup may improve convergence.
 *   **Status**: 12 configs running on gpu2. Awaiting completion for 40/10 standardized comparison.
+
+---
+
+## Phase 4: Closing the Causal-Acausal Gap
+
+### 7. Encoder Distillation (Acausal Teacher → Causal Student)
+**Status**: 📋 Not started  
+**Hypothesis**: Freeze the acausal model's ODE + decoder (proven R²=0.94). Train only a causal GRU encoder to match the acausal z₀ targets. Separates dynamics learning (solved) from causal state inference (unsolved). The causal encoder gets denoised latent targets instead of learning end-to-end.
+
+### 8. Hybrid Distillation
+**Status**: 📋 Not started  
+**Hypothesis**: Same as encoder distillation but allow ODE+decoder to fine-tune with combined loss: α·MSE(z₀_student, z₀_teacher) + (1-α)·MSE(x̂, x_true). Lets the system adapt dynamics to work better with the noisier causal z₀ estimates. Sweep α ∈ {0.1, 0.3, 0.5, 0.7, 0.9}.
+
+### 9. Causal Grokking (500 Trials, 1000 Epochs)
+**Status**: 📋 Not started (data gen in progress)  
+**Hypothesis**: With 10× more training data + 5× more epochs + higher weight decay (1e-4), the causal encoder may "grok" and discover an efficient algorithm for z₀ inference from past context. Watch for the characteristic test-loss plateau → sudden drop.
+
+### 10. Acausal Grokking (Better Teacher)
+**Status**: 📋 Not started (data gen in progress)  
+**Hypothesis**: Train a larger acausal Latent NODE (z=128, h=512) on 500 trials for 1000 epochs. Could push acausal R² from 0.94 → 0.97+, producing a better teacher for distillation.
+
+### 11. Kalman Filter State Estimation (EnKF/UKF)
+**Status**: 📋 Not started  
+**Hypothesis**: Instead of training a neural encoder, use a principled Ensemble Kalman Filter with the learned ODE as the dynamics model and the decoder as the observation model. No additional training needed — just plug in the learned ODE and run the filter. Maintains state covariance for uncertainty estimation.
+
+### 12. Delayed Residual Correction (Complementary Filter)
+**Status**: 📋 Not started  
+**Hypothesis**: Run both causal and acausal models during deployment. The acausal model operates at a 100ms lag (centered ±100ms window). A small residual MLP learns to predict Δz₀ = z₀_acausal - z₀_causal and adds this correction to the real-time causal estimate. Analogous to a Smith Predictor in control theory. The residual is structured (not noise) and learnable. Can be fine-tuned online during deployment.
