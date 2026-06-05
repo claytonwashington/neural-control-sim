@@ -132,7 +132,7 @@ This document tracks modeling hypotheses and architectures to improve prediction
 
 
 ### 19. Optoclamp: Closed-Loop Rate Clamping
-**Status**: 🔄 BUILDING on feature/optoclamp
+**Status**: ✅ DONE — MPC beats PI (14x lower SS error at 125% target)
 **Branch/Worktree**: `feature/optoclamp` / `cleo-worktrees/optoclamp`
 - Recapitulate Newman et al. 2015 optoclamp experiment
 - PI controller baseline (sweep Kp, Ki)
