@@ -9,6 +9,7 @@
 | feature/grokking | cleo-worktrees/grokking | Exp 10: Acausal Grokking | Running | gpu2:1 |
 | feature/enkf-causal | cleo-worktrees/enkf-causal | Exp 15: EnKF Causal Init | Done | gpu1:0-3 |
 | feature/enkf-fulltrial | cleo-worktrees/enkf-fulltrial | Exp 17: EnKF Full Trial | Launching | gpu1:0-3 |
+| feature/residual-v2 | cleo-worktrees/residual-v2 | Exp 18: Residual Correction v2 | Launching | gpu1:0 |
 | feature/control-metrics | cleo-worktrees/control-metrics | Exp 16: Control Metrics | Done | gpu1:4 |
 | feature/control-metrics | cleo-worktrees/control-metrics | Control Metrics Suite | Launching | gpu1:4 |
 
