@@ -11,9 +11,11 @@ Architecture:
   Forward: z0_corrected = z0_causal + delta_z0 -> causal ODE -> causal decoder -> x_hat
   Loss: MSE(x_hat, x_true)
 
-The MLP's last layer is zero-initialized so it starts as identity (no correction).
-Gradients flow through the frozen ODE (weights frozen via requires_grad=False,
-but computation graph remains intact for backprop to the MLP).
+Optimization strategy:
+  - Pre-extract all z0 pairs (no_grad, one-time cost)
+  - During training, only run MLP + ODE + decoder (skip encoder)
+  - Use euler solver for training (10x faster than dopri5)
+  - Use dopri5 for final evaluation
 """
 
 from __future__ import annotations
@@ -32,7 +34,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import TensorDataset, DataLoader
 from torchdiffeq import odeint
 
 torch.set_num_threads(4)
@@ -80,147 +82,162 @@ class ResidualMLP(nn.Module):
 
 
 # ============================================================================
-# Dataset: extracts paired windows for end-to-end training
+# Pre-extraction of z0 pairs and future targets
 # ============================================================================
 
-class ResidualV2Dataset(Dataset):
-    """Pre-extracts all needed windows for the residual correction training.
+@torch.no_grad()
+def extract_training_data(
+    causal_model: LatentControlAffineODE,
+    acausal_model: LatentNeuralODE,
+    x_trials: np.ndarray,
+    u_trials: np.ndarray,
+    causal_x_mean: np.ndarray,
+    causal_x_std: np.ndarray,
+    causal_u_mean: np.ndarray,
+    causal_u_std: np.ndarray,
+    acausal_x_mean: np.ndarray,
+    acausal_x_std: np.ndarray,
+    acausal_u_mean: np.ndarray,
+    acausal_u_std: np.ndarray,
+    dt: float,
+    causal_past_window: int = 200,
+    acausal_half_window: int = 100,
+    future_window: int = 200,
+    lag: int = 100,
+    stride: int = 200,
+    device: str = "cuda",
+    batch_encode_size: int = 128,
+):
+    """Pre-extract all z0 pairs, future controls, and future targets.
 
-    For each valid time point t:
-      - causal_x_past: x_causal_norm[:, t-200:t].T  -> (200, n_x)
-      - causal_u_past: u_causal_norm[:, t-200:t].T  -> (200, n_u)
-      - acausal_x_win: x_acausal_norm[:, t-lag-100:t-lag+100].T -> (200, n_x)
-      - acausal_u_win: u_acausal_norm[:, t-lag-100:t-lag+100].T -> (200, n_u)
-      - future_u: u_causal_norm[:, t:t+200].T -> (200, n_u)
-      - future_x: x_causal_norm[:, t:t+200].T -> (200, n_x)  (target)
+    Returns tensors:
+      - z0_causal_all: (N, z_dim)
+      - z0_acausal_all: (N, z_dim)
+      - future_u_all: (N, future_window, n_u)
+      - future_x_all: (N, future_window, n_x)
     """
+    causal_model.eval()
+    acausal_model.eval()
 
-    def __init__(
-        self,
-        x_trials: np.ndarray,   # (n_trials, n_channels, n_steps)
-        u_trials: np.ndarray,   # (n_trials, n_inputs, n_steps)
-        causal_x_mean: np.ndarray,
-        causal_x_std: np.ndarray,
-        causal_u_mean: np.ndarray,
-        causal_u_std: np.ndarray,
-        acausal_x_mean: np.ndarray,
-        acausal_x_std: np.ndarray,
-        acausal_u_mean: np.ndarray,
-        acausal_u_std: np.ndarray,
-        dt: float,
-        causal_past_window: int = 200,
-        acausal_half_window: int = 100,
-        future_window: int = 200,
-        lag: int = 100,
-        stride: int = 50,
-    ):
-        super().__init__()
-        self.dt = dt
-        self.future_window = future_window
+    z0_causal_list = []
+    z0_acausal_list = []
+    future_u_list = []
+    future_x_list = []
 
-        causal_x_past_list = []
-        causal_u_past_list = []
-        acausal_x_win_list = []
-        acausal_u_win_list = []
-        future_u_list = []
-        future_x_list = []
+    n_trials = x_trials.shape[0]
+    print(f"  Extracting z0 pairs from {n_trials} trials...")
 
-        n_trials = x_trials.shape[0]
-        for trial_idx in range(n_trials):
-            x_trial = x_trials[trial_idx]  # (n_channels, n_steps)
-            u_trial = u_trials[trial_idx]  # (n_inputs, n_steps)
-            T = x_trial.shape[1]
+    for trial_idx in range(n_trials):
+        x_trial = x_trials[trial_idx]
+        u_trial = u_trials[trial_idx]
+        T = x_trial.shape[1]
 
-            # Normalize with respective stats
-            x_causal_n = (x_trial - causal_x_mean) / causal_x_std
-            u_causal_n = (u_trial - causal_u_mean) / causal_u_std
-            x_acausal_n = (x_trial - acausal_x_mean) / acausal_x_std
-            u_acausal_n = (u_trial - acausal_u_mean) / acausal_u_std
+        # Normalize with respective stats
+        x_causal_n = (x_trial - causal_x_mean) / causal_x_std
+        u_causal_n = (u_trial - causal_u_mean) / causal_u_std
+        x_acausal_n = (x_trial - acausal_x_mean) / acausal_x_std
+        u_acausal_n = (u_trial - acausal_u_mean) / acausal_u_std
 
-            # Valid range: need causal_past_window before t, lag+acausal_hw before t,
-            # and future_window after t
-            t_start = max(causal_past_window, lag + acausal_half_window)
-            t_end = T - future_window
+        t_start = max(causal_past_window, lag + acausal_half_window)
+        t_end = T - future_window
 
-            if t_start >= t_end:
-                continue
+        if t_start >= t_end:
+            continue
 
-            for t in range(t_start, t_end, stride):
-                # Causal encoder input: x[t-200:t]
-                cx_past = x_causal_n[:, t - causal_past_window:t].T  # (200, n_x)
-                cu_past = u_causal_n[:, t - causal_past_window:t].T  # (200, n_u)
+        # Collect windows for this trial
+        trial_cx_past = []
+        trial_cu_past = []
+        trial_ax_win = []
+        trial_au_win = []
 
-                # Acausal encoder input: x[t-lag-100:t-lag+100]
-                t_delayed = t - lag
-                ax_win = x_acausal_n[:, t_delayed - acausal_half_window:t_delayed + acausal_half_window].T  # (200, n_x)
-                au_win = u_acausal_n[:, t_delayed - acausal_half_window:t_delayed + acausal_half_window].T  # (200, n_u)
+        for t in range(t_start, t_end, stride):
+            cx_past = x_causal_n[:, t - causal_past_window:t].T
+            cu_past = u_causal_n[:, t - causal_past_window:t].T
 
-                # Future (for ODE integration and loss) -- use causal normalization
-                fu = u_causal_n[:, t:t + future_window].T   # (200, n_u)
-                fx = x_causal_n[:, t:t + future_window].T   # (200, n_x) -- target
+            t_delayed = t - lag
+            ax_win = x_acausal_n[:, t_delayed - acausal_half_window:t_delayed + acausal_half_window].T
+            au_win = u_acausal_n[:, t_delayed - acausal_half_window:t_delayed + acausal_half_window].T
 
-                causal_x_past_list.append(cx_past)
-                causal_u_past_list.append(cu_past)
-                acausal_x_win_list.append(ax_win)
-                acausal_u_win_list.append(au_win)
-                future_u_list.append(fu)
-                future_x_list.append(fx)
+            fu = u_causal_n[:, t:t + future_window].T
+            fx = x_causal_n[:, t:t + future_window].T
 
-        self.causal_x_past = torch.tensor(np.array(causal_x_past_list), dtype=torch.float32)
-        self.causal_u_past = torch.tensor(np.array(causal_u_past_list), dtype=torch.float32)
-        self.acausal_x_win = torch.tensor(np.array(acausal_x_win_list), dtype=torch.float32)
-        self.acausal_u_win = torch.tensor(np.array(acausal_u_win_list), dtype=torch.float32)
-        self.future_u = torch.tensor(np.array(future_u_list), dtype=torch.float32)
-        self.future_x = torch.tensor(np.array(future_x_list), dtype=torch.float32)
-        self.t_future = torch.arange(future_window, dtype=torch.float32) * dt
+            trial_cx_past.append(cx_past)
+            trial_cu_past.append(cu_past)
+            trial_ax_win.append(ax_win)
+            trial_au_win.append(au_win)
+            future_u_list.append(fu)
+            future_x_list.append(fx)
 
-        print(f"  ResidualV2Dataset: {len(self)} windows from {n_trials} trials")
+        if not trial_cx_past:
+            continue
 
-    def __len__(self):
-        return self.causal_x_past.shape[0]
+        # Batch encode this trial's windows
+        cx_past_t = torch.tensor(np.array(trial_cx_past), dtype=torch.float32)
+        cu_past_t = torch.tensor(np.array(trial_cu_past), dtype=torch.float32)
+        ax_win_t = torch.tensor(np.array(trial_ax_win), dtype=torch.float32)
+        au_win_t = torch.tensor(np.array(trial_au_win), dtype=torch.float32)
 
-    def __getitem__(self, idx):
-        return (
-            self.causal_x_past[idx],
-            self.causal_u_past[idx],
-            self.acausal_x_win[idx],
-            self.acausal_u_win[idx],
-            self.future_u[idx],
-            self.future_x[idx],
-        )
+        n_windows = cx_past_t.shape[0]
+        for start in range(0, n_windows, batch_encode_size):
+            end = min(start + batch_encode_size, n_windows)
+            cx_b = cx_past_t[start:end].to(device)
+            cu_b = cu_past_t[start:end].to(device)
+            ax_b = ax_win_t[start:end].to(device)
+            au_b = au_win_t[start:end].to(device)
+
+            mu_c, _ = causal_model.encoder(cx_b, cu_b)
+            mu_a, _ = acausal_model.encoder(ax_b, au_b)
+
+            z0_causal_list.append(mu_c.cpu())
+            z0_acausal_list.append(mu_a.cpu())
+
+        if (trial_idx + 1) % 10 == 0:
+            print(f"    Trial {trial_idx + 1}/{n_trials} done, "
+                  f"{sum(z.shape[0] for z in z0_causal_list)} windows so far")
+
+    z0_causal_all = torch.cat(z0_causal_list, dim=0)
+    z0_acausal_all = torch.cat(z0_acausal_list, dim=0)
+    future_u_all = torch.tensor(np.array(future_u_list), dtype=torch.float32)
+    future_x_all = torch.tensor(np.array(future_x_list), dtype=torch.float32)
+
+    print(f"  Extracted {z0_causal_all.shape[0]} z0 pairs")
+    return z0_causal_all, z0_acausal_all, future_u_all, future_x_all
 
 
 # ============================================================================
-# Training loop
+# Training loop with pre-extracted z0 pairs
 # ============================================================================
 
 def train_residual_v2(
     residual_mlp: ResidualMLP,
     causal_model: LatentControlAffineODE,
-    acausal_model: LatentNeuralODE,
-    dataset: ResidualV2Dataset,
+    z0_causal: torch.Tensor,
+    z0_acausal: torch.Tensor,
+    future_u: torch.Tensor,
+    future_x: torch.Tensor,
+    dt: float,
     n_epochs: int = 200,
     lr: float = 1e-3,
     batch_size: int = 64,
     val_fraction: float = 0.1,
     device: str = "cuda",
-    method: str = "dopri5",
+    method: str = "euler",
     seed: int = DEFAULT_SEED,
 ) -> dict:
-    """Train the ResidualMLP end-to-end through the frozen causal ODE+decoder."""
+    """Train ResidualMLP with pre-extracted z0 pairs (no encoder needed)."""
     residual_mlp = residual_mlp.to(device)
     causal_model = causal_model.to(device)
-    acausal_model = acausal_model.to(device)
 
-    # Freeze both pretrained models entirely
+    # Freeze causal model
     for p in causal_model.parameters():
         p.requires_grad_(False)
-    for p in acausal_model.parameters():
-        p.requires_grad_(False)
     causal_model.eval()
-    acausal_model.eval()
 
-    # Train/val split
+    future_window = future_u.shape[1]
+    t_future = torch.arange(future_window, dtype=torch.float32, device=device) * dt
+
+    # Build dataset from pre-extracted data
+    dataset = TensorDataset(z0_causal, z0_acausal, future_u, future_x)
     n_val = max(1, int(len(dataset) * val_fraction))
     n_train = len(dataset) - n_val
     train_set, val_set = torch.utils.data.random_split(
@@ -237,46 +254,37 @@ def train_residual_v2(
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
 
     history = {"train_loss": [], "val_loss": []}
-    t_future = dataset.t_future.to(device)
 
     print(f"  Dataset: {len(dataset)} windows, {n_train} train, {n_val} val")
     print(f"  Batch size: {batch_size}, batches/epoch: {len(train_loader)}")
+    print(f"  ODE solver: {method}, future_window: {future_window}")
 
     for epoch in range(n_epochs):
         # --- Training ---
         residual_mlp.train()
         train_losses = []
 
-        for batch in train_loader:
-            cx_past, cu_past, ax_win, au_win, fu, fx_target = [b.to(device) for b in batch]
+        for z0c, z0a, fu, fx in train_loader:
+            z0c = z0c.to(device)
+            z0a = z0a.to(device)
+            fu = fu.to(device)
+            fx = fx.to(device)
 
-            # 1. Encode with both encoders (no grad for encoders)
-            with torch.no_grad():
-                mu_causal, _ = causal_model.encoder(cx_past, cu_past)
-                z0_causal = mu_causal  # (B, z_dim)
+            # 1. Compute correction
+            delta_z0 = residual_mlp(z0c, z0a)
+            z0_corrected = z0c + delta_z0
 
-                mu_acausal, _ = acausal_model.encoder(ax_win, au_win)
-                z0_acausal_delayed = mu_acausal  # (B, z_dim)
-
-            # Detach to be sure (already no_grad above, but explicit)
-            z0_causal = z0_causal.detach()
-            z0_acausal_delayed = z0_acausal_delayed.detach()
-
-            # 2. Compute correction (this IS differentiable)
-            delta_z0 = residual_mlp(z0_causal, z0_acausal_delayed)  # (B, z_dim)
-            z0_corrected = z0_causal + delta_z0  # (B, z_dim)
-
-            # 3. Run through CAUSAL ODE (frozen weights, but gradients flow through z0)
+            # 2. Run through CAUSAL ODE (frozen, but grad flows through z0_corrected)
             causal_model.set_input(t_future, fu)
             z_seq = odeint(causal_model.ode_func, z0_corrected, t_future,
-                          method=method, rtol=1e-4, atol=1e-5)  # (T, B, z_dim)
-            z_seq = z_seq.permute(1, 0, 2)  # (B, T, z_dim)
+                          method=method, rtol=1e-4, atol=1e-5)
+            z_seq = z_seq.permute(1, 0, 2)
 
-            # 4. Decode with CAUSAL decoder
-            x_pred = causal_model.decoder(z_seq)  # (B, T, n_x)
+            # 3. Decode
+            x_pred = causal_model.decoder(z_seq)
 
-            # 5. Loss
-            loss = F.mse_loss(x_pred, fx_target)
+            # 4. Loss
+            loss = F.mse_loss(x_pred, fx)
 
             optimizer.zero_grad()
             loss.backward()
@@ -292,17 +300,14 @@ def train_residual_v2(
         residual_mlp.eval()
         val_losses = []
         with torch.no_grad():
-            for batch in val_loader:
-                cx_past, cu_past, ax_win, au_win, fu, fx_target = [b.to(device) for b in batch]
+            for z0c, z0a, fu, fx in val_loader:
+                z0c = z0c.to(device)
+                z0a = z0a.to(device)
+                fu = fu.to(device)
+                fx = fx.to(device)
 
-                mu_causal, _ = causal_model.encoder(cx_past, cu_past)
-                z0_causal = mu_causal
-
-                mu_acausal, _ = acausal_model.encoder(ax_win, au_win)
-                z0_acausal_delayed = mu_acausal
-
-                delta_z0 = residual_mlp(z0_causal, z0_acausal_delayed)
-                z0_corrected = z0_causal + delta_z0
+                delta_z0 = residual_mlp(z0c, z0a)
+                z0_corrected = z0c + delta_z0
 
                 causal_model.set_input(t_future, fu)
                 z_seq = odeint(causal_model.ode_func, z0_corrected, t_future,
@@ -310,7 +315,7 @@ def train_residual_v2(
                 z_seq = z_seq.permute(1, 0, 2)
                 x_pred = causal_model.decoder(z_seq)
 
-                val_losses.append(F.mse_loss(x_pred, fx_target).item())
+                val_losses.append(F.mse_loss(x_pred, fx).item())
 
         avg_val = np.mean(val_losses) if val_losses else float("nan")
         history["val_loss"].append(avg_val)
@@ -369,11 +374,10 @@ def evaluate(
     corrected_times = []
 
     for ti in range(n_test):
-        x_trial = x_test_trials[ti]  # (n_channels, n_steps)
-        u_trial = u_test_trials[ti]  # (n_inputs, n_steps)
+        x_trial = x_test_trials[ti]
+        u_trial = u_test_trials[ti]
         T = x_trial.shape[1]
 
-        # Normalize
         x_causal_n = (x_trial - causal_x_mean) / causal_x_std
         u_causal_n = (u_trial - causal_u_mean) / causal_u_std
         x_acausal_n = (x_trial - acausal_x_mean) / acausal_x_std
@@ -390,7 +394,6 @@ def evaluate(
         trial_var = np.var(x_causal_n)
 
         for t in range(t_start, t_end, stride):
-            # Prepare inputs
             cx_past = torch.tensor(
                 x_causal_n[:, t - causal_past_window:t].T, dtype=torch.float32
             ).unsqueeze(0).to(device)
@@ -412,7 +415,7 @@ def evaluate(
                 u_causal_n[:, t:t + future_window].T, dtype=torch.float32
             ).unsqueeze(0).to(device)
 
-            x_true = x_causal_n[:, t:t + future_window]  # (n_channels, future_window)
+            x_true = x_causal_n[:, t:t + future_window]
 
             # --- Baseline: causal only ---
             t0 = time.perf_counter()
@@ -424,7 +427,7 @@ def evaluate(
                           method=method, rtol=1e-4, atol=1e-5)
             z_seq_b = z_seq.permute(1, 0, 2)
             x_pred_baseline = causal_model.decoder(z_seq_b)
-            x_pred_baseline_np = x_pred_baseline[0].cpu().numpy().T  # (n_channels, T)
+            x_pred_baseline_np = x_pred_baseline[0].cpu().numpy().T
             t1 = time.perf_counter()
             baseline_times.append((t1 - t0) * 1000.0)
 
@@ -500,11 +503,14 @@ def main():
                         help="Hidden dim for residual MLP")
     parser.add_argument("--causal-past-window", type=int, default=200)
     parser.add_argument("--future-window", type=int, default=200)
-    parser.add_argument("--stride", type=int, default=50)
+    parser.add_argument("--stride", type=int, default=200)
     parser.add_argument("--n-test-trials", type=int, default=DEFAULT_TEST_TRIALS)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--device", type=str, default="auto")
-    parser.add_argument("--method", type=str, default="dopri5")
+    parser.add_argument("--train-method", type=str, default="euler",
+                        help="ODE solver for training (euler is much faster)")
+    parser.add_argument("--eval-method", type=str, default="dopri5",
+                        help="ODE solver for evaluation (dopri5 for accuracy)")
     parser.add_argument("--output-dir", type=str, default="results/residual_v2")
     args = parser.parse_args()
 
@@ -547,7 +553,7 @@ def main():
     print(f"  Causal: z_dim={causal_ckpt['z_dim']}, hidden={causal_ckpt['hidden']}, "
           f"layers={causal_ckpt['n_layers']}")
 
-    causal_x_mean = causal_ckpt["x_mean"]  # (n_channels, 1)
+    causal_x_mean = causal_ckpt["x_mean"]
     causal_x_std = causal_ckpt["x_std"]
     causal_u_mean = causal_ckpt["u_mean"]
     causal_u_std = causal_ckpt["u_std"]
@@ -581,10 +587,20 @@ def main():
     n_params = sum(p.numel() for p in residual_mlp.parameters())
     print(f"  Parameters: {n_params:,}")
 
-    # ---- Build dataset ----
-    print("\nBuilding training dataset...")
-    acausal_hw = 100  # half-window for 200-step acausal window
-    dataset = ResidualV2Dataset(
+    # ---- Move models to device ----
+    causal_model = causal_model.to(device)
+    acausal_model = acausal_model.to(device)
+
+    # ---- Pre-extract z0 pairs ----
+    print("\n" + "=" * 60)
+    print("Step 1: Pre-extracting z0 pairs from training data")
+    print("=" * 60)
+    acausal_hw = 100
+    t_extract_start = time.time()
+
+    z0_causal_all, z0_acausal_all, future_u_all, future_x_all = extract_training_data(
+        causal_model=causal_model,
+        acausal_model=acausal_model,
         x_trials=x_train_trials,
         u_trials=u_train_trials,
         causal_x_mean=causal_x_mean,
@@ -601,23 +617,29 @@ def main():
         future_window=args.future_window,
         lag=args.lag,
         stride=args.stride,
+        device=device,
     )
+    t_extract = time.time() - t_extract_start
+    print(f"  Extraction took {t_extract:.1f}s")
 
     # ---- Train ----
     print("\n" + "=" * 60)
-    print("Training Residual MLP (end-to-end through frozen causal ODE)")
+    print("Step 2: Training Residual MLP (end-to-end through frozen causal ODE)")
     print("=" * 60)
     t_train_start = time.time()
     history = train_residual_v2(
         residual_mlp=residual_mlp,
         causal_model=causal_model,
-        acausal_model=acausal_model,
-        dataset=dataset,
+        z0_causal=z0_causal_all,
+        z0_acausal=z0_acausal_all,
+        future_u=future_u_all,
+        future_x=future_x_all,
+        dt=dt,
         n_epochs=args.n_epochs,
         lr=args.lr,
         batch_size=args.batch_size,
         device=device,
-        method=args.method,
+        method=args.train_method,
         seed=args.seed,
     )
     train_time_s = time.time() - t_train_start
@@ -625,7 +647,7 @@ def main():
 
     # ---- Evaluate ----
     print("\n" + "=" * 60)
-    print("Evaluating on test trials...")
+    print("Step 3: Evaluating on test trials (using dopri5)")
     print("=" * 60)
 
     results = evaluate(
@@ -647,9 +669,9 @@ def main():
         acausal_half_window=acausal_hw,
         future_window=args.future_window,
         lag=args.lag,
-        stride=100,  # eval stride
+        stride=100,
         device=device,
-        method=args.method,
+        method=args.eval_method,
         n_train=n_train,
     )
 
@@ -684,7 +706,6 @@ def main():
     # ---- Plot ----
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
-    # Training curve
     axes[0].semilogy(history["train_loss"], label="Train", alpha=0.8)
     axes[0].semilogy(history["val_loss"], label="Val", alpha=0.8)
     axes[0].set_xlabel("Epoch")
@@ -693,7 +714,6 @@ def main():
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
 
-    # Per-trial comparison
     trials = range(len(results["per_trial_baseline_r2"]))
     axes[1].plot(list(trials), results["per_trial_baseline_r2"], "o-",
                  label="Causal baseline", alpha=0.7, color="#e74c3c")
@@ -705,7 +725,6 @@ def main():
     axes[1].legend()
     axes[1].grid(True, alpha=0.3)
 
-    # Summary bar chart
     methods = ["Causal\nbaseline", "Corrected"]
     r2s = [results["baseline_r2"], results["corrected_r2"]]
     stds = [results["baseline_r2_std"], results["corrected_r2_std"]]
