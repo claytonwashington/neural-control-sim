@@ -158,3 +158,60 @@ Real neural systems drift over time (electrode movement, plasticity, pharmacolog
 - Domain adaptation via batch normalization statistics
 - Continual learning with elastic weight consolidation
 - The residual correction MLP (Idea 12) was designed to be fine-tuned online — revisit this with same-architecture ODE
+
+---
+
+## Roadmap: Principled Order of Operations
+
+### Phase 6: Control Layer (NEXT)
+**Why first**: We believe we can infer decent firing rates one way or another (R2=0.82-0.93).
+The control layer tells us whether "decent" is good enough and connects model accuracy to
+actual closed-loop performance. Without this, we are optimizing R2 in a vacuum.
+
+**Deliverables**:
+1. NeuralODEController(LatencyIOProcessor) in Cleo
+2. LDS+LQR baseline via ldsCtrlEst
+3. Rate clamping experiment (simplest control task)
+4. Model accuracy vs control performance curve
+
+**Key questions answered**:
+- What R2 threshold enables useful control?
+- Does MPC with neural ODE outperform LDS+LQR?
+- How sensitive is control to model quality (causal vs acausal vs EnKF-corrected)?
+
+**Prerequisites**: All met (Exp 16 confirmed Jacobian accuracy=99.7%, MPC viable at H<=20)
+
+### Phase 7: Spiking Data on Current Plant
+**Why second**: Real experiments produce spikes, not firing rates. We need a spike-to-rate
+front-end (or direct spike modeling) before any of our models are deployable.
+
+**Deliverables**:
+1. Spike sorting / binning pipeline integrated with Cleo
+2. Evaluate existing models on spike-derived firing rates
+3. Quantify the rate estimation to model accuracy to control performance chain
+4. Potentially train models directly on spike counts (Poisson observation model)
+
+**Key questions answered**:
+- How much does spike-to-rate estimation degrade model performance?
+- Is there a spike observation model that preserves R2?
+- Can we close the loop with noisy spiking observations?
+
+**Prerequisites**: Phase 6 (need the control layer to measure impact)
+
+### Phase 8: New Plants / Generalization
+**Why last**: Different plants (larger networks, different cell types, different stimulation
+modalities) introduce many new variables. We should nail the methodology on the current
+plant first before scaling.
+
+**Deliverables**:
+1. Second plant with different network topology
+2. Transfer learning: can an encoder/ODE pre-trained on Plant A fine-tune to Plant B?
+3. Multi-plant meta-learning (if transfer works)
+4. Scaling laws: how does model quality scale with network size, num electrodes, num opto sites?
+
+**Key questions answered**:
+- Does our approach generalize beyond the current 50-neuron simulation?
+- What transfers and what needs re-training?
+- Where do we hit computational limits?
+
+**Prerequisites**: Phase 7 (want spiking pipeline validated first)
