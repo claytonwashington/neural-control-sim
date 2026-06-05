@@ -7,6 +7,8 @@
 | feature/hybrid-distillation | cleo-worktrees/hybrid-distillation | Exp 8: Hybrid Distillation | Pending launch | gpu1 |
 | feature/grokking | cleo-worktrees/grokking | Exp 9: Causal Grokking | Running | gpu2:0 |
 | feature/grokking | cleo-worktrees/grokking | Exp 10: Acausal Grokking | Running | gpu2:1 |
+| feature/enkf-causal | cleo-worktrees/enkf-causal | Exp 15: EnKF Causal Init | Launching | gpu1:0-3 |
+| feature/control-metrics | cleo-worktrees/control-metrics | Control Metrics Suite | Launching | gpu1:4 |
 
 ## Completed Phase 4 Experiments
 
@@ -16,6 +18,7 @@
 | feature/kalman-filter | cleo-worktrees/kalman-filter | Exp 11: EnKF (2080 Ti) | R2=0.9997 (1.1s, not RT) |
 | feature/residual-correction | cleo-worktrees/residual-correction | Exp 12: Residual Corr | R2=0.34 (cross-arch limit) |
 | feature/enkf-a100 | cleo-worktrees/enkf-a100 | Exp 13: EnKF A100 | R2=1.0 but no speed gain |
+| feature/hybrid-distillation | cleo-worktrees/hybrid-distillation | Exp 8: Hybrid Distill | R2=0.48 (worse than direct) |
 
 ## Additional Runs (no new scripts needed)
 
