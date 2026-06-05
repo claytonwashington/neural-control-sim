@@ -1,0 +1,62 @@
+Random seed set to: 42
+Using device: cuda
+Loading data...
+
+Loading teacher from: results/sweep_latent_node_40_10/run_05_z64_h256_l2_lr0.0005_dopri5.pt
+  Teacher: z_dim=64, hidden=256, layers=2
+  Teacher n_x=50, student n_x=50
+
+Building Student CA-NODE: n_x=50, n_u=2, z_dim=64, hidden=128, layers=2
+  Student Parameters: 250,354
+  Dataset: 11996 windows, 10797 train, 1199 val
+  Batch size: 64, batches/epoch: 168
+  Alpha (distill weight): 0.5
+  Epoch    0/300 | train: 0.762582 (R: 0.929418, D: 0.595747, KL: 0.001830) | val: 0.525168 | lr: 3.00e-04
+  Epoch   10/300 | train: 0.053477 (R: 0.077220, D: 0.022032, KL: 0.019253) | val: 0.087697 | lr: 2.99e-04
+  Epoch   20/300 | train: 0.049043 (R: 0.069207, D: 0.014709, KL: 0.017713) | val: 0.080514 | lr: 2.96e-04
+  Epoch   30/300 | train: 0.051103 (R: 0.069132, D: 0.013586, KL: 0.016240) | val: 0.079362 | lr: 2.92e-04
+  Epoch   40/300 | train: 0.053321 (R: 0.069443, D: 0.012958, KL: 0.015151) | val: 0.079566 | lr: 2.86e-04
+  Epoch   50/300 | train: 0.055757 (R: 0.070175, D: 0.012643, KL: 0.014347) | val: 0.078426 | lr: 2.79e-04
+  Epoch   60/300 | train: 0.054909 (R: 0.069251, D: 0.012164, KL: 0.014202) | val: 0.078085 | lr: 2.70e-04
+  Epoch   70/300 | train: 0.054481 (R: 0.068772, D: 0.011964, KL: 0.014113) | val: 0.077675 | lr: 2.60e-04
+  Epoch   80/300 | train: 0.053963 (R: 0.068175, D: 0.011689, KL: 0.014031) | val: 0.078519 | lr: 2.49e-04
+  Epoch   90/300 | train: 0.053287 (R: 0.067281, D: 0.011385, KL: 0.013954) | val: 0.077995 | lr: 2.37e-04
+  Epoch  100/300 | train: 0.052153 (R: 0.065784, D: 0.010808, KL: 0.013856) | val: 0.077577 | lr: 2.24e-04
+  Epoch  110/300 | train: 0.051079 (R: 0.064180, D: 0.010417, KL: 0.013781) | val: 0.077009 | lr: 2.10e-04
+  Epoch  120/300 | train: 0.050169 (R: 0.062824, D: 0.010080, KL: 0.013717) | val: 0.076490 | lr: 1.95e-04
+  Epoch  130/300 | train: 0.049163 (R: 0.061562, D: 0.009506, KL: 0.013628) | val: 0.076178 | lr: 1.80e-04
+  Epoch  140/300 | train: 0.048345 (R: 0.060628, D: 0.008971, KL: 0.013545) | val: 0.075643 | lr: 1.64e-04
+  Epoch  150/300 | train: 0.048094 (R: 0.060317, D: 0.008868, KL: 0.013501) | val: 0.076059 | lr: 1.48e-04
+  Epoch  160/300 | train: 0.047480 (R: 0.059745, D: 0.008390, KL: 0.013412) | val: 0.075568 | lr: 1.33e-04
+  Epoch  170/300 | train: 0.046796 (R: 0.059184, D: 0.007764, KL: 0.013322) | val: 0.075713 | lr: 1.17e-04
+  Epoch  180/300 | train: 0.046694 (R: 0.059034, D: 0.007843, KL: 0.013255) | val: 0.075783 | lr: 1.02e-04
+  Epoch  190/300 | train: 0.046235 (R: 0.058597, D: 0.007403, KL: 0.013235) | val: 0.075650 | lr: 8.76e-05
+  Epoch  200/300 | train: 0.045880 (R: 0.058279, D: 0.007138, KL: 0.013171) | val: 0.075423 | lr: 7.36e-05
+  Epoch  210/300 | train: 0.045716 (R: 0.058107, D: 0.007074, KL: 0.013126) | val: 0.075647 | lr: 6.06e-05
+  Epoch  220/300 | train: 0.045494 (R: 0.057971, D: 0.006806, KL: 0.013106) | val: 0.075663 | lr: 4.85e-05
+  Epoch  230/300 | train: 0.045275 (R: 0.057710, D: 0.006674, KL: 0.013083) | val: 0.075425 | lr: 3.75e-05
+  Epoch  240/300 | train: 0.045251 (R: 0.057742, D: 0.006631, KL: 0.013064) | val: 0.075323 | lr: 2.77e-05
+  Epoch  250/300 | train: 0.045150 (R: 0.057637, D: 0.006574, KL: 0.013045) | val: 0.074829 | lr: 1.93e-05
+  Epoch  260/300 | train: 0.045090 (R: 0.057580, D: 0.006511, KL: 0.013045) | val: 0.075149 | lr: 1.23e-05
+  Epoch  270/300 | train: 0.045008 (R: 0.057497, D: 0.006446, KL: 0.013037) | val: 0.075158 | lr: 6.86e-06
+  Epoch  280/300 | train: 0.045019 (R: 0.057532, D: 0.006439, KL: 0.013034) | val: 0.074999 | lr: 2.96e-06
+  Epoch  290/300 | train: 0.044977 (R: 0.057463, D: 0.006421, KL: 0.013035) | val: 0.075044 | lr: 6.66e-07
+  Epoch  299/300 | train: 0.044993 (R: 0.057504, D: 0.006415, KL: 0.013034) | val: 0.075026 | lr: 0.00e+00
+
+Model saved to results/hybrid_distill_a0.5/model.pt
+
+Evaluating on test trials (200-step future horizons)...
+  Trial 40: MSE=0.2138, R2=0.8051
+  Trial 41: MSE=0.2518, R2=0.7545
+  Trial 42: MSE=0.2363, R2=0.7425
+  Trial 43: MSE=0.4405, R2=0.5098
+  Trial 44: MSE=1.0308, R2=-0.1535
+  Trial 45: MSE=0.4054, R2=0.5547
+  Trial 46: MSE=0.1944, R2=0.7907
+  Trial 47: MSE=1.3621, R2=-0.2177
+  Trial 48: MSE=0.7710, R2=0.2589
+  Trial 49: MSE=0.2755, R2=0.7812
+
+  Avg 200-step: MSE=0.5182, R2=0.4826
+  Avg Inference Time (batch=1, horizon=200): 188.57 ms
+Done.
