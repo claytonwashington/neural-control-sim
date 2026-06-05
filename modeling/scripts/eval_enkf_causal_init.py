@@ -288,12 +288,13 @@ def evaluate_enkf(
         T_val = x_test_n.shape[1]
 
         # -- Normalize for causal encoder --
-        x_norm_c = (x_test_n - c_x_mean[:, None]) / (c_x_std[:, None] + 1e-8)
-        u_norm_c = (u_test_n - c_u_mean[:, None]) / (c_u_std[:, None] + 1e-8)
+        # x_mean shape is (50, 1), broadcasts with (50, 30000) directly
+        x_norm_c = (x_test_n - c_x_mean) / (c_x_std + 1e-8)
+        u_norm_c = (u_test_n - c_u_mean) / (c_u_std + 1e-8)
 
         # -- Normalize for ODE/decoder --
-        x_norm_o = (x_test_n - o_x_mean[:, None]) / (o_x_std[:, None] + 1e-8)
-        u_norm_o = (u_test_n - o_u_mean[:, None]) / (o_u_std[:, None] + 1e-8)
+        x_norm_o = (x_test_n - o_x_mean) / (o_x_std + 1e-8)
+        u_norm_o = (u_test_n - o_u_mean) / (o_u_std + 1e-8)
 
         # Create windows for causal encoder (needs past context = full window)
         x_windows_c = []
