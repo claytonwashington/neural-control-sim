@@ -127,6 +127,16 @@ This document tracks modeling hypotheses and architectures to improve prediction
 - **Key finding**: Same-arch (A) is far more robust to sparse updates + delay than cross-arch (B)
 - **Deployment target**: A2 K=20 (50Hz updates, 10ms delay) → R²=0.93, practical and deployable
 - Still has t=0 Kalman update artifact — but even with that caveat, the improvement is real
+
+### 16. Control-Relevant Metrics Evaluation
+**Status**: ✅ TESTED — Critical insights for deployment
+**Results dir**: `results/ctrl_metrics_{causal_z64,causal_z128,acausal_z64}/` (in control-metrics worktree)
+**Branch/Worktree**: `feature/control-metrics` / `cleo-worktrees/control-metrics`
+- Free-run FIT% = 0 for ALL models (ODE diverges over 30s, re-encoding mandatory)
+- Multi-horizon: linear error growth (good), R2>0.84 at H=20 for causal z64
+- Jacobian accuracy (dg/du): cos_sim=0.997 — control matrix extremely well-learned
+- Controllability Gramian: only 3-5 effective control dimensions out of 64/128
+- **Implication**: MPC viable at H<=20 steps. Re-encoding every ~200ms is required.
 ### 14. Additional Causal Sweeps
 **Status**: ✅ TESTED — z=128 marginal +2%, 500ep and pw=1000 no benefit
 **Results dir**: `results/causal_z128_*`, `results/causal_z64_500ep_*`, `results/causal_z64_pw1000_*`
