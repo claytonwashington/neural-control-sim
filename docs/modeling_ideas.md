@@ -66,11 +66,13 @@ This document tracks modeling hypotheses and architectures to improve prediction
 - Frozen ODE too sensitive to z₀ distribution mismatch — small encoder errors compound through ODE integration.
 
 ### 8. Hybrid Distillation
-**Status**: 🔄 PENDING (subagent launching)
+**Status**: ✅ TESTED — ❌ Worse than direct causal
 **Results dir**: `results/hybrid_distill_aN/`
 **Branch/Worktree**: `feature/hybrid-distillation` / `cleo-worktrees/hybrid-distillation`
 - Loss = α·MSE(z₀_student, z₀_teacher) + (1-α)·MSE(x̂, x_true)
-- Sweep α ∈ {0.1, 0.3, 0.5, 0.7, 0.9}
+- Sweep α ∈ {0.1, 0.3, 0.5, 0.7}
+- Best: α=0.5 R²=0.4826 — significantly worse than direct causal (R²=0.8252)
+- Distillation loss actively conflicts with reconstruction loss during joint training
 
 ### 9. Causal Grokking (500 Trials, 1000 Epochs)
 **Status**: 🔄 IN PROGRESS — gpu2:0
@@ -113,8 +115,8 @@ This document tracks modeling hypotheses and architectures to improve prediction
 - **Next step**: Try fixed-step Euler integration in EnKF predict step to eliminate adaptive solver overhead
 
 ### 14. Additional Causal Sweeps
-**Status**: 🔄 PARTIAL — z=128 done, z=64 500ep and pw=1000 still running
+**Status**: ✅ TESTED — z=128 marginal +2%, 500ep and pw=1000 no benefit
 **Results dir**: `results/causal_z128_*`, `results/causal_z64_500ep_*`, `results/causal_z64_pw1000_*`
 - z=128: R²=0.8430, 142ms ✅ (marginal +2% over z=64)
-- z=64, 500ep, wd=5e-5: 🔄 running on gpu2:3
-- z=64, pw=1000: 🔄 running on gpu2:4
+- z=64, 500ep, wd=5e-5: R²=0.6664, 173ms ❌ (extra weight decay hurts)
+- z=64, pw=1000: R²=0.8242, 136ms (no benefit over pw=200)
