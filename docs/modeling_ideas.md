@@ -141,7 +141,7 @@ This document tracks modeling hypotheses and architectures to improve prediction
 - Target: rate clamping at 50%, 75%, 125% of baseline rate
 - Metrics: RMSE, settling time, steady-state error, overshoot
 ### 18. Same-Architecture Residual Correction v2
-**Status**: 🔄 RUNNING on gpu1:0
+**Status**: 🔄 RUNNING on gpu1:0 — val loss increasing (overfitting)
 **Branch/Worktree**: `feature/residual-v2` / `cleo-worktrees/residual-v2`
 - Fixes Exp 12 failure: uses CAUSAL ODE+decoder (same-arch, no cross-arch mismatch)
 - ResidualMLP(z0_causal, z0_acausal_delayed) -> delta_z0, trained end-to-end through frozen causal ODE
@@ -149,6 +149,40 @@ This document tracks modeling hypotheses and architectures to improve prediction
 - Acausal encoder at 100ms lag provides richer context as auxiliary MLP input
 - Loss = MSE(decoder(ODE(z0_corrected)), x_true) through causal pipeline
 - Expected: R2 >= 0.82 guaranteed, hopefully closer to 0.93 (EnKF level)
+
+#### Why Residual Correction May Fundamentally Fail: The Topology Problem
+The causal and acausal models were trained independently. Even though both predict the
+same firing rates x(t), their latent spaces z(t) can be arbitrarily rotated, scaled, or
+non-linearly warped relative to each other. The residual dz0 = z_acausal - z_causal is
+therefore not a clean structured correction vector — it is an inconsistent mapping between
+two unaligned coordinate systems. A small MLP cannot untangle a global diffeomorphism.
+
+#### Fix 1: Direct Trajectory Distillation (= Exp 7 approach, revisited)
+Freeze acausal encoder + ODE + decoder. Train a new causal encoder from scratch with
+L = ||z_causal - z_acausal||^2. Forces the causal encoder to adopt the acausal topology.
+Once aligned, residuals become meaningful because both models speak the same language.
+- We tried this (Exp 7), R2=0.66 — frozen ODE was too rigid for the imperfect causal z0.
+- **Variant**: Also fine-tune the decoder to tolerate noisier causal z0.
+
+#### Fix 2: Vector Field Alignment (Match the Dynamics)
+Instead of matching z0 points, match the ODE vector fields:
+L = ||f_theta(z_causal) - f_theta(z_acausal)||^2.
+Guarantees that even if z0 is slightly noisy, the ODE pushes it in the same direction.
+Can be combined with trajectory distillation as a regularizer.
+
+#### Fix 3: Contrastive Alignment (InfoNCE / Mutual Information)
+Project both z_causal and z_acausal into a shared low-dim subspace via linear heads.
+Maximize cosine similarity for same-timestep pairs, push apart different-timestep pairs.
+Maximizes mutual information without forcing rigid 1:1 mapping — gives the causal model
+flexibility to handle missing future context.
+- Most flexible approach; allows the causal space to be a *compressed* version of acausal.
+
+#### Recommended Path Forward
+Start with **Direct Trajectory Distillation** but with a joint loss:
+L = alpha * ||z_causal - z_acausal||^2 + (1-alpha) * reconstruction_loss
+This was Exp 8 (hybrid distillation, R2=0.48) — but it used random init for the causal ODE.
+Better approach: initialize causal ODE from acausal weights, then distill with alpha schedule
+(start high to force alignment, decay to let the model specialize for causal inference).
 ### 17. Full-Trial EnKF — 30s Deployment Stability
 **Status**: ✅ TESTED — K=1 D=0 is extraordinary, realistic configs degrade
 **Branch/Worktree**: `feature/enkf-fulltrial` / `cleo-worktrees/enkf-fulltrial`
