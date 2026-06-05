@@ -140,10 +140,10 @@ class NeuralODEMPC(LatencyIOProcessor):
         ckpt = torch.load(path, map_location=self.device, weights_only=False)
 
         # Normalization stats
-        self.x_mean = ckpt["x_mean"].numpy().flatten()
-        self.x_std = ckpt["x_std"].numpy().flatten()
-        self.u_mean = ckpt["u_mean"].numpy().flatten()
-        self.u_std = ckpt["u_std"].numpy().flatten()
+        self.x_mean = np.asarray(ckpt["x_mean"]).flatten()
+        self.x_std = np.asarray(ckpt["x_std"]).flatten()
+        self.u_mean = np.asarray(ckpt["u_mean"]).flatten()
+        self.u_std = np.asarray(ckpt["u_std"]).flatten()
 
         # Build model
         from modeling.models.latent_canode import LatentControlAffineODE
@@ -151,7 +151,7 @@ class NeuralODEMPC(LatencyIOProcessor):
         n_x = len(self.x_mean)
         n_u = len(self.u_mean)
         z_dim = ckpt.get("z_dim", 64)
-        hidden = ckpt.get("hidden_dim", 128)
+        hidden = ckpt.get("hidden", ckpt.get("hidden_dim", 128))
         n_layers = ckpt.get("n_layers", 2)
 
         self.model = LatentControlAffineODE(
