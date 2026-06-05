@@ -337,6 +337,18 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 
 ---
 
+
+### 22. Periodic Re-Encoding vs EnKF
+**Status**: 🔄 RUNNING on gpu1:6
+**Branch/Worktree**: `feature/periodic-reencode` / `cleo-worktrees/periodic-reencode`
+- Fair comparison: re-encode z₀ from GRU every K steps vs EnKF with K-step updates
+- Uses aligned distill model (R²=0.864 base, Exp 20 best)
+- Sweep K ∈ {1, 5, 10, 20, 50, 100, 200} × D ∈ {0, 10ms}
+- Compute cost: re-encode (0.44ms/step amortized) vs EnKF (0.30ms/step)
+- Key question: is the EnKF worth the complexity, or does periodic re-encoding suffice?
+- GRU encode = 3.37ms (expensive but resets accumulated drift)
+- 64-particle ODE step = 0.28ms (cheap thanks to GPU batching)
+
 ## Appendix: Model Architecture Reference
 
 ### Acausal Latent NODE (`modeling/models/latent_node.py`)
