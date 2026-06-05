@@ -129,6 +129,16 @@ This document tracks modeling hypotheses and architectures to improve prediction
 - Still has t=0 Kalman update artifact — but even with that caveat, the improvement is real
 
 
+
+### 18. Same-Architecture Residual Correction v2
+**Status**: 🔄 RUNNING on gpu1:0
+**Branch/Worktree**: `feature/residual-v2` / `cleo-worktrees/residual-v2`
+- Fixes Exp 12 failure: uses CAUSAL ODE+decoder (same-arch, no cross-arch mismatch)
+- ResidualMLP(z0_causal, z0_acausal_delayed) -> delta_z0, trained end-to-end through frozen causal ODE
+- Last layer initialized to zero -> starts as identity -> floor = causal baseline (R2=0.82)
+- Acausal encoder at 100ms lag provides richer context as auxiliary MLP input
+- Loss = MSE(decoder(ODE(z0_corrected)), x_true) through causal pipeline
+- Expected: R2 >= 0.82 guaranteed, hopefully closer to 0.93 (EnKF level)
 ### 17. Full-Trial EnKF — 30s Deployment Stability
 **Status**: ✅ TESTED — K=1 D=0 is extraordinary, realistic configs degrade
 **Branch/Worktree**: `feature/enkf-fulltrial` / `cleo-worktrees/enkf-fulltrial`
