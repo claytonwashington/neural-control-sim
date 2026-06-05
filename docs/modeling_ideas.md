@@ -114,6 +114,19 @@ This document tracks modeling hypotheses and architectures to improve prediction
 - Bottleneck is sequential ODE integration via dopri5, not GPU parallelism
 - **Next step**: Try fixed-step Euler integration in EnKF predict step to eliminate adaptive solver overhead
 
+
+
+### 15. EnKF with Causal Encoder Init (4-Way Sweep)
+**Status**: ✅ TESTED — ✅ Same-arch EnKF dramatically improves causal model
+**Results dir**:  (in enkf-causal worktree)
+**Branch/Worktree**:  / 
+- A1 (causal ODE, no delay, K=1): R²=0.9997 | K=20: 0.9621 | K=999: 0.905
+- A2 (causal ODE, 10ms delay, K=1): R²=0.9563 | K=20: 0.932 | K=999: 0.826
+- B1 (acausal ODE, no delay, K=1): R²=0.9995 | K=20: 0.958 | K=999: 0.797
+- B2 (acausal ODE, 10ms delay, K=1): R²=0.888 | K=20: 0.790 | K=999: -0.535
+- **Key finding**: Same-arch (A) is far more robust to sparse updates + delay than cross-arch (B)
+- **Deployment target**: A2 K=20 (50Hz updates, 10ms delay) → R²=0.93, practical and deployable
+- Still has t=0 Kalman update artifact — but even with that caveat, the improvement is real
 ### 14. Additional Causal Sweeps
 **Status**: ✅ TESTED — z=128 marginal +2%, 500ep and pw=1000 no benefit
 **Results dir**: `results/causal_z128_*`, `results/causal_z64_500ep_*`, `results/causal_z64_pw1000_*`
