@@ -621,7 +621,7 @@ def main():
     results["args"] = vars(args)
     results_path = os.path.join(args.output_dir, "fulltrial_results.json")
     with open(results_path, "w") as f:
-        json.dump(results, f, indent=2)
+        json.dump(results, f, indent=2, default=lambda x: float(x) if hasattr(x, "item") else str(x))
     print(f"\nResults saved to {results_path}")
 
     # Plots
