@@ -128,6 +128,17 @@ This document tracks modeling hypotheses and architectures to improve prediction
 - **Deployment target**: A2 K=20 (50Hz updates, 10ms delay) → R²=0.93, practical and deployable
 - Still has t=0 Kalman update artifact — but even with that caveat, the improvement is real
 
+
+### 17. Full-Trial EnKF — 30s Deployment Stability
+**Status**: ✅ TESTED — K=1 D=0 is extraordinary, realistic configs degrade
+**Branch/Worktree**: `feature/enkf-fulltrial` / `cleo-worktrees/enkf-fulltrial`
+- K=1, D=0: FIT%=90.5, R2=0.993 stable over 30s — beats acausal model (0.94)
+- K=1, D=10: FIT%=51.6 — 10ms delay destroys long-horizon stability
+- K=20, D=0: FIT%=50.8 — sparse corrections insufficient over 30s
+- K=20, D=10: FIT%=38.5 — not viable for long-term tracking
+- **Key insight**: Small errors from delayed/sparse corrections compound over 30,000 steps
+- **Implication**: K=1 D=0 is unrealistic for deployment. Need periodic re-encoding OR Path A PredNet
+- Over SHORT horizons (200ms), K=20 D=10 is fine (R2=0.93 from Exp 15)
 ### 16. Control-Relevant Metrics Evaluation
 **Status**: ✅ TESTED — Critical insights for deployment
 **Results dir**: `results/ctrl_metrics_{causal_z64,causal_z128,acausal_z64}/` (in control-metrics worktree)
