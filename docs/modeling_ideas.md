@@ -141,7 +141,7 @@ This document tracks modeling hypotheses and architectures to improve prediction
 - Target: rate clamping at 50%, 75%, 125% of baseline rate
 - Metrics: RMSE, settling time, steady-state error, overshoot
 ### 18. Same-Architecture Residual Correction v2
-**Status**: 🔄 RUNNING on gpu1:0 — val loss increasing (overfitting)
+**Status**: ❌ DONE — Failed. R²=0.80 < baseline 0.82. Topology problem confirmed.
 **Branch/Worktree**: `feature/residual-v2` / `cleo-worktrees/residual-v2`
 - Fixes Exp 12 failure: uses CAUSAL ODE+decoder (same-arch, no cross-arch mismatch)
 - ResidualMLP(z0_causal, z0_acausal_delayed) -> delta_z0, trained end-to-end through frozen causal ODE
