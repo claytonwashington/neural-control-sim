@@ -1,0 +1,182 @@
+Using device: cuda
+Random seed set to: 42
+
+Loading causal model from /snel/home/cbwash2/cleo/results/causal_z64_pw200_h128_lr3e4/model.pt...
+  n_x=50, n_u=2, z_dim=64, hidden=128, n_layers=2
+
+================================================================================
+Experiment 17: Full-Trial EnKF
+  K=50, delay=0
+  Q=0.1, R=0.01, ensemble=64
+================================================================================
+
+  Trial 40 (1/10):
+    step 3000/30000 (10%) — recent MSE=0.063393
+    step 6000/30000 (20%) — recent MSE=0.076797
+    step 9000/30000 (30%) — recent MSE=0.071065
+    step 12000/30000 (40%) — recent MSE=0.065161
+    step 15000/30000 (50%) — recent MSE=0.060470
+    step 18000/30000 (60%) — recent MSE=0.064655
+    step 21000/30000 (70%) — recent MSE=0.075651
+    step 24000/30000 (80%) — recent MSE=0.067481
+    step 27000/30000 (90%) — recent MSE=0.071503
+    FIT% = 17.53%  (14.5s)
+    R² windows: t=0:-1.6330, t=1000:-0.6109, t=5000:-0.5316, t=10000:-0.6041, t=20000:-0.5308, t=29000:-0.5564
+    Full-trial R²=0.3199, MSE=0.069311
+
+  Trial 41 (2/10):
+    step 3000/30000 (10%) — recent MSE=0.063467
+    step 6000/30000 (20%) — recent MSE=0.058981
+    step 9000/30000 (30%) — recent MSE=0.057288
+    step 12000/30000 (40%) — recent MSE=0.057635
+    step 15000/30000 (50%) — recent MSE=0.055866
+    step 18000/30000 (60%) — recent MSE=0.051917
+    step 21000/30000 (70%) — recent MSE=0.061903
+    step 24000/30000 (80%) — recent MSE=0.049134
+    step 27000/30000 (90%) — recent MSE=0.055777
+    FIT% = 41.79%  (14.4s)
+    R² windows: t=0:-2.2591, t=1000:-0.4504, t=5000:-0.5779, t=10000:-0.7384, t=20000:-0.7344, t=29000:-0.5002
+    Full-trial R²=0.6612, MSE=0.057100
+
+  Trial 42 (3/10):
+    step 3000/30000 (10%) — recent MSE=0.067689
+    step 6000/30000 (20%) — recent MSE=0.064689
+    step 9000/30000 (30%) — recent MSE=0.068998
+    step 12000/30000 (40%) — recent MSE=0.070365
+    step 15000/30000 (50%) — recent MSE=0.064682
+    step 18000/30000 (60%) — recent MSE=0.073818
+    step 21000/30000 (70%) — recent MSE=0.070677
+    step 24000/30000 (80%) — recent MSE=0.075377
+    step 27000/30000 (90%) — recent MSE=0.075692
+    FIT% = 35.84%  (14.4s)
+    R² windows: t=0:-2.2187, t=1000:-0.4755, t=5000:-0.4072, t=10000:-0.6306, t=20000:-0.6760, t=29000:-0.6323
+    Full-trial R²=0.5884, MSE=0.067911
+
+  Trial 43 (4/10):
+    step 3000/30000 (10%) — recent MSE=0.055763
+    step 6000/30000 (20%) — recent MSE=0.062599
+    step 9000/30000 (30%) — recent MSE=0.072938
+    step 12000/30000 (40%) — recent MSE=0.073577
+    step 15000/30000 (50%) — recent MSE=0.082501
+    step 18000/30000 (60%) — recent MSE=0.070295
+    step 21000/30000 (70%) — recent MSE=0.070341
+    step 24000/30000 (80%) — recent MSE=0.060190
+    step 27000/30000 (90%) — recent MSE=0.070081
+    FIT% = 34.07%  (14.4s)
+    R² windows: t=0:-2.7634, t=1000:-0.6551, t=5000:-0.4237, t=10000:-0.6335, t=20000:-0.6615, t=29000:-0.4515
+    Full-trial R²=0.5653, MSE=0.072698
+
+  Trial 44 (5/10):
+    step 3000/30000 (10%) — recent MSE=0.070303
+    step 6000/30000 (20%) — recent MSE=0.072453
+    step 9000/30000 (30%) — recent MSE=0.053725
+    step 12000/30000 (40%) — recent MSE=0.061830
+    step 15000/30000 (50%) — recent MSE=0.066759
+    step 18000/30000 (60%) — recent MSE=0.061194
+    step 21000/30000 (70%) — recent MSE=0.069885
+    step 24000/30000 (80%) — recent MSE=0.066984
+    step 27000/30000 (90%) — recent MSE=0.063483
+    FIT% = 42.64%  (14.4s)
+    R² windows: t=0:-2.5011, t=1000:-0.7188, t=5000:-0.6581, t=10000:-0.8253, t=20000:-0.7026, t=29000:-0.5318
+    Full-trial R²=0.6709, MSE=0.064599
+
+  Trial 45 (6/10):
+    step 3000/30000 (10%) — recent MSE=0.063326
+    step 6000/30000 (20%) — recent MSE=0.084173
+    step 9000/30000 (30%) — recent MSE=0.080816
+    step 12000/30000 (40%) — recent MSE=0.082532
+    step 15000/30000 (50%) — recent MSE=0.062926
+    step 18000/30000 (60%) — recent MSE=0.069969
+    step 21000/30000 (70%) — recent MSE=0.075732
+    step 24000/30000 (80%) — recent MSE=0.064792
+    step 27000/30000 (90%) — recent MSE=0.065510
+    FIT% = 37.34%  (14.4s)
+    R² windows: t=0:-4.1066, t=1000:-0.1752, t=5000:-0.6771, t=10000:-0.5274, t=20000:-0.4136, t=29000:-0.5375
+    Full-trial R²=0.6074, MSE=0.072698
+
+  Trial 46 (7/10):
+    step 3000/30000 (10%) — recent MSE=0.052072
+    step 6000/30000 (20%) — recent MSE=0.064263
+    step 9000/30000 (30%) — recent MSE=0.067425
+    step 12000/30000 (40%) — recent MSE=0.049172
+    step 15000/30000 (50%) — recent MSE=0.065539
+    step 18000/30000 (60%) — recent MSE=0.061072
+    step 21000/30000 (70%) — recent MSE=0.058653
+    step 24000/30000 (80%) — recent MSE=0.058312
+    step 27000/30000 (90%) — recent MSE=0.065063
+    FIT% = 43.20%  (14.3s)
+    R² windows: t=0:-1.4627, t=1000:-0.6276, t=5000:-0.5941, t=10000:-0.9489, t=20000:-0.7525, t=29000:-0.3936
+    Full-trial R²=0.6773, MSE=0.060512
+
+  Trial 47 (8/10):
+    step 3000/30000 (10%) — recent MSE=0.051489
+    step 6000/30000 (20%) — recent MSE=0.055364
+    step 9000/30000 (30%) — recent MSE=0.050213
+    step 12000/30000 (40%) — recent MSE=0.049295
+    step 15000/30000 (50%) — recent MSE=0.049943
+    step 18000/30000 (60%) — recent MSE=0.046896
+    step 21000/30000 (70%) — recent MSE=0.062286
+    step 24000/30000 (80%) — recent MSE=0.057652
+    step 27000/30000 (90%) — recent MSE=0.050520
+    FIT% = 35.22%  (14.4s)
+    R² windows: t=0:-3.0992, t=1000:-0.6581, t=5000:-0.8496, t=10000:-0.3619, t=20000:-0.5661, t=29000:-0.5372
+    Full-trial R²=0.5804, MSE=0.056020
+
+  Trial 48 (9/10):
+    step 3000/30000 (10%) — recent MSE=0.061620
+    step 6000/30000 (20%) — recent MSE=0.066129
+    step 9000/30000 (30%) — recent MSE=0.050341
+    step 12000/30000 (40%) — recent MSE=0.071841
+    step 15000/30000 (50%) — recent MSE=0.055671
+    step 18000/30000 (60%) — recent MSE=0.065244
+    step 21000/30000 (70%) — recent MSE=0.054005
+    step 24000/30000 (80%) — recent MSE=0.064703
+    step 27000/30000 (90%) — recent MSE=0.052737
+    FIT% = 35.95%  (14.7s)
+    R² windows: t=0:-2.5536, t=1000:-0.4051, t=5000:-0.6983, t=10000:-0.4689, t=20000:-0.5843, t=29000:-0.7164
+    Full-trial R²=0.5897, MSE=0.062647
+
+  Trial 49 (10/10):
+    step 3000/30000 (10%) — recent MSE=0.050032
+    step 6000/30000 (20%) — recent MSE=0.058104
+    step 9000/30000 (30%) — recent MSE=0.055044
+    step 12000/30000 (40%) — recent MSE=0.053239
+    step 15000/30000 (50%) — recent MSE=0.052215
+    step 18000/30000 (60%) — recent MSE=0.052729
+    step 21000/30000 (70%) — recent MSE=0.051876
+    step 24000/30000 (80%) — recent MSE=0.043148
+    step 27000/30000 (90%) — recent MSE=0.045191
+    FIT% = 44.45%  (14.9s)
+    R² windows: t=0:-4.1223, t=1000:-0.4429, t=5000:-0.6454, t=10000:-0.5160, t=20000:-0.7203, t=29000:-0.7455
+    Full-trial R²=0.6915, MSE=0.052076
+
+================================================================================
+RESULTS SUMMARY
+================================================================================
+  Config: K=50, delay=0, Q=0.1, R=0.01
+  Ensemble size: 64
+  FIT%: 36.80 ± 7.36
+  Per-trial FIT%: ['17.53', '41.79', '35.84', '34.07', '42.64', '37.34', '43.20', '35.22', '35.95', '44.45']
+  Avg inference time per trial: 14.5s
+  Total time: 149.0s
+
+  R² at key timepoints (200-step windows):
+    0-200ms: R²=-2.6720 ± 0.8552
+    1s: R²=-0.5220 ± 0.1554
+    5s: R²=-0.6063 ± 0.1251
+    10s: R²=-0.6255 ± 0.1653
+    20s: R²=-0.6342 ± 0.1025
+    29s: R²=-0.5602 ± 0.1044
+
+  R² stability: early=-0.6859, late=-0.6183, drop=-0.0676
+  => IMPROVING: R² improves by 0.0676 from early to late
+
+  Comparison:
+    Baseline (free-run, no EnKF): FIT% ≈ 0
+    EnKF K=50, D=0: FIT% = 36.80
+
+Results saved to results/fulltrial_k50_d0/fulltrial_results.json
+  Saved R² trajectory plot to results/fulltrial_k50_d0/r2_trajectory.png
+  Saved MSE trajectory plot to results/fulltrial_k50_d0/mse_trajectory.png
+
+Done! All outputs in results/fulltrial_k50_d0/
