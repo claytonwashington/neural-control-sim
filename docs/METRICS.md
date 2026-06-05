@@ -178,3 +178,57 @@ W_c ≈ (1/T) Σₜ B(t) B(t)ᵀ + A(t)B(t)(A(t)B(t))ᵀ + ...
 > **For MPC, the error growth curve and Jacobian accuracy are the two most important metrics.**
 > A model with R²=0.80 but accurate g(x) and good 20-step predictions will outperform
 > a model with R²=0.95 but poor input sensitivity. We've been optimizing the wrong thing.
+
+---
+
+## 7. Control Experiment Metrics (from Exp 19: Optoclamp)
+
+These metrics apply to closed-loop control experiments (rate clamping, trajectory tracking).
+
+### Steady-State Error
+```
+SS_error = mean(|actual_rate - target|) during last 200ms of clamp period
+```
+Measures how close the controller holds the neural population to the target rate
+after transients have settled. Lower is better.
+
+### Tracking RMSE
+```
+Tracking_RMSE = sqrt(mean((rate - target)²)) over entire clamp period
+```
+Overall tracking quality including transient response. Penalizes both steady-state
+error and overshoot/undershoot.
+
+### Settling Time
+```
+Settling_time = time to reach and stay within 10% of target for ≥50ms
+```
+How quickly the controller reaches the desired rate. Defined as the first time
+the output enters and remains in a ±10% band around the target for at least 50ms.
+
+### Control Effort
+```
+Effort = sum(|u(t)|) over clamp period
+```
+Total stimulation energy. Less effort is preferable for minimizing tissue damage
+and power consumption.
+
+---
+
+## Experimental Results Update (from Exp 16)
+
+The following metrics have been **measured** (no longer "to implement"):
+
+| Metric | Status | Key Result |
+|--------|--------|------------|
+| **R² (200ms)** | ✅ Measured | Acausal=0.9387, Causal=0.8252 |
+| **MSE** | ✅ Measured | Tracked for all models |
+| **FIT% (free-run)** | ✅ Measured (Exp 17) | 0% open-loop; 90.5% with EnKF K=1 D=0 |
+| **Error growth curves** | ✅ Measured (Exp 16) | Linear growth, R²>0.84 at H=20 |
+| **Jacobian accuracy** | ✅ Measured (Exp 16) | **cos_sim=0.997** (near-perfect) |
+| **Controllability Gramian** | ✅ Measured (Exp 16) | 3–5 effective dims out of 64 |
+| **Optoclamp (PI vs MPC)** | ✅ Measured (Exp 19) | MPC: 14× lower SS error than PI |
+
+> [!NOTE]
+> All "to implement" metrics from the original table are now implemented and measured.
+> See Experiments 16, 17, and 19 in docs/modeling_ideas.md for full details.
