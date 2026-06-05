@@ -130,6 +130,16 @@ This document tracks modeling hypotheses and architectures to improve prediction
 
 
 
+
+### 19. Optoclamp: Closed-Loop Rate Clamping
+**Status**: 🔄 BUILDING on feature/optoclamp
+**Branch/Worktree**: `feature/optoclamp` / `cleo-worktrees/optoclamp`
+- Recapitulate Newman et al. 2015 optoclamp experiment
+- PI controller baseline (sweep Kp, Ki)
+- Neural ODE MPC using causal CA-NODE (z=64, H=20 horizon)
+- Compare tracking RMSE, settling time, control effort
+- Target: rate clamping at 50%, 75%, 125% of baseline rate
+- Metrics: RMSE, settling time, steady-state error, overshoot
 ### 18. Same-Architecture Residual Correction v2
 **Status**: 🔄 RUNNING on gpu1:0
 **Branch/Worktree**: `feature/residual-v2` / `cleo-worktrees/residual-v2`
