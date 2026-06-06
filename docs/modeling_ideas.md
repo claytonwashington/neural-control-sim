@@ -8,15 +8,17 @@ are numbered chronologically. All results use the **standardized 40/10 train/tes
 
 ## Current Leaderboard
 
-| Rank | Model | R² | Inference | Causal? | Deployable? |
-|------|-------|-----|-----------|---------|-------------|
-| 1 | EnKF K=1 D=0 (Exp 14) | 0.9997 | ~1.2s | ✅ | ❌ (too slow) |
-| 2 | EnKF K=20 D=10 (Exp 15) | 0.93 | ~1.2s | ✅ | ⚠️ (latency) |
-| 3 | Latent NODE acausal (Exp 3) | 0.9387 | 71ms | ❌ | ❌ |
-| 4 | Aligned Distillation (Exp 20) | 0.864 | ~170ms | ✅ | ✅ |
-| 5 | Causal CA-NODE z64 (Exp 5) | 0.8252 | 173ms | ✅ | ✅ |
-| 6 | GRU (Exp 2) | 0.69 | — | ✅ | ✅ |
-| 7 | N4SID (Exp 1) | 0.40 | <1ms | ✅ | ✅ |
+| Rank | Model | R² | Inference / Step | Causal? | Deployable? |
+|------|-------|-----|------------------|---------|-------------|
+| 1 | EnKF on Aligned Model K=1 D=0 (Exp 21) | **0.9997** | ~6.0ms (1.2s/trial) | ✅ | ❌ (too slow) |
+| 2 | EnKF on Aligned Model K=20 D=10 (Exp 21) | **0.9391** | ~2.3ms (460ms/trial) | ✅ | ❌ (too slow) |
+| 3 | Latent NODE acausal (Exp 3) | 0.9387 | 71ms (initial) | ❌ | ❌ |
+| 4 | Periodic Re-Encoding K=5 D=0 (Exp 22) | **0.8770** | **0.81ms** (162ms/trial) | ✅ | ✅ |
+| 5 | Periodic Re-Encoding K=20 D=10 (Exp 22) | **0.8701** | **0.56ms** (112ms/trial) | ✅ | ✅ |
+| 6 | Aligned Distillation (Exp 20) | 0.8640 | ~170ms (initial) | ✅ | ✅ |
+| 7 | Causal CA-NODE z64 (Exp 5) | 0.8252 | ~173ms (initial) | ✅ | ✅ |
+| 8 | GRU (Exp 2) | 0.6900 | — | ✅ | ✅ |
+| 9 | N4SID (Exp 1) | 0.4000 | <1ms | ✅ | ✅ |
 
 ---
 
@@ -248,7 +250,7 @@ Every experiment **MUST** produce:
 
 ---
 
-## Phase 5: Latent Alignment & Control (Exp 18–20)
+## Phase 5: Latent Alignment & Control (Exp 18–22)
 
 > Goal: Fix the topology mismatch between causal and acausal latent spaces,
 > and validate the models for closed-loop control.
@@ -312,16 +314,42 @@ Initialize causal ODE from acausal weights, then distill with α schedule
   because Jacobian accuracy (cos_sim=0.997) matters more than R² for control
 
 ### Experiment 20. Aligned Distillation (Warm-Start from Acausal)
-**Status**: ✅ COMPLETE — ✅ BEST CAUSAL MODEL
-**Results dir**: (in aligned-distillation worktree)
+**Status**: ✅ COMPLETE — ✅ BEST CAUSAL BASELINE
+**Results dir**: `results/aligned_cosine_0.9_0.1/` (in aligned-distillation worktree)
 **Branch/Worktree**: `feature/aligned-distillation`
 - **R²=0.864** 🏆 — new causal SOTA (+4.7% over baseline 0.8252)
 - Implements the recommended path from Exp 18 topology analysis
 - Initialize causal ODE from acausal weights → latent spaces start aligned
-- Joint loss with α schedule: start with strong distillation, decay to reconstruction
+- Joint loss with α schedule: start with strong distillation (α=0.9), decay to reconstruction (α=0.1)
 - Successfully closes ~35% of the causal-acausal gap (0.8252 → 0.864 of 0.9387)
 - **Key finding**: Pre-alignment of latent topology via weight initialization is crucial.
   Random init (Exp 8, R²=0.48) fails; warm start succeeds.
+
+### Experiment 21. EnKF on Aligned Model
+**Status**: ✅ COMPLETE
+**Results dir**: `results/enkf_aligned_A1/` (D=0), `results/enkf_aligned_A2/` (D=10)
+**Branch/Worktree**: `feature/aligned-distillation`
+- Implements Ensemble Kalman Filtering on top of the best aligned distillation model (Exp 20)
+- Swept observation rate K ∈ {1, 10, 20, 50, 100, 999} and noise parameters Q, R
+- **Results**:
+  - **D=0ms**: K=1 R²=0.9997 (Q=0.1, R=0.01) | K=20 R²=0.9607 | K=999 R²=0.9262
+  - **D=10ms**: K=1 R²=0.9593 (Q=0.1, R=0.01) | K=20 R²=0.9391 | K=999 R²=0.9149
+- **Key finding**: Under sparse updates/latency (K=999 D=10), the aligned model yields R²=0.915 vs 0.826 on the unaligned model (+0.089 improvement). However, EnKF compute time is ~1.2s per 200ms trial (sequential dopri5 integration), which is far too slow for real-time BCI control.
+
+### Experiment 22. Periodic Re-Encoding vs EnKF
+**Status**: ✅ COMPLETE — 🏆 FIRST REAL-TIME DEPLOYABLE CAUSAL MODEL APPROACHING ACAUSAL ACCURACY
+**Results dir**: `results/periodic_reencode/`
+**Branch/Worktree**: `feature/periodic-reencode` / `cleo-worktrees/periodic-reencode`
+- Evaluates periodic latent state re-encoding (running the GRU encoder every K steps to reset the ODE initial state z₀) compared to EnKF.
+- Swept K ∈ {1, 5, 10, 20, 50, 100, 200} × D ∈ {0, 10ms} using the aligned distillation model (R²=0.864).
+- **Results**:
+  - **D=0ms**: K=1 R²=0.8782 (550.3ms/trial) | K=5 R²=0.8770 (162.6ms/trial) | K=20 R²=0.8736 (87.7ms/trial)
+  - **D=10ms**: K=1 R²=0.8730 (1050.7ms/trial) | K=5 R²=0.8722 (260.6ms/trial) | K=20 R²=0.8701 (112.4ms/trial)
+- **Comparison to EnKF**:
+  - EnKF K=20 D=10 R²=0.9391 vs. Re-Encode R²=0.8701 (EnKF is +0.0690 more accurate).
+  - However, EnKF takes ~460ms/trial (~2.3ms/step average), whereas Re-Encode takes only 112.4ms/trial (**0.56ms/step average**).
+  - 0.56ms/step is comfortably under the 1ms real-time budget, making periodic re-encoding the first nonlinear causal model that is fully deployable in real-time at 1kHz.
+- **Key finding**: Continuous EnKF correction yields higher R², but periodic re-encoding with a GRU encoder is the only computationally viable approach for real-time deployment without GPU-level speed optimizations.
 
 ---
 
@@ -330,24 +358,12 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 1. **Latent space is everything**: Channel-level models plateau at R²≈0.90; latent compression breaks through to 0.94
 2. **Causal-acausal gap is an encoder problem**: The ODE and decoder are fine; the causal encoder z₀ is the bottleneck
 3. **Topology alignment matters**: Independent training creates incompatible latent spaces (Exp 18 analysis). Pre-alignment via weight init (Exp 20) or filtering (Exp 15) is required
-4. **EnKF is powerful but slow**: R²=0.93 at realistic latency, but ~1.2s inference makes it impractical for real-time
-5. **Jacobian accuracy > R² for control**: cos_sim=0.997 means MPC works even with R²=0.82 (Exp 16, 19)
-6. **Re-encoding is mandatory**: All models diverge in free-run over 30s (Exp 17). Deploy with periodic re-encoding (~200ms)
-7. **Same-architecture pairing is critical**: Cross-arch approaches (Exp 9, 12) consistently fail; same-arch (Exp 15, 18, 20) succeed
+4. **EnKF is powerful but slow**: EnKF reaches R²=0.9997 with dense updates, and R²=0.9391 at realistic latency (Exp 21), but ~1.2s inference makes it impractical for real-time
+5. **Periodic re-encoding is the path forward**: Re-encoding every 5-20 steps (Exp 22) yields R²=0.870-0.877 with an average step compute time of 0.44ms - 0.81ms, making it fully deployable under a 1ms budget
+6. **Jacobian accuracy > R² for control**: cos_sim=0.997 means MPC works even with baseline causal R²=0.82 (Exp 16, 19). The new aligned + re-encoded models (R²=0.877) should perform even better
+7. **Same-architecture pairing is critical**: Cross-arch approaches (Exp 9, 12) consistently fail; same-arch (Exp 15, 18, 20, 21, 22) succeed
 
 ---
-
-
-### 22. Periodic Re-Encoding vs EnKF
-**Status**: 🔄 RUNNING on gpu1:6
-**Branch/Worktree**: `feature/periodic-reencode` / `cleo-worktrees/periodic-reencode`
-- Fair comparison: re-encode z₀ from GRU every K steps vs EnKF with K-step updates
-- Uses aligned distill model (R²=0.864 base, Exp 20 best)
-- Sweep K ∈ {1, 5, 10, 20, 50, 100, 200} × D ∈ {0, 10ms}
-- Compute cost: re-encode (0.44ms/step amortized) vs EnKF (0.30ms/step)
-- Key question: is the EnKF worth the complexity, or does periodic re-encoding suffice?
-- GRU encode = 3.37ms (expensive but resets accumulated drift)
-- 64-particle ODE step = 0.28ms (cheap thanks to GPU batching)
 
 ## Appendix: Model Architecture Reference
 
@@ -366,3 +382,5 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 ### Training Scripts
 - Acausal: `modeling/scripts/fit_latent_node.py`
 - Causal: `modeling/scripts/fit_latent_canode.py`
+- Distillation: `modeling/scripts/hybrid_distill.py`
+- Evaluation: `modeling/scripts/eval_periodic_reencode.py`

@@ -8,28 +8,8 @@ Research directions beyond the current Phase 4 modeling sweep. These are ideas t
 
 **Priority**: HIGH — blocks the ultimate validation of all modeling work
 
-### Motivation
-We are optimizing R2 in a vacuum. LDS models with R2 ~ 0.3-0.6 already enable successful closed-loop optogenetic control (Bolus et al. 2021). Our causal model at R2=0.82 is far above this, but we have no idea whether neural ODE + MPC actually outperforms simple LDS + LQR.
-
-### What We Need
-1. **Better metrics**: Free-run simulation FIT%, multi-horizon error growth curves, Jacobian accuracy (dg/du)
-2. **MPC controller**: Implement NeuralODEController(LatencyIOProcessor) in Cleo
-3. **Baselines**: PI controller, LDS + LQR via ldsCtrlEst
-4. **Key experiment**: Model accuracy vs control performance curve — sweep models of varying quality, run MPC with each, plot tracking RMSE vs model R2/FIT%
-
-### Control Objectives (in order of difficulty)
-- Rate clamping (hold firing rate at target) — start here
-- Rate tracking (follow time-varying trajectory)
-- Pattern generation (reproduce spatiotemporal patterns)
-- Perturbation rejection (maintain target under disturbances)
-
-### Relevant Literature
-- Bolus, Willats, Rozell, Stanley (2021). State-space optimal feedback control of optogenetically driven neural activity. J. Neural Engineering.
-- Newman et al. (eLife). Optoclamp for closed-loop optogenetic control.
-- Johnsen et al. Cleo: Closed-Loop simulation testbed (our framework).
-- ldsCtrlEst library (CLOCTools, Georgia Tech)
-
-See also: [control_layer_analysis.md] in the conversation artifacts.
+> [!NOTE]
+> All active control ideas, controller implementations, closed-loop experiments (including the optoclamp results), and future control plans have been moved to [CONTROL_IDEAS.md](CONTROL_IDEAS.md). Please refer to that document for the current state and roadmap of control-layer work.
 
 ---
 
@@ -163,23 +143,10 @@ Real neural systems drift over time (electrode movement, plasticity, pharmacolog
 
 ## Roadmap: Principled Order of Operations
 
-### Phase 6: Control Layer (NEXT)
-**Why first**: We believe we can infer decent firing rates one way or another (R2=0.82-0.93).
-The control layer tells us whether "decent" is good enough and connects model accuracy to
-actual closed-loop performance. Without this, we are optimizing R2 in a vacuum.
+### Phase 6: Control Layer (In Progress)
+We have successfully implemented and executed the first closed-loop control experiments (PI vs. Neural ODE MPC optoclamp), and established control-relevant model metrics. 
 
-**Deliverables**:
-1. NeuralODEController(LatencyIOProcessor) in Cleo
-2. LDS+LQR baseline via ldsCtrlEst
-3. Rate clamping experiment (simplest control task)
-4. Model accuracy vs control performance curve
-
-**Key questions answered**:
-- What R2 threshold enables useful control?
-- Does MPC with neural ODE outperform LDS+LQR?
-- How sensitive is control to model quality (causal vs acausal vs EnKF-corrected)?
-
-**Prerequisites**: All met (Exp 16 confirmed Jacobian accuracy=99.7%, MPC viable at H<=20)
+Details of these experiments, key results, and next steps for the control layer are tracked in [CONTROL_IDEAS.md](CONTROL_IDEAS.md).
 
 ### Phase 7: Spiking Data on Current Plant
 **Why second**: Real experiments produce spikes, not firing rates. We need a spike-to-rate
