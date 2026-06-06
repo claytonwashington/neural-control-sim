@@ -90,7 +90,6 @@ OU noise stimulation — reasonable but not optimal.
 - g(x) is learned from stimulation periods (active inputs)
 - Our current data mixes both — explicit separation would help
 - The input design primarily helps identify g(x), which is what MPC needs most
-
 ---
 
 ## 4. EnKF Speed Optimization
@@ -110,19 +109,18 @@ EnKF runs 64 parallel ODE solves per step using dopri5 (adaptive solver). The so
 
 ## 5. Advanced Metrics and Evaluation
 
-**Priority**: HIGH — needed before control layer
+**Priority**: COMPLETED (Metrics) / HIGH (Training Improvements)
 
-### Metrics to Implement
-1. Free-run simulation FIT% (run model open-loop from initial state)
-2. Multi-horizon error growth curves (1, 5, 10, 20, 50, 100, 200 steps)
-3. Jacobian accuracy: cosine similarity of dg/du vs finite-difference ground truth
-4. Empirical controllability Gramian from learned model
-5. Sobolev/derivative-informed training loss
+### Implemented Metrics (Experiment 16 & 17)
+1. **Free-run simulation FIT%** (✅ Completed in Exp 17): Runs the model open-loop for the entire 30s trial to evaluate long-horizon stability.
+2. **Multi-horizon error growth curves** (✅ Completed in Exp 16): Evaluates prediction accuracy at horizons $H \in \{1, 2, 5, 10, 20, 50, 100, 200\}$ steps.
+3. **Jacobian accuracy ($\partial g / \partial u$)** (✅ Completed in Exp 16): Cosine similarity of the learned control matrix vs empirical finite-difference ground truth (achieved 99.7% similarity).
+4. **Empirical controllability Gramian** (✅ Completed in Exp 16): Evaluates controllable latent dimensions (found 3-5 effective control dimensions out of 64).
 
-### Training Improvements
-1. Multi-step shooting loss (not just single windows)
-2. Jacobian matching regularization
-3. Stability regularization (penalize positive Jacobian eigenvalues)
+### Future Training Improvements
+1. **Multi-step shooting loss**: Integrate over multiple future windows during training to improve long-horizon prediction stability.
+2. **Jacobian matching/Sobolev loss**: Penalize differences between the model's analytical Jacobian and empirical gradients during training to force correct input sensitivity.
+3. **Stability regularization**: Penalize positive eigenvalues in the drift Jacobian ($\partial f / \partial z$) to regularize against explosive, chaotic dynamics.
 
 ---
 
