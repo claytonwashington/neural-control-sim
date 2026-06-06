@@ -3,6 +3,14 @@
 Drives optic fibers with Ornstein-Uhlenbeck processes and records
 smoothed multi-unit firing rates for system identification.
 
+Supports both:
+- Original plant (1 combined light device "fibers" with 2 fiber positions)
+- Bidirectional plant (2 separate light devices "fiber_red" and "fiber_blue")
+
+The input u shape is:
+- Original: (2, n_steps)  — 2 fibers in one Light device
+- Bidirectional: (2, n_steps) — u[0]=red (excitatory), u[1]=blue (inhibitory)
+
 Supports parallel multi-trial generation using multiprocessing.
 
 Usage:
@@ -86,6 +94,9 @@ class DataCollectionIOP(LatencyIOProcessor):
     Applies OU-noise input trajectory to light stimulators and records
     exponentially-smoothed firing rates from MUA channels.
 
+    Supports both single-device (original plant) and multi-device
+    (bidirectional plant) configurations.
+
     Parameters
     ----------
     u_trajectory : ndarray, shape (n_inputs, n_steps)
@@ -94,8 +105,10 @@ class DataCollectionIOP(LatencyIOProcessor):
         Sampling period in milliseconds
     tau_smooth_ms : float
         Exponential smoothing time constant in milliseconds
-    light_name : str
-        Name of the Light stimulator device
+    light_names : list[str]
+        Names of the Light stimulator devices.
+        For original plant: ["fibers"] (one device with 2 fiber coords).
+        For bidirectional plant: ["fiber_red", "fiber_blue"] (two devices, 1 coord each).
     probe_name : str
         Name of the Probe recorder device
     mua_name : str
@@ -107,16 +120,21 @@ class DataCollectionIOP(LatencyIOProcessor):
         u_trajectory: NDArray,
         sample_period_ms: float = 1.0,
         tau_smooth_ms: float = 20.0,
-        light_name: str = "fibers",
+        light_names: list[str] | str = "fibers",
         probe_name: str = "probe",
         mua_name: str = "mua",
     ):
         super().__init__(sample_period=sample_period_ms * ms)
         self.u = u_trajectory  # (n_inputs, n_steps)
         self.tau_smooth = tau_smooth_ms * ms
-        self.light_name = light_name
         self.probe_name = probe_name
         self.mua_name = mua_name
+
+        # Normalize light_names to a list
+        if isinstance(light_names, str):
+            self.light_names = [light_names]
+        else:
+            self.light_names = list(light_names)
 
         # Storage
         self.x_history: list[NDArray] = []
@@ -127,7 +145,6 @@ class DataCollectionIOP(LatencyIOProcessor):
     def process(self, state_dict, t_samp):
         """Process one sample: record rates, apply next input."""
         # 1. Get spike counts from MUA
-        # MUA get_state() returns (i_chan, t_spikes, y) where y is spike count vector
         i_chan, t_spikes, counts = state_dict[self.probe_name][self.mua_name]
         counts = np.asarray(counts, dtype=float)
 
@@ -151,8 +168,16 @@ class DataCollectionIOP(LatencyIOProcessor):
         self.u_history.append(u_now.copy())
         self._step += 1
 
-        # 5. Drive fibers (irradiance in mW/mm^2)
-        out = {self.light_name: u_now * mwatt / mm**2}
+        # 5. Drive light devices
+        out = {}
+        if len(self.light_names) == 1:
+            # Original plant: single device with all fiber coords
+            out[self.light_names[0]] = u_now * mwatt / mm**2
+        else:
+            # Bidirectional plant: one channel per device
+            for i, name in enumerate(self.light_names):
+                out[name] = u_now[i] * mwatt / mm**2
+
         return out, t_samp
 
     def get_results(self) -> dict:
@@ -170,6 +195,32 @@ class DataCollectionIOP(LatencyIOProcessor):
         }
 
 
+def _detect_light_config(devices: dict) -> tuple[list[str], int]:
+    """Detect whether the plant uses a single or bidirectional light config.
+
+    Returns
+    -------
+    light_names : list[str]
+        Light device names for the IOProcessor.
+    n_inputs : int
+        Total number of input channels.
+    """
+    if "light" in devices:
+        # Original plant: single Light device with multiple fiber coords
+        n_inputs = len(devices["light"].coords)
+        return ["fibers"], n_inputs
+    elif "light_red" in devices and "light_blue" in devices:
+        # Bidirectional plant: two separate Light devices
+        n_red = len(devices["light_red"].coords)
+        n_blue = len(devices["light_blue"].coords)
+        return ["fiber_red", "fiber_blue"], n_red + n_blue
+    else:
+        raise ValueError(
+            "Could not detect light configuration from devices dict. "
+            "Expected either 'light' or ('light_red', 'light_blue') keys."
+        )
+
+
 def generate_dataset(
     sim: cleo.CLSimulator,
     devices: dict,
@@ -182,6 +233,9 @@ def generate_dataset(
     seed: int = 42,
 ) -> dict:
     """Run a single Cleo simulation with OU-noise inputs and collect paired data.
+
+    Automatically detects whether the plant uses a single or bidirectional
+    light configuration.
 
     Parameters
     ----------
@@ -217,11 +271,13 @@ def generate_dataset(
     """
     dt_s = sample_period_ms / 1000.0
     n_steps = int(duration_s / dt_s)
-    n_inputs = len(devices["light"].coords)
+
+    light_names, n_inputs = _detect_light_config(devices)
 
     # Generate OU input trajectory
     print(f"Generating OU inputs: {n_inputs} channels, {n_steps} steps, "
           f"tau={ou_tau}s, sigma={ou_sigma}, mu={ou_mu}")
+    print(f"  Light config: {light_names}")
     u = ou_process(n_steps, n_inputs, dt_s, tau=ou_tau, sigma=ou_sigma, mu=ou_mu, seed=seed)
 
     # Set up IOProcessor
@@ -229,6 +285,7 @@ def generate_dataset(
         u_trajectory=u,
         sample_period_ms=sample_period_ms,
         tau_smooth_ms=tau_smooth_ms,
+        light_names=light_names,
     )
     sim.set_io_processor(iop)
 
@@ -304,7 +361,7 @@ def _run_single_trial(args: dict) -> dict:
         seed=ou_seed,
     )
 
-    print(f"[Worker] Trial {trial_idx + 1}/{n_trials} done. x={data['x'].shape}")
+    print(f"[Worker] Trial {trial_idx + 1}/{n_trials} done. x={data['x'].shape}, u={data['u'].shape}")
     return {"x": data["x"], "u": data["u"]}
 
 
