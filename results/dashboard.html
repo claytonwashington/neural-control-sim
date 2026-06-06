@@ -425,7 +425,7 @@
       <h1>⚡ Cleo Digital Twin — Experiment Dashboard</h1>
       <div class="subtitle">Control-Affine Neural ODE System Identification<span class="split-badge">Standardized 40/10 Split · seed=42</span></div>
     </div>
-    <div class="timestamp" id="timestamp">Last updated: 2026-06-05 11:19 EDT</div>
+    <div class="timestamp" id="timestamp">Last updated: 2026-06-06 14:01 EDT</div>
   </div>
 </header>
 
@@ -1075,6 +1075,7 @@
               <th>Verdict</th>
             </tr>
           </thead>
+          <!-- LEADERBOARD_ROWS_START -->
           <tbody>
             <tr class="best-row">
               <td class="td-label">Latent NODE (z=64, h256)</td>
@@ -1097,12 +1098,12 @@
               <td>0.0981</td>
               <td style="color:var(--cyan)">✅ Real-time · Best Channel-Level</td>
             </tr>
-            <tr class="best-row">
-              <td class="td-label">Causal Latent CA-NODE (z=64, lr=3e-4) 🆕</td>
-              <td>Causal Latent ODE</td>
-              <td><div class="r2-cell"><span style="color:var(--green);font-weight:700">0.8252</span></div></td>
-              <td>0.1750</td>
-              <td style="color:var(--green)">✅ 173ms · Best Deployable Latent</td>
+            <tr>
+              <td class="td-label">Discrete CA-NODE (Euler, lr=5e-5)</td>
+              <td>Euler-Discretized CA</td>
+              <td><div class="r2-cell"><span>0.8968</span></div></td>
+              <td>0.1022</td>
+              <td style="color:var(--text-muted)">Near-ODE with slow LR</td>
             </tr>
             <tr>
               <td class="td-label">CA-NODE (skip linear, swd=1.0)</td>
@@ -1118,12 +1119,12 @@
               <td>0.1084</td>
               <td style="color:var(--text-muted)">❌ Sub-stepping = zero benefit</td>
             </tr>
-            <tr>
-              <td class="td-label">Discrete CA-NODE (Euler, lr=5e-5)</td>
-              <td>Euler-Discretized CA</td>
-              <td><div class="r2-cell"><span>0.8968</span></div></td>
-              <td>0.1022</td>
-              <td style="color:var(--text-muted)">Near-ODE with slow LR</td>
+            <tr class="best-row">
+              <td class="td-label">Causal Latent CA-NODE (z=64, lr=3e-4) 🆕</td>
+              <td>Causal Latent ODE</td>
+              <td><div class="r2-cell"><span style="color:var(--green);font-weight:700">0.8252</span></div></td>
+              <td>0.1750</td>
+              <td style="color:var(--green)">✅ 173ms · Best Deployable Latent</td>
             </tr>
             <tr>
               <td class="td-label">GRU (best)</td>
@@ -1147,6 +1148,7 @@
               <td style="color:var(--text-muted)">Linear baseline</td>
             </tr>
           </tbody>
+          <!-- LEADERBOARD_ROWS_END -->
         </table>
       </div>
 
