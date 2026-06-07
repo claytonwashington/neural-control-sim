@@ -216,6 +216,75 @@ This updates:
 
 
 
+
+### Autonomous Experiment Workflow
+
+Agents running experiments must follow this exact sequence. Every step is code-enforced.
+
+#### 1. Select Experiment
+Pick the next `Not started` entry from `ideas/modeling.md`, `ideas/control.md`, `ideas/project.md`, or `ideas/future.md`.
+
+#### 2. Check GPU Availability
+```bash
+python -m modeling.scripts.preflight gpu-status
+```
+This shows which GPUs are free and suggests `--gpu-ids`.
+
+#### 3. Run Preflight
+```bash
+python -m modeling.scripts.preflight start \
+  --idea-file ideas/modeling.md --idea-id 23 \
+  --experiment-name "Descriptive Name" \
+  --branch feature/branch-name \
+  --hypothesis "What you're testing" \
+  --data data/training_trials_bidirectional.h5 \
+  --machine gpu1 --gpu-ids 0,1,2,3 \
+  --results-dir results/unique_dir_name \
+  --worktree-path /snel/home/cbwash2/cleo-worktrees/name
+```
+Save the printed token for the next step.
+
+#### 4. Launch Training in tmux
+All sweep scripts **refuse to run outside tmux**. Use the session name from preflight:
+```bash
+tmux new-session -d -s exp_23_branch_name \
+  'cd /snel/home/cbwash2/cleo-worktrees/name && \
+   conda activate dtmodeling && \
+   python -m modeling.scripts.sweep_... \
+     --preflight-token <TOKEN> ...'
+```
+
+#### 5. Monitor Training
+```bash
+python -m modeling.scripts.preflight monitor \
+  --results-dir results/unique_dir_name \
+  --poll-interval 60 --timeout 14400
+```
+This blocks until all runs produce `results.json`, then prints the best result and the exact `preflight complete` command to run.
+
+#### 6. Complete Experiment (Postflight)
+```bash
+python -m modeling.scripts.preflight complete \
+  --results-dir results/unique_dir_name \
+  --status completed --best-r2 0.864 \
+  --notes "Summary of findings"
+```
+This enforces (all are hard gates — failure blocks completion):
+1. **Eval results exist** — `results.json` must be present
+2. **Dashboard updated** — `update_dashboard_leaderboard.py` must succeed
+3. **Git push** — auto-pushes to `origin/modeling-dev`
+4. **Worktree cleanup** — merges branch, removes worktree, deletes branch
+
+#### 7. Repeat
+Select the next experiment and go to step 2.
+
+### Worktree Lifecycle
+
+- **Creation**: `preflight start --worktree-path ...` creates worktrees
+- **Deletion**: `preflight complete` auto-merges and removes worktrees
+- **No manual worktrees**: All worktrees must be created via preflight
+- **Stale worktrees**: Any worktree not tied to an active experiment should be cleaned up
+
 ### Prohibited Patterns
 
 1. **Never read from local file mirrors** (e.g., ~/code/gpu2/cleo/). These are stale. Always use the MCP tools (gpu1, gpu2) or SSH to read files from the actual machines.

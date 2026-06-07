@@ -332,6 +332,16 @@ def main():
     complete.add_argument("--best-mse", type=float, default=None, help="Best MSE achieved")
     complete.add_argument("--notes", type=str, default="", help="Summary of findings")
 
+    # ── GPU-STATUS subcommand ──
+    gpu_status = sub.add_parser("gpu-status", help="Show GPU availability")
+    gpu_status.add_argument("--machine", default="gpu1", choices=["gpu1", "gpu2"])
+
+    # ── MONITOR subcommand ──
+    monitor = sub.add_parser("monitor", help="Block until training completes")
+    monitor.add_argument("--results-dir", required=True, help="Results directory to watch")
+    monitor.add_argument("--poll-interval", type=int, default=30, help="Seconds between checks")
+    monitor.add_argument("--timeout", type=int, default=14400, help="Max seconds to wait (default 4hr)")
+
     args = parser.parse_args()
     repo_root = get_repo_root()
 
@@ -339,6 +349,10 @@ def main():
         _do_start(args, repo_root)
     elif args.command == "complete":
         _do_complete(args, repo_root)
+    elif args.command == "gpu-status":
+        _do_gpu_status(args)
+    elif args.command == "monitor":
+        _do_monitor(args, repo_root)
 
 
 def _do_start(args, repo_root):
@@ -566,17 +580,259 @@ def _require_git_push(repo_root):
 
 
 def _cleanup_worktree(repo_root, worktree_path):
-    """Auto-remove completed experiment worktree."""
+    """Auto-remove completed experiment worktree after verifying merge."""
+    # Check what branch the worktree is on
+    result = subprocess.run(
+        ["git", "-C", worktree_path, "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True, text=True,
+    )
+    branch = result.stdout.strip() if result.returncode == 0 else None
+
+    # Check for uncommitted changes
+    result = subprocess.run(
+        ["git", "-C", worktree_path, "status", "--porcelain"],
+        capture_output=True, text=True,
+    )
+    has_changes = bool(result.stdout.strip())
+
+    if has_changes:
+        print(f"[preflight] WARNING: Worktree has uncommitted changes, skipping cleanup")
+        print(f"  Path: {worktree_path}")
+        print(f"  Commit or stash changes, then run: git worktree remove {worktree_path}")
+        return
+
+    # Check if branch is merged into modeling-dev
+    if branch:
+        result = subprocess.run(
+            ["git", "branch", "--merged", "modeling-dev"],
+            capture_output=True, text=True, cwd=repo_root,
+        )
+        merged_branches = [b.strip().lstrip("* ") for b in result.stdout.strip().split("\n")]
+        if branch not in merged_branches:
+            # Merge the branch into modeling-dev first
+            print(f"[preflight] Merging {branch} into modeling-dev before cleanup...")
+            result = subprocess.run(
+                ["git", "merge", branch, "--no-edit",
+                 "-m", f"merge: {branch} (experiment complete)"],
+                capture_output=True, text=True, cwd=repo_root,
+            )
+            if result.returncode != 0:
+                print(f"[preflight] WARNING: Merge failed: {result.stderr.strip()}")
+                print(f"  Resolve manually, then: git worktree remove {worktree_path}")
+                return
+            print(f"[preflight] \u2713 Merged {branch} into modeling-dev")
+
+    # Remove the worktree
     print(f"[preflight] Cleaning up worktree: {worktree_path}")
     result = subprocess.run(
         ["git", "worktree", "remove", "--force", worktree_path],
         capture_output=True, text=True, cwd=repo_root,
     )
     if result.returncode != 0:
-        print(f"[preflight] WARNING: Worktree cleanup failed: {result.stderr.strip()}")
+        print(f"[preflight] WARNING: Worktree removal failed: {result.stderr.strip()}")
         print(f"  Manual cleanup: git worktree remove {worktree_path}")
     else:
         print(f"[preflight] \u2713 Worktree removed: {worktree_path}")
+
+    # Delete the remote-tracking branch
+    if branch and branch != "modeling-dev":
+        subprocess.run(
+            ["git", "branch", "-d", branch],
+            capture_output=True, text=True, cwd=repo_root,
+        )
+        print(f"[preflight] \u2713 Deleted local branch: {branch}")
+
+
+
+def _do_gpu_status(args):
+    """Show GPU availability with process info."""
+    import re as _re
+
+    print(f"\nGPU Status — {args.machine}")
+    print("=" * 60)
+
+    # Get GPU info
+    result = subprocess.run(
+        ["nvidia-smi", "--query-gpu=index,memory.used,memory.total,utilization.gpu",
+         "--format=csv,noheader,nounits"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print("ERROR: nvidia-smi failed", file=sys.stderr)
+        sys.exit(1)
+
+    gpus = []
+    for line in result.stdout.strip().split("\n"):
+        parts = [p.strip() for p in line.split(",")]
+        idx, mem_used, mem_total, util = int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])
+        gpus.append({"idx": idx, "mem_used": mem_used, "mem_total": mem_total, "util": util})
+
+    # Get process info per GPU
+    result = subprocess.run(
+        ["nvidia-smi", "--query-compute-apps=gpu_uuid,pid,used_memory,process_name",
+         "--format=csv,noheader,nounits"],
+        capture_output=True, text=True,
+    )
+    # Also get GPU UUID to index mapping
+    result2 = subprocess.run(
+        ["nvidia-smi", "--query-gpu=index,uuid", "--format=csv,noheader"],
+        capture_output=True, text=True,
+    )
+    uuid_to_idx = {}
+    if result2.returncode == 0:
+        for line in result2.stdout.strip().split("\n"):
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) == 2:
+                uuid_to_idx[parts[1]] = int(parts[0])
+
+    gpu_procs = {g["idx"]: [] for g in gpus}
+    if result.returncode == 0 and result.stdout.strip():
+        for line in result.stdout.strip().split("\n"):
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) >= 4:
+                uuid, pid, mem, proc = parts[0], parts[1], parts[2], parts[3]
+                gpu_idx = uuid_to_idx.get(uuid, -1)
+                if gpu_idx in gpu_procs:
+                    gpu_procs[gpu_idx].append({"pid": pid, "mem": mem, "proc": os.path.basename(proc)})
+
+    # Check MANIFEST files to map PIDs to experiments
+    free_gpus = []
+    busy_gpus = []
+    for g in gpus:
+        idx = g["idx"]
+        procs = gpu_procs.get(idx, [])
+        status = "FREE" if g["mem_used"] < 100 and g["util"] < 5 else "BUSY"
+        proc_str = ""
+        if procs:
+            proc_str = " | ".join(f"pid={p['pid']} {p['proc']} ({p['mem']}MiB)" for p in procs)
+        else:
+            proc_str = "no compute processes"
+
+        icon = "\u2705" if status == "FREE" else "\u274c"
+        print(f"  GPU {idx}: {icon} {status}  ({g['mem_used']}/{g['mem_total']} MiB, {g['util']}% util)")
+        if procs:
+            for p in procs:
+                print(f"         \u2514\u2500 pid {p['pid']}: {p['proc']} ({p['mem']} MiB)")
+
+        if status == "FREE":
+            free_gpus.append(idx)
+        else:
+            busy_gpus.append(idx)
+
+    print(f"\n  Free: {len(free_gpus)} GPUs {free_gpus}")
+    print(f"  Busy: {len(busy_gpus)} GPUs {busy_gpus}")
+    if free_gpus:
+        print(f"  --gpu-ids {','.join(str(g) for g in free_gpus)}")
+
+
+def _do_monitor(args, repo_root):
+    """Block until all training runs in results-dir produce results.json."""
+    import time as _time
+    import glob as _glob
+
+    results_dir = os.path.join(repo_root, args.results_dir) if not os.path.isabs(args.results_dir) else args.results_dir
+
+    if not os.path.exists(results_dir):
+        print(f"ERROR: Results directory not found: {results_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    manifest_path = os.path.join(results_dir, "MANIFEST.json")
+    if not os.path.exists(manifest_path):
+        print(f"ERROR: No MANIFEST.json in {results_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+
+    print(f"\nMONITOR \u2014 Watching Exp {manifest.get('idea_id', '?')}: {manifest.get('experiment_name', '?')}")
+    print(f"  Results dir: {results_dir}")
+    print(f"  Poll interval: {args.poll_interval}s")
+    print(f"  Timeout: {args.timeout}s ({args.timeout/3600:.1f}h)")
+    print()
+
+    start_time = _time.time()
+    completed = set()
+
+    while True:
+        elapsed = _time.time() - start_time
+        if elapsed > args.timeout:
+            print(f"\nTIMEOUT after {elapsed/3600:.1f}h")
+            sys.exit(1)
+
+        # Find all run_* subdirectories
+        run_dirs = sorted(_glob.glob(os.path.join(results_dir, "run_*")))
+        if not run_dirs:
+            # Maybe it's a single-run experiment, check for results.json in root
+            if os.path.exists(os.path.join(results_dir, "results.json")):
+                print(f"[{elapsed/60:.0f}m] \u2713 Training complete!")
+                with open(os.path.join(results_dir, "results.json")) as f:
+                    r = json.load(f)
+                r2 = r.get("r2_200step", r.get("val_r2", r.get("best_r2", "?")))
+                print(f"  R\u00b2 = {r2}")
+                return
+            # No runs yet, keep waiting
+            _time.sleep(args.poll_interval)
+            continue
+
+        # Check each run dir for results.json
+        all_done = True
+        for rd in run_dirs:
+            run_name = os.path.basename(rd)
+            rpath = os.path.join(rd, "results.json")
+            if os.path.exists(rpath):
+                if run_name not in completed:
+                    completed.add(run_name)
+                    try:
+                        with open(rpath) as f:
+                            r = json.load(f)
+                        r2 = r.get("r2_200step", r.get("val_r2", r.get("best_r2", "?")))
+                        mse = r.get("best_val_loss", r.get("best_mse", "?"))
+                        print(f"[{elapsed/60:.0f}m] \u2713 {run_name}: R\u00b2={r2}, MSE={mse}")
+                    except Exception:
+                        print(f"[{elapsed/60:.0f}m] \u2713 {run_name}: results.json found (parse error)")
+            else:
+                all_done = False
+
+        if all_done and len(completed) == len(run_dirs):
+            print(f"\n{'='*60}")
+            print(f"All {len(run_dirs)} runs complete in {elapsed/60:.1f} minutes!")
+
+            # Find best run
+            best_r2 = -1
+            best_run = None
+            for rd in run_dirs:
+                rpath = os.path.join(rd, "results.json")
+                if os.path.exists(rpath):
+                    try:
+                        with open(rpath) as f:
+                            r = json.load(f)
+                        r2 = float(r.get("r2_200step", r.get("val_r2", r.get("best_r2", -1))))
+                        if r2 > best_r2:
+                            best_r2 = r2
+                            best_run = os.path.basename(rd)
+                    except Exception:
+                        pass
+
+            if best_run:
+                print(f"Best run: {best_run} (R\u00b2={best_r2:.4f})")
+                print(f"\nReady for postflight:")
+                print(f"  python -m modeling.scripts.preflight complete \\")
+                print(f"    --results-dir {args.results_dir} \\")
+                print(f"    --status completed \\")
+                print(f"    --best-r2 {best_r2:.4f} \\")
+                print(f'    --notes "Best: {best_run}"')
+            return
+
+        # Print progress
+        n_done = len(completed)
+        n_total = len(run_dirs)
+        if n_total > 0:
+            pct = n_done / n_total * 100
+            remaining = n_total - n_done
+            bar = "\u2588" * int(pct / 5) + "\u2591" * (20 - int(pct / 5))
+            print(f"\r[{elapsed/60:.0f}m] {bar} {n_done}/{n_total} ({pct:.0f}%) — {remaining} running", end="", flush=True)
+
+        _time.sleep(args.poll_interval)
 
 
 if __name__ == "__main__":

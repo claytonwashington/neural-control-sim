@@ -4,7 +4,13 @@ import re
 import json
 from datetime import datetime
 
+import argparse
+
 def main():
+    parser = argparse.ArgumentParser(description="Update dashboard leaderboard")
+    parser.add_argument("--results-dir", default=None, help="Results directory (optional)")
+    args = parser.parse_args()
+
     # Detect repo root dynamically
     script_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
