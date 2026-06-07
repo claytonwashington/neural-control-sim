@@ -1,9 +1,11 @@
-"""Cleo E/I plant for digital twin modeling.
+"""Cleo E/I plant for digital twin modeling — bidirectional variant.
 
 Builds a 3D LIF excitatory/inhibitory network with:
-- ProportionalCurrentOpsin (control-affine)
-- 2 OpticFiber light sources in opposing quadrants
+- ChrimsonR (excitatory opsin, peak ~590nm) driven by red fiber
+- GtACR2 (inhibitory opsin, peak ~470nm) driven by blue fiber
 - 50-channel MultiUnitActivity probe
+
+The input u is 2-dimensional: u[0] = red (excitatory), u[1] = blue (inhibitory).
 
 Usage:
     from modeling.plant import build_plant
@@ -31,7 +33,7 @@ import cleo
 import cleo.coords
 import cleo.ephys
 import cleo.light
-import cleo.opto
+from cleo.opto.opsin_library import chrimson_4s, gtacr2_4s
 
 
 def _make_probe_coords(n_channels: int, volume_um: float) -> np.ndarray:
@@ -53,7 +55,6 @@ def _make_probe_coords(n_channels: int, volume_um: float) -> np.ndarray:
         Channel coordinates in microns
     """
     half = volume_um / 2
-    # Grid along X and Z, Y=0 (planar MEA)
     n_side = int(np.ceil(np.sqrt(n_channels)))
     xs = np.linspace(-half * 0.8, half * 0.8, n_side)
     zs = np.linspace(-half * 0.8, half * 0.8, n_side)
@@ -71,11 +72,18 @@ def build_plant(
     n_inh: int = 200,
     n_channels: int = 50,
     volume_um: float = 500.0,
-    I_per_Irr_val: float = 50e-12,  # 50 pA per mW/mm^2
     p_connect: float = 0.1,
     seed: int = 42,
 ) -> tuple[cleo.CLSimulator, dict]:
-    """Build the Cleo E/I plant for digital twin experiments.
+    """Build the Cleo E/I plant with bidirectional optogenetic control.
+
+    Uses ChrimsonR (red-shifted excitatory cation channel) and
+    GtACR2 (blue-shifted inhibitory anion channel) for independent
+    excitation and inhibition.
+
+    Brian2 does not allow two (summed) synapses to target the same
+    variable, so we use separate variables I_exc_opto and I_inh_opto
+    and combine them into I_opto in the neuron equations.
 
     Parameters
     ----------
@@ -87,9 +95,6 @@ def build_plant(
         Number of MUA probe channels
     volume_um : float
         Side length of cubic volume in microns
-    I_per_Irr_val : float
-        Current per unit irradiance in amps / (mW/mm^2).
-        Default 50 pA/(mW/mm^2) gives ~50-500 pA at 1-10 mW/mm^2.
     p_connect : float
         Connection probability for recurrent synapses
     seed : int
@@ -100,8 +105,7 @@ def build_plant(
     sim : cleo.CLSimulator
         The configured simulator (no IOProcessor set yet)
     devices : dict
-        References to key devices: 'light', 'opsin', 'probe', 'mua',
-        'ng', 'exc_syn', 'inh_syn'
+        References to key devices
     """
     np.random.seed(seed)
 
@@ -113,12 +117,15 @@ def build_plant(
     # -------------------------------------------------------------------------
     b2.start_scope()
 
+    # Two separate opsin current variables to avoid the Brian2
+    # "multiple summed variables" limitation.
     ng = b2.NeuronGroup(
         n_total,
         """
-        dv/dt = (-(v - E_L) + Rm * (I_syn + I_opto + I_bg)) / tau_m : volt
+        dv/dt = (-(v - E_L) + Rm * (I_syn + I_exc_opto + I_inh_opto + I_bg)) / tau_m : volt
         I_syn : amp
-        I_opto : amp
+        I_exc_opto : amp
+        I_inh_opto : amp
         """,
         threshold="v > v_th",
         reset="v = E_L",
@@ -171,31 +178,39 @@ def build_plant(
     # -------------------------------------------------------------------------
     sim = cleo.CLSimulator(net)
 
-    # Light: 2 fibers in opposing quadrants
     quarter = half / 2
-    light = cleo.light.Light(
-        name="fibers",
-        light_model=cleo.light.fiber473nm(),
-        coords=np.array([[-quarter, -quarter, -half], [quarter, quarter, -half]]) * um,
-        direction=np.array([[0, 0, 1], [0, 0, 1]]),
-        wavelength=473 * nmeter,
-    )
-    sim.inject(light, ng)
 
-    # Opsin: ProportionalCurrentOpsin (control-affine)
-    opsin = cleo.opto.ProportionalCurrentOpsin(
-        name="opto",
-        I_per_Irr=I_per_Irr_val * nA / (mwatt / mm**2) * 1e9,
-        # normalize: I_per_Irr_val is in amps, need units of amp / (mW/mm^2)
+    # Light 1: Red fiber for ChrimsonR (~590nm excitation)
+    light_red = cleo.light.Light(
+        name="fiber_red",
+        light_model=cleo.light.fiber473nm(),  # same spatial propagation model
+        coords=np.array([[-quarter, -quarter, -half]]) * um,
+        direction=np.array([[0, 0, 1]]),
+        wavelength=590 * nmeter,
     )
-    # Actually, let's be explicit about units:
-    # I_per_Irr should have units of amp / (mW/mm^2)
-    # So for 50 pA per mW/mm^2:
-    opsin = cleo.opto.ProportionalCurrentOpsin(
-        name="opto",
-        I_per_Irr=I_per_Irr_val * b2.amp / (mwatt / mm**2),
+    sim.inject(light_red, ng)
+
+    # Light 2: Blue fiber for GtACR2 (~470nm inhibition)
+    light_blue = cleo.light.Light(
+        name="fiber_blue",
+        light_model=cleo.light.fiber473nm(),
+        coords=np.array([[quarter, quarter, -half]]) * um,
+        direction=np.array([[0, 0, 1]]),
+        wavelength=470 * nmeter,
     )
-    sim.inject(opsin, ng, Iopto_var_name="I_opto")
+    sim.inject(light_blue, ng)
+
+    # Opsin 1: ChrimsonR — excitatory cation channel (E=0mV)
+    # All neurons express it; driven primarily by the red fiber.
+    # Maps to I_exc_opto in the neuron model.
+    opsin_exc = chrimson_4s()
+    sim.inject(opsin_exc, ng, Iopto_var_name="I_exc_opto")
+
+    # Opsin 2: GtACR2 — inhibitory anion channel (E=-69.5mV)
+    # All neurons express it; driven primarily by the blue fiber.
+    # Maps to I_inh_opto in the neuron model.
+    opsin_inh = gtacr2_4s()
+    sim.inject(opsin_inh, ng, Iopto_var_name="I_inh_opto")
 
     # Probe: 50-channel MultiUnitActivity
     mua = cleo.ephys.MultiUnitActivity(name="mua")
@@ -209,8 +224,10 @@ def build_plant(
     sim.inject(probe, ng)
 
     devices = {
-        "light": light,
-        "opsin": opsin,
+        "light_red": light_red,
+        "light_blue": light_blue,
+        "opsin_exc": opsin_exc,
+        "opsin_inh": opsin_inh,
         "probe": probe,
         "mua": mua,
         "ng": ng,
@@ -223,11 +240,13 @@ def build_plant(
 
 if __name__ == "__main__":
     # Smoke test
-    print("Building plant...")
+    print("Building bidirectional plant...")
     sim, devices = build_plant()
     print(f"  Neurons: {len(devices['ng'])}")
     print(f"  Channels: {len(devices['probe'].coords)}")
-    print(f"  Fibers: {len(devices['light'].coords)}")
+    print(f"  Red fiber sources: {len(devices['light_red'].coords)}")
+    print(f"  Blue fiber sources: {len(devices['light_blue'].coords)}")
+    print(f"  Opsins: {devices['opsin_exc'].name} (exc) + {devices['opsin_inh'].name} (inh)")
     print("Running 100ms smoke test...")
     sim.run(100 * ms)
     print("Done.")
