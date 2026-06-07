@@ -18,6 +18,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+from modeling.scripts.preflight_check import add_preflight_args, validate_preflight
 torch.set_num_threads(4)
 
 import matplotlib
@@ -160,9 +161,11 @@ def main():
                         help="AdamW weight decay")
     parser.add_argument("--output-dir", type=str, default="results/latent_node")
     parser.add_argument("--save-model", type=str, default="results/latent_node/model.pt")
+    add_preflight_args(parser)
     args = parser.parse_args()
 
     set_seed(args.seed)
+    validate_preflight(args)
 
     os.makedirs(args.output_dir, exist_ok=True)
 

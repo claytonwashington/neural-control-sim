@@ -12,6 +12,7 @@ import argparse
 import os
 import numpy as np
 import matplotlib
+from modeling.scripts.preflight_check import add_preflight_args, validate_preflight
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from modeling.config import DEFAULT_SEED, DEFAULT_TEST_TRIALS, set_seed
@@ -95,8 +96,10 @@ def main():
     parser.add_argument("--eval-horizon", type=int, default=200,
                         help="Prediction horizon for evaluation (steps = ms at 1kHz)")
     parser.add_argument("--output-dir", type=str, default="results/n4sid")
+    add_preflight_args(parser)
     args = parser.parse_args()
     set_seed(args.seed)
+    validate_preflight(args)
 
     os.makedirs(args.output_dir, exist_ok=True)
 

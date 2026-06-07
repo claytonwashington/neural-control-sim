@@ -11,6 +11,7 @@ import subprocess
 import time
 import json
 import numpy as np
+from modeling.scripts.preflight_check import add_preflight_args, validate_preflight
 
 
 def main():
@@ -26,6 +27,7 @@ def main():
     parser.add_argument("--max-workers", type=int, default=4,
                         help="Maximum parallel runs (capped by n_gpus)")
     parser.add_argument("--output-dir", type=str, default="results/sweep_sequence")
+    add_preflight_args(parser)
     args = parser.parse_args()
 
     # Cap workers at available GPUs

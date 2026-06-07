@@ -140,6 +140,35 @@ The project maintains a living results dashboard at **`results/dashboard.html`**
 6. Sync the dashboard to the remote machine via `scp`
 
 
+### Preflight Protocol
+
+Before launching ANY training run, you MUST run the preflight harness:
+
+```bash
+python -m modeling.scripts.preflight \
+  --experiment-name "<descriptive name>" \
+  --branch feature/<branch-name> \
+  --hypothesis "<what you're testing and why>" \
+  --data <path-to-data-file> \
+  --machine <gpu1|gpu2> \
+  --gpu-ids <comma-separated GPU indices> \
+  --results-dir results/<experiment-dir>
+```
+
+This script:
+1. Creates/validates a git worktree for the experiment
+2. Registers the experiment in `branches.md` and `docs/modeling_ideas.md`
+3. Writes a `MANIFEST.json` to the results directory with a preflight token
+4. Commits the registration
+
+Training scripts (`fit_*.py`, `sweep_*.py`) **require** a valid `--preflight-token` argument. They will refuse to start without one.
+
+**No experiment may run without preflight registration.** This ensures:
+- Every worktree has a documented purpose
+- `branches.md` is always up to date
+- Results can be traced back to their hypothesis
+- The digestion protocol can find and assimilate results
+
 ### Results Digestion Protocol
 
 Every new set of experiment results **MUST** be digested through a structured git commit that updates all tracking artifacts. No results are considered "landed" until this process completes.
@@ -225,3 +254,57 @@ with torch.no_grad():
     torch.cuda.synchronize()
     inference_time_ms = (time.time() - t0) / 100 * 1000
 ```
+
+### Results Digestion Protocol
+
+Every new set of experiment results **MUST** be digested through a structured git commit that updates all tracking artifacts. No results are considered landed until this process completes.
+
+#### Required Steps
+
+1. **Parse results** from the sweep log/JSON:
+   - Extract R², MSE, training time, and any hyperparameters
+   - Verify results are plausible (sanity check against known baselines)
+   - Flag any suspicious patterns (e.g., identical metrics across configs that should differ)
+
+2. **Update **:
+   - Add/update rows in the relevant sweep tab (sorted by R²)
+   - Update the Model Comparison tab if rankings changed
+   - Update summary metric cards (Best R², configs tested, etc.)
+   - Update the Experiment Log tab with a dated entry
+   - Update the Key Findings tab if new conclusions emerged
+   - Set the "Last updated" timestamp
+
+3. **Update **:
+   - Mark the tested idea with status: ✅ TESTED, ❌ Did not beat baseline, or 🔄 IN PROGRESS
+   - Include the R² result and comparison to baseline
+   - Add any new insights under the idea's notes
+
+4. **Update ** (local artifact or repo-level):
+   - Mark completed items as `[x]`
+   - Add new items if the results suggest follow-up experiments
+
+5. **Commit atomically**:
+   
+   Example: 
+
+6. **Verification checklist** (include in commit message body):
+   - [ ] Dashboard has no ⏳ placeholders for completed runs
+   - [ ] Model Comparison tab reflects current leaderboard
+   - [ ] modeling_ideas.md status markers are accurate
+   - [ ] No stale numbers from old train/test splits
+
+#### For Autonomous Agents
+
+When a subagent completes a sweep or training run, it MUST:
+1. Parse its own results
+2. Produce a structured JSON summary (saved to )
+3. Report results back to the parent agent with: model name, R², MSE, key hyperparameters
+4. The **parent agent** (or a dedicated results-digestion agent) then performs steps 2-6 above
+
+**Never leave results un-digested.** If a sweep finishes but the dashboard hasn't been updated, the results effectively don't exist for the project.
+
+#### Standardization Rules
+
+- **All results MUST use the 40/10 train/test split** on  with 
+- Results on other splits (e.g., old 48/2) must be clearly marked as non-comparable and should not appear in the main leaderboard
+- The CA-NODE baseline (R²=0.9009) is the reference point for all comparisons

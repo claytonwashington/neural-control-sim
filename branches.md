@@ -1,41 +1,36 @@
+<!-- PREFLIGHT:AUTO-MANAGED — Active Experiments table is updated by preflight.py -->
 # Branch / Worktree / Experiment Mapping
 
-## Active Phase 4 Experiments
+## Active Experiments
 
-| Branch | Worktree | Experiment | Status | GPU |
-|--------|----------|------------|--------|-----|
-| feature/hybrid-distillation | cleo-worktrees/hybrid-distillation | Exp 8: Hybrid Distillation | Pending launch | gpu1 |
-| feature/grokking | cleo-worktrees/grokking | Exp 9: Causal Grokking | Running | gpu2:0 |
-| feature/grokking | cleo-worktrees/grokking | Exp 10: Acausal Grokking | Running | gpu2:1 |
-| feature/enkf-causal | cleo-worktrees/enkf-causal | Exp 15: EnKF Causal Init | Done | gpu1:0-3 |
-| feature/enkf-fulltrial | cleo-worktrees/enkf-fulltrial | Exp 17: EnKF Full Trial | Launching | gpu1:0-3 |
-| feature/residual-v2 | cleo-worktrees/residual-v2 | Exp 18: Residual Correction v2 | Launching | gpu1:0 |
-| feature/control-metrics | cleo-worktrees/control-metrics | Exp 16: Control Metrics | Done | gpu1:4 |
-| feature/control-metrics | cleo-worktrees/control-metrics | Control Metrics Suite | Launching | gpu1:4 |
+| Branch | Worktree | Experiment | Status |
+|--------|----------|------------|--------|
+| feature/bidirectional-plant | cleo-worktrees/bidirectional-plant | Bidirectional plant setup (ChrimsonR+GtACR2) | Active — dataset generated |
+| feature/optoclamp | cleo-worktrees/optoclamp | Exp 19: Optoclamp MPC (excitatory plant) | Done — results collected |
+| feature/mpc-latency | cleo-worktrees/mpc-latency | Exp 19b: MPC under 15ms latency | Done — results collected |
+| feature/grokking | cleo-worktrees/grokking | Exp 10: Grokking (causal z64) | Done — R²=0.8535 (causal), acausal killed |
 
-## Completed Phase 4 Experiments
+## Completed Experiments
 
 | Branch | Worktree | Experiment | Result |
 |--------|----------|------------|--------|
-| feature/encoder-distillation | cleo-worktrees/encoder-distillation | Exp 7: Encoder Distill | R2=0.6639 (worse than direct) |
-| feature/kalman-filter | cleo-worktrees/kalman-filter | Exp 11: EnKF (2080 Ti) | R2=0.9997 (1.1s, not RT) |
-| feature/residual-correction | cleo-worktrees/residual-correction | Exp 12: Residual Corr | R2=0.34 (cross-arch limit) |
-| feature/enkf-a100 | cleo-worktrees/enkf-a100 | Exp 13: EnKF A100 | R2=1.0 but no speed gain |
-| feature/hybrid-distillation | cleo-worktrees/hybrid-distillation | Exp 8: Hybrid Distill | R2=0.48 (worse than direct) |
-
-## Additional Runs (no new scripts needed)
-
-| Config | tmux | GPU | Status | Result |
-|--------|------|-----|--------|--------|
-| z=128, h128 | - | gpu2:2 | Done | R2=0.8430, 142ms |
-| z=64, 500ep, wd=5e-5 | causal_z64_500ep | gpu2:3 | Running | - |
-| z=64, pw=1000 | causal_z64_pw1000 | gpu2:4 | Running | - |
-
-## Completed Phase 2-3 Experiments
-
-| Branch | Worktree | Result |
-|--------|----------|--------|
-| feature/extended-training | cleo-worktrees/extended-training | Merged to modeling-dev |
-| feature/multi-rate-integration | cleo-worktrees/multi-rate-integration | R2=0.8907 (no benefit) |
-| feature/skip-connections | cleo-worktrees/skip-connections | R2=0.8911 (hurt) |
-| feature/spectral-loss | cleo-worktrees/spectral-loss | R2=0.899 (no effect) |
+| modeling-dev | cleo (main) | Exp 1: N4SID Baseline | R²=0.40 |
+| modeling-dev | cleo (main) | Exp 2: GRU Baseline | R²=0.69 |
+| modeling-dev | cleo (main) | Exp 3: Latent NODE (Acausal) | R²=0.9387 🏆 |
+| modeling-dev | cleo (main) | Exp 5: Causal Latent CA-NODE | R²=0.8252 |
+| modeling-dev | cleo (main) | Exp 11: 500-Trial Dataset | Generated |
+| feature/skip-connections | cleo-worktrees/skip-connections | Exp 4/6: Skip Connections | R²=0.8911 ❌ |
+| feature/spectral-loss | cleo-worktrees/spectral-loss | Exp 4: Spectral Loss | R²=0.8993 ❌ |
+| feature/multi-rate-integration | cleo-worktrees/multi-rate-integration | Exp 4: Multi-Rate Integration | R²=0.8907 ❌ |
+| feature/encoder-distillation | cleo-worktrees/encoder-distillation | Exp 7/9: Encoder Distillation | R²=0.6639 ❌ |
+| feature/hybrid-distillation | cleo-worktrees/hybrid-distillation | Exp 8: Hybrid Distillation | R²=0.4826 ❌ |
+| feature/extended-training | cleo-worktrees/extended-training | Extended Training Sweep | Merged to modeling-dev |
+| feature/residual-correction | cleo-worktrees/residual-correction | Exp 12: Residual Correction | R²=0.3445 ❌ |
+| feature/enkf-a100 | cleo-worktrees/enkf-a100 | Exp 13: EnKF A100 Speed | No speedup ❌ |
+| feature/kalman-filter | cleo-worktrees/kalman-filter | Exp 14: EnKF Baseline | R²=0.9997 (not RT) |
+| feature/enkf-causal | cleo-worktrees/enkf-causal | Exp 15: EnKF Causal Init | Done |
+| feature/control-metrics | cleo-worktrees/control-metrics | Exp 16: Control Metrics | Done |
+| feature/enkf-fulltrial | cleo-worktrees/enkf-fulltrial | Exp 17: Full-Trial EnKF | Done |
+| feature/residual-v2 | cleo-worktrees/residual-v2 | Exp 18: Residual v2 | Done |
+| feature/aligned-distill | cleo-worktrees/aligned-distill | Exp 20: Aligned Distillation | R²=0.8640 ✅ |
+| feature/periodic-reencode | cleo-worktrees/periodic-reencode | Exp 21/22: EnKF + Periodic Re-Encoding | R²=0.877 ✅ |

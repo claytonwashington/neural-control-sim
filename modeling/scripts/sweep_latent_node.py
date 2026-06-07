@@ -12,6 +12,7 @@ import time
 import json
 import numpy as np
 from modeling.config import DEFAULT_SEED, DEFAULT_TEST_TRIALS
+from modeling.scripts.preflight_check import add_preflight_args, validate_preflight
 
 
 def main():
@@ -33,6 +34,7 @@ def main():
     parser.add_argument("--output-dir", type=str, default="results/sweep_latent")
     parser.add_argument("--grid", type=str, default="small",
                         choices=["small", "large"])
+    add_preflight_args(parser)
     args = parser.parse_args()
 
     if args.gpu_ids is not None:

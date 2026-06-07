@@ -37,11 +37,14 @@ def main():
                         help="Disable wandb logging for all child runs")
     parser.add_argument("--wandb-group", type=str, default=None,
                         help="wandb group name for sweep runs (auto-generated if not set)")
+    add_preflight_args(parser)
     args = parser.parse_args()
+    validate_preflight(args)
 
     # Auto-generate wandb group name for sweep
     if not args.no_wandb and args.wandb_group is None:
         import datetime
+from modeling.scripts.preflight_check import add_preflight_args, validate_preflight
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         args.wandb_group = f"sweep_latent_{args.grid}_{ts}"
 
