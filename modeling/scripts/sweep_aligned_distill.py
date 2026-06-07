@@ -29,7 +29,7 @@ CONFIGS = [
 def main():
     parser = argparse.ArgumentParser(description="Aligned Distillation sweep")
     parser.add_argument("--data", required=True, help="Training data file")
-    parser.add_argument("--teacher-checkpoint", required=True, help="Acausal teacher .pt")
+    parser.add_argument("--acausal-checkpoint", required=True, help="Acausal teacher .pt")
     parser.add_argument("--n-epochs", type=int, default=200)
     parser.add_argument("--n-test-trials", type=int, default=10)
     parser.add_argument("--output-dir", required=True, help="Base output directory")
@@ -69,7 +69,7 @@ def main():
         cmd = [
             "python", "-m", "modeling.scripts.train_aligned_distill",
             "--data", args.data,
-            "--teacher-checkpoint", args.teacher_checkpoint,
+            "--acausal-checkpoint", args.teacher_checkpoint,
             "--n-epochs", str(args.n_epochs),
             "--alpha-schedule", "cosine",
             "--alpha-init", str(config["alpha_init"]),
