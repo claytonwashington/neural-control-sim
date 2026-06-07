@@ -58,13 +58,24 @@ def validate_preflight(args):
         print("ERROR: Cannot validate preflight without --output-dir.", file=sys.stderr)
         sys.exit(1)
 
-    manifest_path = os.path.join(output_dir, "MANIFEST.json")
-    if not os.path.exists(manifest_path):
+    # Search for MANIFEST.json in output_dir or parent dirs (sweep children
+    # run in subdirectories of the preflight results dir)
+    manifest_path = None
+    search_dir = os.path.abspath(output_dir)
+    for _ in range(5):  # max 5 levels up
+        candidate = os.path.join(search_dir, "MANIFEST.json")
+        if os.path.exists(candidate):
+            manifest_path = candidate
+            break
+        parent = os.path.dirname(search_dir)
+        if parent == search_dir:
+            break
+        search_dir = parent
+
+    if manifest_path is None:
         print(
-            f"ERROR: No MANIFEST.json found at {manifest_path}.\n"
-            f"Run preflight first to create it:\n"
-            f"  python -m modeling.scripts.preflight \\\n"
-            f"    --results-dir {output_dir} ...",
+            f"ERROR: No MANIFEST.json found at or above {output_dir}.\n"
+            f"Run preflight first: python -m modeling.scripts.preflight start --help",
             file=sys.stderr,
         )
         sys.exit(1)
