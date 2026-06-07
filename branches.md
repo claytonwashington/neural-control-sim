@@ -9,7 +9,7 @@
 | feature/optoclamp | cleo-worktrees/optoclamp | Exp 19: Optoclamp MPC (excitatory plant) | — | Done — results collected |
 | feature/mpc-latency | cleo-worktrees/mpc-latency | Exp 19b: MPC under 15ms latency | — | Done — results collected |
 | feature/grokking | cleo-worktrees/grokking | Exp 10: Grokking (causal z64) | — | Done — R²=0.8535 (causal), acausal killed |
-| feature/bidir-aligned-distill | cleo-worktrees/bidir-aligned-distill | [Exp 23](ideas/modeling.md) | `results/bidir_aligned_distill/` | Done — R²=0.8000 |
+| feature/bidir-aligned-distill | cleo-worktrees/bidir-aligned-distill | [Exp 23](ideas/modeling.md) | `results/bidir_aligned_distill/` | Preflight complete |
 
 ## Completed Experiments
 
