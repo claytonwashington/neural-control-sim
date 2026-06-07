@@ -231,4 +231,4 @@ The following metrics have been **measured** (no longer "to implement"):
 
 > [!NOTE]
 > All "to implement" metrics from the original table are now implemented and measured.
-> See Experiments 16, 17, and 19 in docs/modeling_ideas.md for full details.
+> See Experiments 16, 17, and 19 in ideas/modeling.md for full details.

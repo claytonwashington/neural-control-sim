@@ -384,3 +384,41 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Causal: `modeling/scripts/fit_latent_canode.py`
 - Distillation: `modeling/scripts/hybrid_distill.py`
 - Evaluation: `modeling/scripts/eval_periodic_reencode.py`
+
+### Experiment 23. Bidirectional Aligned Distillation
+**Status**: Not started
+**Branch/Worktree**: TBD
+**Results dir**: TBD
+- Hypothesis: Aligned distillation from acausal NODE (R²=0.935) to causal CA-NODE on the bidirectional ChrimsonR+GtACR2 plant will close the large causal-acausal gap (0.39 vs 0.11 on excitatory-only plant)
+- Sweep: α ∈ {0.5, 0.7, 0.9}, pw ∈ {50, 100, 200}, lr ∈ {5e-4, 1e-3}
+- Teacher: `results/sweep_latent_node_40_10/run_05_z64_h256_l2_lr0.0005_dopri5.pt` (n_u=2 verified)
+
+### Experiment 24. Delay-Matched Training
+**Status**: Not started
+**Branch/Worktree**: TBD
+**Results dir**: TBD
+- Hypothesis: Training the causal model on data encoded with the same observation delay (D=10ms) used during deployment will improve generalization under latency, since the model learns to compensate for stale observations rather than seeing them for the first time at test time
+- Compare: train with D=0 + test with D=10 vs. train with D=10 + test with D=10
+- Expected: reduced latency-induced R² degradation
+
+### Experiment 25. Bidirectional Periodic Re-Encoding
+**Status**: Not started
+**Branch/Worktree**: TBD
+**Results dir**: TBD
+- Hypothesis: Periodic re-encoding (K×D sweep) on the best bidirectional aligned model will replicate the gains seen on the excitatory plant (Exp 22) where re-encoding pushed R² from 0.864 to 0.877
+- Sweep: K ∈ {1, 5, 10, 20, 50, 100} × D ∈ {0, 10ms}
+
+### Experiment 26. Bidirectional EnKF Evaluation
+**Status**: Not started
+**Branch/Worktree**: TBD
+**Results dir**: TBD
+- Hypothesis: EnKF on the bidirectional aligned model will provide an accuracy upper bound (expected R²>0.90) for comparison with periodic re-encoding, replicating Exp 21 on the new plant
+- Sweep: K ∈ {1, 20, 100, 999} × D ∈ {0, 10ms} × Q ∈ {0.1, 1.0} × R ∈ {0.01, 0.1}
+
+### Experiment 27. Bidirectional Optoclamp MPC
+**Status**: Not started
+**Branch/Worktree**: TBD
+**Results dir**: TBD
+- Hypothesis: MPC with the bidirectional aligned model can achieve inhibition (hitting 50% and 75% target rates) which was impossible on the excitatory-only plant. This is the primary validation of the bidirectional plant.
+- Targets: 50%, 75%, 100%, 125%
+- Controllers: PI baseline vs NODE MPC with periodic re-encoding

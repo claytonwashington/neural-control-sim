@@ -9,7 +9,7 @@ Research directions beyond the current Phase 4 modeling sweep. These are ideas t
 **Priority**: HIGH — blocks the ultimate validation of all modeling work
 
 > [!NOTE]
-> All active control ideas, controller implementations, closed-loop experiments (including the optoclamp results), and future control plans have been moved to [CONTROL_IDEAS.md](CONTROL_IDEAS.md). Please refer to that document for the current state and roadmap of control-layer work.
+> All active control ideas, controller implementations, closed-loop experiments (including the optoclamp results), and future control plans have been moved to [../ideas/control.md](../ideas/control.md). Please refer to that document for the current state and roadmap of control-layer work.
 
 ---
 
@@ -144,7 +144,7 @@ Real neural systems drift over time (electrode movement, plasticity, pharmacolog
 ### Phase 6: Control Layer (In Progress)
 We have successfully implemented and executed the first closed-loop control experiments (PI vs. Neural ODE MPC optoclamp), and established control-relevant model metrics. 
 
-Details of these experiments, key results, and next steps for the control layer are tracked in [CONTROL_IDEAS.md](CONTROL_IDEAS.md).
+Details of these experiments, key results, and next steps for the control layer are tracked in [../ideas/control.md](../ideas/control.md).
 
 ### Phase 7: Spiking Data on Current Plant
 **Why second**: Real experiments produce spikes, not firing rates. We need a spike-to-rate
