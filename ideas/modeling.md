@@ -386,7 +386,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Evaluation: `modeling/scripts/eval_periodic_reencode.py`
 
 ### Experiment 23. Bidirectional Aligned Distillation
-**Status**: 🔄 IN PROGRESS
+**Status**: ✅ COMPLETE — R²=0.8000
+**Results notes**: test
 **Branch/Worktree**: TBD
 **Results dir**: TBD
 - Hypothesis: Aligned distillation from acausal NODE (R²=0.935) to causal CA-NODE on the bidirectional ChrimsonR+GtACR2 plant will close the large causal-acausal gap (0.39 vs 0.11 on excitatory-only plant)
