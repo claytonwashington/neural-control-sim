@@ -143,6 +143,11 @@ def create_worktree(repo_root, worktree_path, branch, base_branch="modeling-dev"
 
 
 def write_manifest(results_dir, manifest_data):
+    """Write MANIFEST.json to the results directory.
+    
+    Refuses to write if the directory already contains results from
+    a different experiment (prevents accidental overwrites).
+    """
     """Write MANIFEST.json to the results directory."""
     os.makedirs(results_dir, exist_ok=True)
     manifest_path = os.path.join(results_dir, "MANIFEST.json")
