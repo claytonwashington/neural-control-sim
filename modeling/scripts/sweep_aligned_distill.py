@@ -69,7 +69,7 @@ def main():
         cmd = [
             "python", "-m", "modeling.scripts.train_aligned_distill",
             "--data", args.data,
-            "--acausal-checkpoint", args.teacher_checkpoint,
+            "--acausal-checkpoint", args.acausal_checkpoint,
             "--n-epochs", str(args.n_epochs),
             "--alpha-schedule", "cosine",
             "--alpha-init", str(config["alpha_init"]),
