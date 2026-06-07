@@ -214,6 +214,13 @@ This updates:
 **No experiment is considered finished until `preflight complete` has been run.**
 
 
+
+
+### Prohibited Patterns
+
+1. **Never read from local file mirrors** (e.g., ~/code/gpu2/cleo/). These are stale. Always use the MCP tools (gpu1, gpu2) or SSH to read files from the actual machines.
+2. **Never run training outside tmux**. Sweep scripts enforce this and will refuse to start.
+3. **Never reuse a results directory**. Preflight enforces this — each experiment gets a unique results dir.
 ### Results Digestion Protocol
 
 Every new set of experiment results **MUST** be digested through a structured git commit that updates all tracking artifacts. No results are considered "landed" until this process completes.

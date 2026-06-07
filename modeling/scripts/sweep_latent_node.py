@@ -15,6 +15,17 @@ from modeling.config import DEFAULT_SEED, DEFAULT_TEST_TRIALS
 from modeling.scripts.preflight_check import add_preflight_args, validate_preflight
 
 
+def _require_tmux():
+    """Refuse to run sweep outside tmux."""
+    if not os.environ.get("TMUX"):
+        print(
+            "ERROR: Sweep scripts must run inside a tmux session.\n"
+            "  Training runs must be in tmux to survive disconnects.\n"
+            "  Use: tmux new-session -s <session_name>",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
 def main():
     parser = argparse.ArgumentParser(description="Parallel hyperparameter sweep for Latent NODE")
     parser.add_argument("--data", type=str, default="data/training_trials.h5")

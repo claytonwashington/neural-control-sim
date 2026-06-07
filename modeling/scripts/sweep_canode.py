@@ -17,6 +17,17 @@ import json
 import numpy as np
 
 
+def _require_tmux():
+    """Refuse to run sweep outside tmux."""
+    if not os.environ.get("TMUX"):
+        print(
+            "ERROR: Sweep scripts must run inside a tmux session.\n"
+            "  Training runs must be in tmux to survive disconnects.\n"
+            "  Use: tmux new-session -s <session_name>",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
 def main():
     parser = argparse.ArgumentParser(description="Parallel hyperparameter sweep for CA-NODE")
     parser.add_argument("--data", type=str, default="data/training_trials.h5")
@@ -41,6 +52,7 @@ def main():
                         help="wandb group name for sweep runs (auto-generated if not set)")
     add_preflight_args(parser)
     args = parser.parse_args()
+    _require_tmux()
     manifest = validate_preflight(args)
     _preflight_token = getattr(args, 'preflight_token', None) or os.environ.get('PREFLIGHT_TOKEN', '')
 
