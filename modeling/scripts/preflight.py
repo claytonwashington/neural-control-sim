@@ -469,6 +469,37 @@ def _do_complete(args, repo_root):
 
     print(f"[preflight] ✓ Experiment {idea_id} marked as {args.status}")
 
+    # Auto-update dashboard if script exists
+    dashboard_script = os.path.join(repo_root, "modeling/scripts/update_dashboard_leaderboard.py")
+    if os.path.exists(dashboard_script):
+        try:
+            subprocess.run(
+                ["python", dashboard_script, "--results-dir", results_dir],
+                cwd=repo_root, timeout=60,
+            )
+            print("[preflight] ✓ Dashboard updated")
+        except Exception as e:
+            print(f"[preflight] WARNING: Dashboard update failed: {e}")
+
+    # Check if ahead of remote and suggest push
+    try:
+        result = subprocess.run(
+            ["git", "rev-list", "--count", "origin/modeling-dev..HEAD"],
+            capture_output=True, text=True, cwd=repo_root,
+        )
+        ahead = int(result.stdout.strip()) if result.returncode == 0 else 0
+        if ahead > 0:
+            print(f"\n[preflight] ⚠ You are {ahead} commits ahead of origin/modeling-dev.")
+            print(f"  Run: git push origin modeling-dev")
+    except Exception:
+        pass
+
+    # Suggest worktree cleanup
+    worktree = manifest.get("worktree_path")
+    if worktree and os.path.exists(worktree):
+        print(f"\n[preflight] Worktree still exists: {worktree}")
+        print(f"  To clean up: git worktree remove {worktree}")
+
 
 if __name__ == "__main__":
     main()

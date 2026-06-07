@@ -114,6 +114,7 @@ def main():
 
             log_file = open(log_path, "w")
             env = os.environ.copy()
+            env["PREFLIGHT_TOKEN"] = _preflight_token
             env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
 
             print(f"[{idx+1}/{n_configs}] Launching {run_id} on GPU {gpu_id} ...")

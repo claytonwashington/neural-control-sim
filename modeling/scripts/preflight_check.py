@@ -40,12 +40,16 @@ def validate_preflight(args):
     output_dir = getattr(args, "output_dir", None)
     token = getattr(args, "preflight_token", None)
 
+    # Also accept token via env var (used by sweep scripts to pass to children)
+    if token is None:
+        token = os.environ.get("PREFLIGHT_TOKEN")
+
     if token is None:
         print(
-            "ERROR: --preflight-token is required. Run preflight first:\n"
-            "  python -m modeling.scripts.preflight --help\n"
-            "\nThis ensures your experiment is registered in branches.md "
-            "and modeling_ideas.md before training starts.",
+            "ERROR: --preflight-token is required (or set PREFLIGHT_TOKEN env var).\n"
+            "  Run preflight first: python -m modeling.scripts.preflight start --help\n"
+            "\nThis ensures your experiment is registered in ideas/ "
+            "and branches.md before training starts.",
             file=sys.stderr,
         )
         sys.exit(1)

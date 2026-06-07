@@ -41,7 +41,8 @@ def main():
                         help="wandb group name for sweep runs (auto-generated if not set)")
     add_preflight_args(parser)
     args = parser.parse_args()
-    validate_preflight(args)
+    manifest = validate_preflight(args)
+    _preflight_token = getattr(args, 'preflight_token', None) or os.environ.get('PREFLIGHT_TOKEN', '')
 
     # Auto-generate wandb group name for sweep
     if not args.no_wandb and args.wandb_group is None:
@@ -247,6 +248,7 @@ from modeling.scripts.preflight_check import add_preflight_args, validate_prefli
 
             # Dynamically assign GPU
             env = os.environ.copy()
+            env["PREFLIGHT_TOKEN"] = _preflight_token
             env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
 
             print(f"[{idx+1}/{n_configs}] Launching {run_id} on GPU {gpu_id} ...")
