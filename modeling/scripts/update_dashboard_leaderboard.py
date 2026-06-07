@@ -7,10 +7,10 @@ from datetime import datetime
 def main():
     # Detect repo root dynamically
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.abspath(os.path.join(script_dir, .., ..))
+    repo_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
     
-    leaderboard_path = os.path.join(repo_root, results/leaderboard.json)
-    dashboard_path = os.path.join(repo_root, results/dashboard.html)
+    leaderboard_path = os.path.join(repo_root, "results/leaderboard.json")
+    dashboard_path = os.path.join(repo_root, "results/dashboard.html")
     
     if not os.path.exists(leaderboard_path):
         print(f"Error: {leaderboard_path} not found.")

@@ -7,11 +7,15 @@ Each subprocess is assigned a dedicated GPU via CUDA_VISIBLE_DEVICES.
 
 import argparse
 import os
+import sys
 import subprocess
 import time
 import json
 import numpy as np
 from modeling.config import DEFAULT_SEED, DEFAULT_TEST_TRIALS
+from modeling.scripts.preflight_check import add_preflight_args, validate_preflight
+
+
 
 
 def _require_tmux():
@@ -24,6 +28,7 @@ def _require_tmux():
             file=sys.stderr,
         )
         sys.exit(1)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Parallel hyperparameter sweep for Latent CA-NODE")
@@ -57,7 +62,6 @@ def main():
     # Auto-generate wandb group name for sweep
     if not args.no_wandb and args.wandb_group is None:
         import datetime
-from modeling.scripts.preflight_check import add_preflight_args, validate_preflight
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         args.wandb_group = f"sweep_latent_{args.grid}_{ts}"
 
