@@ -419,6 +419,7 @@ def _do_start(args, repo_root):
     print(f"\n{token}")
 
 
+
 def _do_complete(args, repo_root):
     results_dir = os.path.join(repo_root, args.results_dir) if not os.path.isabs(args.results_dir) else args.results_dir
     manifest_path = os.path.join(results_dir, "MANIFEST.json")
@@ -438,12 +439,29 @@ def _do_complete(args, repo_root):
         sys.exit(1)
 
     ideas_path = os.path.join(repo_root, idea_file)
+    sep = "=" * 60
 
-    print(f"\n{'='*60}")
-    print(f"POSTFLIGHT — Completing Exp {idea_id}: {manifest.get('experiment_name', '?')}")
-    print(f"{'='*60}")
+    # ═══════════════════════════════════════════════════════════
+    # ALL GATES FIRE BEFORE ANY STATE CHANGES
+    # If any gate fails, nothing is modified.
+    # ═══════════════════════════════════════════════════════════
+
+    # GATE 1: Require eval results (unless --status failed)
+    if args.status != "failed":
+        _require_eval_results(results_dir)
+
+    # GATE 2: Dashboard update must succeed
+    _require_dashboard_update(repo_root, results_dir)
+
+    # ═══════════════════════════════════════════════════════════
+    # GATES PASSED — now make state changes
+    # ═══════════════════════════════════════════════════════════
+
+    print(f"\n{sep}")
+    print(f"POSTFLIGHT \u2014 Completing Exp {idea_id}: {manifest.get('experiment_name', '?')}")
+    print(f"{sep}")
     print(f"  Status:  {args.status}")
-    print(f"  R²:     {args.best_r2}")
+    print(f"  R\u00b2:     {args.best_r2}")
     print(f"  Notes:   {args.notes}")
     print()
 
@@ -463,42 +481,102 @@ def _do_complete(args, repo_root):
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)
 
+    # Commit
     git_commit(repo_root,
-               f"results(Exp {idea_id}): {args.status} — R²={args.best_r2} — {args.notes[:60]}",
+               f"results(Exp {idea_id}): {args.status} \u2014 R\u00b2={args.best_r2} \u2014 {args.notes[:60]}",
                ["branches.md", idea_file])
+    print(f"[preflight] \u2713 Experiment {idea_id} marked as {args.status}")
 
-    print(f"[preflight] ✓ Experiment {idea_id} marked as {args.status}")
+    # GATE 3: Git push (auto-pushes, fails if push fails)
+    _require_git_push(repo_root)
 
-    # Auto-update dashboard if script exists
-    dashboard_script = os.path.join(repo_root, "modeling/scripts/update_dashboard_leaderboard.py")
-    if os.path.exists(dashboard_script):
-        try:
-            subprocess.run(
-                ["python", dashboard_script, "--results-dir", results_dir],
-                cwd=repo_root, timeout=60,
-            )
-            print("[preflight] ✓ Dashboard updated")
-        except Exception as e:
-            print(f"[preflight] WARNING: Dashboard update failed: {e}")
-
-    # Check if ahead of remote and suggest push
-    try:
-        result = subprocess.run(
-            ["git", "rev-list", "--count", "origin/modeling-dev..HEAD"],
-            capture_output=True, text=True, cwd=repo_root,
-        )
-        ahead = int(result.stdout.strip()) if result.returncode == 0 else 0
-        if ahead > 0:
-            print(f"\n[preflight] ⚠ You are {ahead} commits ahead of origin/modeling-dev.")
-            print(f"  Run: git push origin modeling-dev")
-    except Exception:
-        pass
-
-    # Suggest worktree cleanup
+    # AUTO 4: Worktree cleanup
     worktree = manifest.get("worktree_path")
     if worktree and os.path.exists(worktree):
-        print(f"\n[preflight] Worktree still exists: {worktree}")
-        print(f"  To clean up: git worktree remove {worktree}")
+        _cleanup_worktree(repo_root, worktree)
+
+    print(f"\n[preflight] \u2713 Experiment {idea_id} fully completed, pushed, and cleaned up.")
+
+
+def _require_eval_results(results_dir):
+    """HARD GATE: Refuse to complete if no eval results exist."""
+    found = []
+    for root, dirs, files in os.walk(results_dir):
+        for f in files:
+            if f in ("results.json", "sweep_summary.json"):
+                found.append(os.path.join(root, f))
+    if not found:
+        print(
+            f"ERROR: No eval results found in {results_dir}\n"
+            f"  Expected: results.json or sweep_summary.json\n"
+            f"  Run evaluation before completing the experiment.\n"
+            f"  If this is a failed experiment, use: --status failed",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    basenames = [os.path.relpath(f, results_dir) for f in found[:5]]
+    print(f"[preflight] \u2713 Found {len(found)} result file(s): {basenames}")
+
+
+def _require_dashboard_update(repo_root, results_dir):
+    """HARD GATE: Run dashboard update; exit non-zero if it fails."""
+    dashboard_script = os.path.join(repo_root, "modeling/scripts/update_dashboard_leaderboard.py")
+    if not os.path.exists(dashboard_script):
+        print("[preflight] SKIP: Dashboard script not found (non-blocking)")
+        return
+    result = subprocess.run(
+        ["python", dashboard_script, "--results-dir", results_dir],
+        cwd=repo_root, capture_output=True, text=True, timeout=120,
+    )
+    if result.returncode != 0:
+        print(
+            f"ERROR: Dashboard update failed (exit {result.returncode}):\n"
+            f"  stdout: {result.stdout[:300]}\n"
+            f"  stderr: {result.stderr[:300]}\n"
+            f"Fix the dashboard script and re-run preflight complete.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    print("[preflight] \u2713 Dashboard updated")
+
+
+def _require_git_push(repo_root):
+    """HARD GATE: Auto-push to remote; exit non-zero if push fails."""
+    result = subprocess.run(
+        ["git", "rev-list", "--count", "origin/modeling-dev..HEAD"],
+        capture_output=True, text=True, cwd=repo_root,
+    )
+    ahead = int(result.stdout.strip()) if result.returncode == 0 else 0
+    if ahead == 0:
+        print("[preflight] \u2713 Already in sync with remote")
+        return
+    print(f"[preflight] Pushing {ahead} commit(s) to origin/modeling-dev ...")
+    result = subprocess.run(
+        ["git", "push", "origin", "modeling-dev"],
+        capture_output=True, text=True, cwd=repo_root, timeout=60,
+    )
+    if result.returncode != 0:
+        print(
+            f"ERROR: Git push failed:\n  {result.stderr[:500]}\n"
+            f"Push manually and re-run preflight complete.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    print(f"[preflight] \u2713 Pushed {ahead} commit(s) to origin/modeling-dev")
+
+
+def _cleanup_worktree(repo_root, worktree_path):
+    """Auto-remove completed experiment worktree."""
+    print(f"[preflight] Cleaning up worktree: {worktree_path}")
+    result = subprocess.run(
+        ["git", "worktree", "remove", "--force", worktree_path],
+        capture_output=True, text=True, cwd=repo_root,
+    )
+    if result.returncode != 0:
+        print(f"[preflight] WARNING: Worktree cleanup failed: {result.stderr.strip()}")
+        print(f"  Manual cleanup: git worktree remove {worktree_path}")
+    else:
+        print(f"[preflight] \u2713 Worktree removed: {worktree_path}")
 
 
 if __name__ == "__main__":
