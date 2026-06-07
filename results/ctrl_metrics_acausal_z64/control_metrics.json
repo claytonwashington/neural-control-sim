@@ -1,0 +1,132 @@
+{
+  "checkpoint": "/snel/home/cbwash2/cleo/results/sweep_latent_node_40_10/run_05_z64_h256_l2_lr0.0005_dopri5.pt",
+  "model_type": "acausal",
+  "meta": {
+    "n_x": 50,
+    "n_u": 2,
+    "z_dim": 64,
+    "hidden": 256,
+    "n_layers": 2
+  },
+  "n_params": 644466,
+  "past_window": 200,
+  "method": "dopri5",
+  "total_time_s": 106.17380666732788,
+  "free_run_fit": {
+    "avg_fit_pct": 0.0,
+    "std_fit_pct": 0.0,
+    "per_trial": [
+      {
+        "trial": 0,
+        "fit_pct": 0.0,
+        "T_future": 29800,
+        "residual_norm": 2624.273321777914,
+        "baseline_norm": 366.00506561144243
+      },
+      {
+        "trial": 1,
+        "fit_pct": 0.0,
+        "T_future": 29800,
+        "residual_norm": 2597.57887082413,
+        "baseline_norm": 475.44048534183446
+      },
+      {
+        "trial": 2,
+        "fit_pct": 0.0,
+        "T_future": 29800,
+        "residual_norm": 2751.5695527460507,
+        "baseline_norm": 472.37157693991253
+      },
+      {
+        "trial": 3,
+        "fit_pct": 0.0,
+        "T_future": 29800,
+        "residual_norm": 2734.704769494063,
+        "baseline_norm": 478.718872901683
+      },
+      {
+        "trial": 4,
+        "fit_pct": 0.0,
+        "T_future": 29800,
+        "residual_norm": 2781.3753860381544,
+        "baseline_norm": 518.2157646127204
+      },
+      {
+        "trial": 5,
+        "fit_pct": 0.0,
+        "T_future": 29800,
+        "residual_norm": 2547.2948813132157,
+        "baseline_norm": 504.24132503790673
+      },
+      {
+        "trial": 6,
+        "fit_pct": 0.0,
+        "T_future": 29800,
+        "residual_norm": 2754.7119076185727,
+        "baseline_norm": 504.4019133679263
+      },
+      {
+        "trial": 7,
+        "fit_pct": 0.0,
+        "T_future": 29800,
+        "residual_norm": 2660.0885351900592,
+        "baseline_norm": 413.0218053089094
+      },
+      {
+        "trial": 8,
+        "fit_pct": 0.0,
+        "T_future": 29800,
+        "residual_norm": 2663.6308827735324,
+        "baseline_norm": 450.95455350951636
+      },
+      {
+        "trial": 9,
+        "fit_pct": 0.0,
+        "T_future": 29800,
+        "residual_norm": 2968.510193246694,
+        "baseline_norm": 475.5462096926788
+      }
+    ]
+  },
+  "horizon_curves": {
+    "horizons": [
+      1,
+      2,
+      5,
+      10,
+      20,
+      50,
+      100,
+      200
+    ],
+    "r2_by_horizon": {
+      "1": 0.9166551317963211,
+      "2": 0.9168031220411066,
+      "5": 0.9157541399106747,
+      "10": 0.9148079382932198,
+      "20": 0.9112332156344434,
+      "50": 0.9033323670125785,
+      "100": 0.8938331546076344,
+      "200": 0.8678012680131102
+    },
+    "mse_by_horizon": {
+      "1": 0.08823737348872836,
+      "2": 0.08788568810265084,
+      "5": 0.08905282220377872,
+      "10": 0.08980509839163323,
+      "20": 0.09346312383814057,
+      "50": 0.10150123615867176,
+      "100": 0.11118254336187237,
+      "200": 0.13767741876016146
+    },
+    "n_windows": 500
+  },
+  "jacobian_accuracy": {
+    "skipped": true,
+    "reason": "Not a control-affine model"
+  },
+  "controllability_gramian": {
+    "skipped": true,
+    "reason": "Not a control-affine model"
+  }
+}
