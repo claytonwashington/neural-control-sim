@@ -116,7 +116,10 @@ class PIController(LatencyIOProcessor):
         if self._step < self.warmup_steps:
             u_out = np.zeros(self.n_u)
             self.u_log.append(u_out)
-            return {self.light_name: u_out * mwatt / mm**2}, t_samp
+            return {
+                self.light_name_exc: np.zeros(1) * mwatt / mm**2,
+                self.light_name_inh: np.zeros(1) * mwatt / mm**2,
+            }, t_samp
 
         # 5. Compute population mean rate
         mean_rate = np.mean(rate_hz)
@@ -127,14 +130,19 @@ class PIController(LatencyIOProcessor):
         self.error_log.append(error)
 
         u_scalar = self.Kp * error + self.Ki * self._integ_error
-        u_scalar = np.clip(u_scalar, 0, self.u_max)
+        u_scalar = np.clip(u_scalar, -self.u_max, self.u_max)
 
-        # Apply same signal to all fibers
-        u_out = np.full(self.n_u, u_scalar)
+        # Bidirectional: positive u → excite (red), negative → inhibit (blue)
+        u_exc = max(0.0, u_scalar)
+        u_inh = max(0.0, -u_scalar) if u_scalar < 0 else 0.0
+        u_out = np.array([u_exc, u_inh])
         self.u_log.append(u_out.copy())
 
         return (
-            {self.light_name: u_out * mwatt / mm**2},
+            {
+                self.light_name_exc: np.array([u_exc]) * mwatt / mm**2,
+                self.light_name_inh: np.array([u_inh]) * mwatt / mm**2,
+            },
             t_samp + self.compute_delay,
         )
 

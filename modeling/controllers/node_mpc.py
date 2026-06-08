@@ -234,7 +234,10 @@ class NeuralODEMPC(LatencyIOProcessor):
         if self._step < self.warmup_steps:
             u_out = np.zeros(self.n_u)
             self.u_log.append(u_out)
-            return {self.light_name: u_out * mwatt / mm**2}, t_samp
+            return {
+                self.light_name_exc: np.zeros(1) * mwatt / mm**2,
+                self.light_name_inh: np.zeros(1) * mwatt / mm**2,
+            }, t_samp
 
         # 6. Encode z₀ from past window
         z0 = self._encode_z0()
@@ -251,7 +254,10 @@ class NeuralODEMPC(LatencyIOProcessor):
 
         # 9. Return with processing delay
         return (
-            {self.light_name: u_raw * mwatt / mm**2},
+            {
+                self.light_name_exc: np.array([u_raw[0]]) * mwatt / mm**2,
+                self.light_name_inh: np.array([u_raw[1] if len(u_raw) > 1 else 0.0]) * mwatt / mm**2,
+            },
             t_samp + self.compute_delay,
         )
 
@@ -415,7 +421,10 @@ class PeriodicNeuralODEMPC(NeuralODEMPC):
         if self._step < self.warmup_steps:
             u_out = np.zeros(self.n_u)
             self.u_log.append(u_out)
-            return {self.light_name: u_out * mwatt / mm**2}, t_samp
+            return {
+                self.light_name_exc: np.zeros(1) * mwatt / mm**2,
+                self.light_name_inh: np.zeros(1) * mwatt / mm**2,
+            }, t_samp
 
         # 6. Periodic Re-encoding
         if (self._step - self.warmup_steps) % self.reencode_period == 0 or self._z_current is None:
@@ -446,6 +455,9 @@ class PeriodicNeuralODEMPC(NeuralODEMPC):
 
         # 9. Return with processing delay
         return (
-            {self.light_name: u_raw * mwatt / mm**2},
+            {
+                self.light_name_exc: np.array([u_raw[0]]) * mwatt / mm**2,
+                self.light_name_inh: np.array([u_raw[1] if len(u_raw) > 1 else 0.0]) * mwatt / mm**2,
+            },
             t_samp + self.compute_delay,
         )
