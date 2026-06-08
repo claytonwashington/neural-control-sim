@@ -367,3 +367,81 @@ class NeuralODEMPC(LatencyIOProcessor):
         self.u_log.clear()
         self.z0_log.clear()
         self.cost_log.clear()
+
+
+class PeriodicNeuralODEMPC(NeuralODEMPC):
+    def __init__(self, *args, reencode_period=20, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reencode_period = reencode_period
+        self._z_current = None
+
+    def _base_reset(self):
+        super()._base_reset()
+        self._z_current = None
+
+    def process(self, state_dict: dict, t_samp):
+        # 1. Extract spike counts
+        i_chan, t_spikes, counts = state_dict[self.probe_name][self.mua_name]
+        counts = np.asarray(counts, dtype=float)
+
+        # 2. Initialize firing rate estimate
+        if self._rates is None:
+            from brian2 import Hz
+            self._rates = np.zeros(len(counts)) * Hz
+
+        # 3. Exponential smoothing
+        self._rates = exp_firing_rate_estimate(
+            counts, self.sample_period, self._rates, self.tau_rate
+        )
+        rate_hz = np.array(self._rates, dtype=np.float64)
+        self._rate_buffer.append(rate_hz.copy())
+
+        # 4. Store last applied u (or zeros if warmup)
+        if len(self.u_log) > 0:
+            self._u_buffer.append(self.u_log[-1].copy())
+        else:
+            self._u_buffer.append(np.zeros(self.n_u))
+
+        self._step += 1
+        self.rate_log.append(rate_hz.copy())
+
+        from brian2 import mwatt, mm
+        
+        # 5. During warmup: no control
+        if self._step < self.warmup_steps:
+            u_out = np.zeros(self.n_u)
+            self.u_log.append(u_out)
+            return {self.light_name: u_out * mwatt / mm**2}, t_samp
+
+        # 6. Periodic Re-encoding
+        if (self._step - self.warmup_steps) % self.reencode_period == 0 or self._z_current is None:
+            self._z_current = self._encode_z0()
+        else:
+            # Forward simulate 1 step using last applied u
+            u_prev = self._u_buffer[-1]
+            u_norm = self._normalize_u(u_prev)
+            u_t = torch.tensor(u_norm, dtype=torch.float32, device=self.device)
+            
+            dt = 1e-3
+            z = self._z_current.unsqueeze(0)
+            with torch.no_grad():
+                dz = self.model.f(z) + (self.model.g(z) @ u_t.unsqueeze(-1)).squeeze(-1)
+                self._z_current = (z + dt * dz).squeeze(0)
+
+        z0 = self._z_current
+        self.z0_log.append(z0.detach().cpu().numpy().flatten())
+
+        # 7. Solve MPC
+        u_optimal, cost = self._solve_mpc(z0)
+        self.cost_log.append(cost)
+
+        # 8. Denormalize and clip
+        u_raw = self._denormalize_u(u_optimal)
+        u_raw = np.clip(u_raw, 0, self.u_max)
+        self.u_log.append(u_raw.copy())
+
+        # 9. Return with processing delay
+        return (
+            {self.light_name: u_raw * mwatt / mm**2},
+            t_samp + self.compute_delay,
+        )
