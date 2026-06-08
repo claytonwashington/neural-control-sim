@@ -430,6 +430,10 @@ def _do_start(args, repo_root):
                f"preflight(Exp {args.idea_id}): {args.experiment_name}",
                ["branches.md", args.idea_file])
 
+    # GATE: Verify cross-references were written correctly
+    verify_cross_references(repo_root, args.idea_file, args.idea_id,
+                           args.branch, args.results_dir)
+
     print(f"\n{token}")
 
 
@@ -644,6 +648,57 @@ def _cleanup_worktree(repo_root, worktree_path):
 
 
 
+def verify_cross_references(repo_root, idea_file, idea_id, branch, results_dir):
+    """HARD GATE: Verify branches.md and idea file mutually reference each other.
+    
+    Called after both files are updated. If either is missing the
+    cross-reference, something went wrong and we abort.
+    """
+    # Check idea file references the branch
+    ideas_path = os.path.join(repo_root, idea_file)
+    with open(ideas_path) as f:
+        idea_content = f.read()
+    
+    # Find the idea entry
+    pattern = rf"### Experiment {idea_id}\b"
+    match = re.search(pattern, idea_content)
+    if not match:
+        print(f"ERROR: Idea #{idea_id} not found in {idea_file} after update", file=sys.stderr)
+        sys.exit(1)
+    
+    # Get the text until next experiment or end
+    rest = idea_content[match.start():]
+    next_exp = re.search(r"\n### Experiment \d+", rest[10:])
+    entry_text = rest[:next_exp.start() + 10] if next_exp else rest
+    
+    if branch not in entry_text:
+        print(f"ERROR: Idea #{idea_id} in {idea_file} does not reference branch '{branch}'", file=sys.stderr)
+        print(f"  Entry text:\n{entry_text[:200]}", file=sys.stderr)
+        sys.exit(1)
+    
+    # Check branches.md references the idea file and experiment
+    branches_path = os.path.join(repo_root, "branches.md")
+    with open(branches_path) as f:
+        branches_content = f.read()
+    
+    # Look for a row containing both the branch name and the idea reference
+    found_branch_row = False
+    for line in branches_content.split("\n"):
+        if branch in line and f"Exp {idea_id}" in line:
+            found_branch_row = True
+            # Also verify results dir is in the row
+            if results_dir and results_dir not in line:
+                print(f"ERROR: branches.md row for {branch} missing results dir '{results_dir}'", file=sys.stderr)
+                sys.exit(1)
+            break
+    
+    if not found_branch_row:
+        print(f"ERROR: branches.md has no row linking '{branch}' to Exp {idea_id}", file=sys.stderr)
+        sys.exit(1)
+    
+    print(f"[preflight] ✓ Cross-references verified: {idea_file} ↔ branches.md")
+
+
 def _do_gpu_status(args):
     """Show GPU availability with process info."""
     import re as _re
@@ -759,15 +814,17 @@ def _do_monitor(args, repo_root):
             print(f"\nTIMEOUT after {elapsed/3600:.1f}h")
             sys.exit(1)
 
-        # Find all run_* subdirectories
-        run_dirs = sorted(_glob.glob(os.path.join(results_dir, "run_*")))
+        # Find all run_* subdirectories that contain actual training output
+        # (filter out empty dirs from failed launches)
+        all_run_dirs = sorted(_glob.glob(os.path.join(results_dir, "run_*")))
+        run_dirs = [d for d in all_run_dirs if os.path.isdir(d) and len(os.listdir(d)) > 0]
         if not run_dirs:
             # Maybe it's a single-run experiment, check for results.json in root
             if os.path.exists(os.path.join(results_dir, "results.json")):
                 print(f"[{elapsed/60:.0f}m] \u2713 Training complete!")
                 with open(os.path.join(results_dir, "results.json")) as f:
                     r = json.load(f)
-                r2 = r.get("r2_200step", r.get("val_r2", r.get("best_r2", "?")))
+                r2 = r.get("r2", r.get("r2_200step", r.get("val_r2", r.get("best_r2", "?"))))
                 print(f"  R\u00b2 = {r2}")
                 return
             # No runs yet, keep waiting
@@ -785,8 +842,8 @@ def _do_monitor(args, repo_root):
                     try:
                         with open(rpath) as f:
                             r = json.load(f)
-                        r2 = r.get("r2_200step", r.get("val_r2", r.get("best_r2", "?")))
-                        mse = r.get("best_val_loss", r.get("best_mse", "?"))
+                        r2 = r.get("r2", r.get("r2_200step", r.get("val_r2", r.get("best_r2", "?"))))
+                        mse = r.get("mse", r.get("best_val_loss", r.get("best_mse", "?")))
                         print(f"[{elapsed/60:.0f}m] \u2713 {run_name}: R\u00b2={r2}, MSE={mse}")
                     except Exception:
                         print(f"[{elapsed/60:.0f}m] \u2713 {run_name}: results.json found (parse error)")
@@ -806,7 +863,7 @@ def _do_monitor(args, repo_root):
                     try:
                         with open(rpath) as f:
                             r = json.load(f)
-                        r2 = float(r.get("r2_200step", r.get("val_r2", r.get("best_r2", -1))))
+                        r2 = float(r.get("r2", r.get("r2_200step", r.get("val_r2", r.get("best_r2", -1)))))
                         if r2 > best_r2:
                             best_r2 = r2
                             best_run = os.path.basename(rd)

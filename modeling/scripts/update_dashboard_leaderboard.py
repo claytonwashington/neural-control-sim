@@ -6,6 +6,88 @@ from datetime import datetime
 
 import argparse
 
+def _update_leaderboard_from_results(repo_root, results_dir):
+    """Add entries from a results directory to leaderboard.json."""
+    import glob
+    results_dir_abs = os.path.join(repo_root, results_dir) if not os.path.isabs(results_dir) else results_dir
+    leaderboard_path = os.path.join(repo_root, "results/leaderboard.json")
+
+    # Load existing leaderboard
+    if os.path.exists(leaderboard_path):
+        with open(leaderboard_path) as f:
+            leaderboard = json.load(f)
+    else:
+        leaderboard = []
+
+    # Load MANIFEST for experiment info
+    manifest_path = os.path.join(results_dir_abs, "MANIFEST.json")
+    exp_name = "Unknown"
+    if os.path.exists(manifest_path):
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+        exp_name = manifest.get("experiment_name", "Unknown")
+
+    # Find best result across all runs
+    best_r2 = -1
+    best_mse = float("inf")
+    best_config = ""
+    for rpath in glob.glob(os.path.join(results_dir_abs, "run_*/results.json")):
+        with open(rpath) as f:
+            r = json.load(f)
+        r2 = r.get("r2", r.get("r2_200step", r.get("val_r2", -1)))
+        mse = r.get("mse", r.get("best_val_loss", float("inf")))
+        if r2 > best_r2:
+            best_r2 = r2
+            best_mse = mse
+            best_config = os.path.basename(os.path.dirname(rpath))
+
+    # Also check for single-run results
+    single_results = os.path.join(results_dir_abs, "results.json")
+    if os.path.exists(single_results):
+        with open(single_results) as f:
+            r = json.load(f)
+        r2 = r.get("r2", r.get("r2_200step", -1))
+        mse = r.get("mse", r.get("best_val_loss", float("inf")))
+        if r2 > best_r2:
+            best_r2 = r2
+            best_mse = mse
+            best_config = "single run"
+
+    if best_r2 <= 0:
+        print(f"WARNING: No valid results found in {results_dir}")
+        return
+
+    # Remove old entries with the same model name (avoid duplicates)
+    leaderboard = [e for e in leaderboard if e.get("model") != exp_name]
+
+    # Determine verdict
+    baseline_r2 = 0.9009  # CA-NODE baseline
+    if best_r2 > baseline_r2:
+        verdict = "NEW BEST" if best_r2 > max((e.get("r2", 0) for e in leaderboard), default=0) else "BEATS BASELINE"
+        verdict_color = "#4caf50"
+    else:
+        verdict = "BELOW BASELINE"
+        verdict_color = "#ff9800"
+
+    entry = {
+        "model": exp_name,
+        "type": best_config,
+        "r2": round(best_r2, 4),
+        "mse": round(best_mse, 4),
+        "verdict": verdict,
+        "verdict_color": verdict_color,
+        "is_best_row": verdict == "NEW BEST",
+        "r2_style": "font-weight:bold;color:#4caf50" if best_r2 > baseline_r2 else "",
+    }
+    leaderboard.append(entry)
+    leaderboard.sort(key=lambda x: x.get("r2", -999), reverse=True)
+
+    with open(leaderboard_path, "w") as f:
+        json.dump(leaderboard, f, indent=2)
+    print(f"Updated leaderboard: {exp_name} R2={best_r2:.4f} ({best_config})")
+
+
+
 def main():
     parser = argparse.ArgumentParser(description="Update dashboard leaderboard")
     parser.add_argument("--results-dir", default=None, help="Results directory (optional)")
@@ -14,6 +96,10 @@ def main():
     # Detect repo root dynamically
     script_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
+
+    # If --results-dir provided, update leaderboard.json first
+    if args.results_dir:
+        _update_leaderboard_from_results(repo_root, args.results_dir)
     
     leaderboard_path = os.path.join(repo_root, "results/leaderboard.json")
     dashboard_path = os.path.join(repo_root, "results/dashboard.html")
