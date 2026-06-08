@@ -34,6 +34,7 @@ from torch.utils.data import DataLoader, TensorDataset
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from modeling.scripts.preflight_check import add_preflight_args, validate_preflight
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -482,5 +483,7 @@ if __name__ == "__main__":
                         help="Freeze decoder for this many epochs to anchor latent space")
     parser.add_argument("--n-test-trials", type=int, default=10)
 
+    add_preflight_args(parser)
     args = parser.parse_args()
+    validate_preflight(args)
     main(args)
