@@ -417,9 +417,9 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Sweep: K ∈ {1, 20, 100, 999} × D ∈ {0, 10ms} × Q ∈ {0.1, 1.0} × R ∈ {0.01, 0.1}
 
 ### Experiment 27. Bidirectional Optoclamp MPC
-**Status**: Not started
-**Branch/Worktree**: TBD
-**Results dir**: TBD
+**Status**: 🔄 IN PROGRESS
+**Branch/Worktree**: `feature/bidir-optoclamp` / `cleo-worktrees/bidir-optoclamp`
+**Results dir**: `results/bidir_optoclamp/`
 - Hypothesis: MPC with the bidirectional aligned model can achieve inhibition (hitting 50% and 75% target rates) which was impossible on the excitatory-only plant. This is the primary validation of the bidirectional plant.
 - Targets: 50%, 75%, 100%, 125%
 - Controllers: PI baseline vs NODE MPC with periodic re-encoding
