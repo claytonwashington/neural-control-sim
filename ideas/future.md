@@ -16,7 +16,7 @@ Research directions beyond the current Phase 4 modeling sweep. These are ideas t
 ## 2. Continuous PredNet — Hierarchical Neural ODE (Path A)
 
 **Priority**: HIGH — novel architecture, principled approach to causal state estimation
-**Full spec**: [architecture_specs.md](docs/architecture_specs.md)
+**Full spec**: [architecture_specs.md](architecture_specs.md)
 
 ### Concept
 A stacked hierarchy of lightweight Neural ODEs communicating via **continuous prediction errors**.
@@ -45,7 +45,7 @@ Layer 1 (abstraction): dz¹/dt = f_θ¹(z¹) + g_φ¹(z⁰ - proj(z¹))
 ## 2b. Continuous Delayed Distillation (Path B)
 
 **Priority**: HIGH — fixes the exact failure mode of our residual correction experiment
-**Full spec**: [architecture_specs.md](docs/architecture_specs.md)
+**Full spec**: [architecture_specs.md](architecture_specs.md)
 
 ### Concept
 Run causal + acausal models in parallel during deployment. The acausal model operates

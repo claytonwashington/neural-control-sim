@@ -64,6 +64,7 @@ VALID_IDEA_FILES = [
     "ideas/control.md",
     "ideas/project.md",
     "ideas/future.md",
+    "ideas/architecture_specs.md",
 ]
 
 

@@ -153,6 +153,7 @@ All experiments must originate from an entry in one of these files:
 - `ideas/control.md` — controller & closed-loop experiments
 - `ideas/project.md` — broader project ideas (organoids, multi-area, etc.)
 - `ideas/future.md` — speculative/research directions
+- `ideas/architecture_specs.md` — model architecture specifications
 
 Each entry has a status: `Not started` → `🔄 IN PROGRESS` → `✅ COMPLETE` or `❌ DID NOT BEAT BASELINE`.
 **No experiment starts without an idea entry. No experiment finishes without annotating its idea entry.**
@@ -222,7 +223,7 @@ This updates:
 Agents running experiments must follow this exact sequence. Every step is code-enforced.
 
 #### 1. Select Experiment
-Pick the next `Not started` entry from `ideas/modeling.md`, `ideas/control.md`, `ideas/project.md`, or `ideas/future.md`.
+Pick the next `Not started` entry from `ideas/modeling.md`, `ideas/control.md`, `ideas/project.md`, `ideas/future.md`, or `ideas/architecture_specs.md`.
 
 #### 2. Check GPU Availability
 ```bash
