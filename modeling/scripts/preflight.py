@@ -128,20 +128,24 @@ def mark_idea_in_progress(ideas_path, idea_id, branch, worktree_path, results_di
 
     # Find where to insert the status (after the header line)
     insert_idx = line_idx + 1
-    # Check if there's already a Status line
+    # Update Status, Branch/Worktree, and Results dir lines
+    wt_short = os.path.basename(worktree_path) if worktree_path else "(main)"
     has_status = False
-    for j in range(line_idx + 1, min(line_idx + 5, len(lines))):
-        if lines[j].strip().startswith("**Status**"):
-            lines[j] = f"**Status**: 🔄 IN PROGRESS\n"
+    for j in range(line_idx + 1, min(line_idx + 8, len(lines))):
+        stripped = lines[j].strip()
+        if stripped.startswith("**Status**"):
+            lines[j] = f"**Status**: \U0001f504 IN PROGRESS\n"
             has_status = True
-            break
-        if lines[j].strip().startswith("###") or lines[j].strip().startswith("## "):
+        elif stripped.startswith("**Branch/Worktree**"):
+            lines[j] = f"**Branch/Worktree**: `{branch}` / `cleo-worktrees/{wt_short}`\n"
+        elif stripped.startswith("**Results dir**"):
+            lines[j] = f"**Results dir**: `{results_dir}/`\n"
+        elif stripped.startswith("###") or stripped.startswith("## "):
             break
 
     if not has_status:
-        wt_short = os.path.basename(worktree_path) if worktree_path else "(main)"
         status_block = (
-            f"**Status**: 🔄 IN PROGRESS\n"
+            f"**Status**: \U0001f504 IN PROGRESS\n"
             f"**Branch/Worktree**: `{branch}` / `cleo-worktrees/{wt_short}`\n"
             f"**Results dir**: `{results_dir}/`\n"
         )
