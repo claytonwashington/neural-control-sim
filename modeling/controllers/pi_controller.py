@@ -66,7 +66,8 @@ class PIController(LatencyIOProcessor):
         tau_rate_ms: float = 20.0,
         u_max: float = 50.0,
         warmup_steps: int = 200,
-        light_name: str = "fibers",
+        light_name_exc: str = "fiber_red",
+        light_name_inh: str = "fiber_blue",
         probe_name: str = "probe",
         mua_name: str = "mua",
     ):
@@ -79,7 +80,8 @@ class PIController(LatencyIOProcessor):
         self.tau_rate = tau_rate_ms * ms
         self.u_max = u_max
         self.warmup_steps = warmup_steps
-        self.light_name = light_name
+        self.light_name_exc = light_name_exc
+        self.light_name_inh = light_name_inh
         self.probe_name = probe_name
         self.mua_name = mua_name
 

@@ -48,12 +48,11 @@ class BaselineRecorder(LatencyIOProcessor):
     """Record firing rates without any stimulation."""
 
     def __init__(self, sample_period_ms=1.0, tau_rate_ms=20.0,
-                 probe_name="probe", mua_name="mua", light_name="fibers"):
+                 probe_name="probe", mua_name="mua"):
         super().__init__(sample_period=sample_period_ms * ms)
         self.tau_rate = tau_rate_ms * ms
         self.probe_name = probe_name
         self.mua_name = mua_name
-        self.light_name = light_name
         self._rates = None
         self.rate_log = []
 
@@ -67,7 +66,10 @@ class BaselineRecorder(LatencyIOProcessor):
         )
         self.rate_log.append(np.array(self._rates, dtype=np.float64))
         # Zero stimulation
-        return {self.light_name: np.zeros(2) * mwatt / mm**2}, t_samp
+        return {
+            "fiber_red": np.zeros(1) * mwatt / mm**2,
+            "fiber_blue": np.zeros(1) * mwatt / mm**2,
+        }, t_samp
 
     def _base_reset(self):
         super()._base_reset()

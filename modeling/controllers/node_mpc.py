@@ -69,8 +69,10 @@ class NeuralODEMPC(LatencyIOProcessor):
         Steps before control starts (fill rate buffer) (default 200)
     device : str
         Torch device ('cpu' or 'cuda')
-    light_name : str
-        Name of the Light stimulator in Cleo
+    light_name_exc : str
+        Name of the excitatory Light stimulator (fiber_red)
+    light_name_inh : str
+        Name of the inhibitory Light stimulator (fiber_blue)
     probe_name : str
         Name of the Probe recorder
     mua_name : str
@@ -92,7 +94,8 @@ class NeuralODEMPC(LatencyIOProcessor):
         past_window: int = 200,
         warmup_steps: int = 200,
         device: str = "cpu",
-        light_name: str = "fibers",
+        light_name_exc: str = "fiber_red",
+        light_name_inh: str = "fiber_blue",
         probe_name: str = "probe",
         mua_name: str = "mua",
     ):
@@ -108,7 +111,8 @@ class NeuralODEMPC(LatencyIOProcessor):
         self.past_window = past_window
         self.warmup_steps = warmup_steps
         self.device = device
-        self.light_name = light_name
+        self.light_name_exc = light_name_exc
+        self.light_name_inh = light_name_inh
         self.probe_name = probe_name
         self.mua_name = mua_name
 
