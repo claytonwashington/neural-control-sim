@@ -430,3 +430,10 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/(main)`
 - Hypothesis: Acausal latent NODE on ChR2(H134R)+eNpHR3.0 bidir plant (replacing GtACR2 which had E_rev=-69.5mV, nearly identical to E_L=-70mV, producing paradoxical inhibition)
 
+
+### Experiment 29. Bidir V2 Aligned Distillation
+**Status**: 🔄 IN PROGRESS
+**Results dir**: `results/bidir_v2_aligned_distill/`
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/(main)`
+- Hypothesis: Causal CA-NODE distilled from acausal teacher (Exp 28 run_05, R²=0.956) on v2 plant
+
