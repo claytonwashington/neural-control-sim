@@ -423,3 +423,10 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Hypothesis: MPC with the bidirectional aligned model can achieve inhibition (hitting 50% and 75% target rates) which was impossible on the excitatory-only plant. This is the primary validation of the bidirectional plant.
 - Targets: 50%, 75%, 100%, 125%
 - Controllers: PI baseline vs NODE MPC with periodic re-encoding
+
+### Experiment 28. Bidir V2 Acausal NODE
+**Status**: 🔄 IN PROGRESS
+**Results dir**: `results/bidir_v2_acausal/`
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/(main)`
+- Hypothesis: Acausal latent NODE on ChR2(H134R)+eNpHR3.0 bidir plant (replacing GtACR2 which had E_rev=-69.5mV, nearly identical to E_L=-70mV, producing paradoxical inhibition)
+

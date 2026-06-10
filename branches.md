@@ -11,6 +11,7 @@
 | feature/grokking | cleo-worktrees/grokking | Exp 10: Grokking (causal z64) | — | Done — R²=0.8535 (causal), acausal killed |
 | feature/bidir-aligned-distill | cleo-worktrees/bidir-aligned-distill | [Exp 23](ideas/modeling.md) | `results/bidir_aligned_distill/` | Done — R²=0.8613 |
 | feature/bidir-optoclamp | cleo-worktrees/bidir-optoclamp | [Exp 27](ideas/modeling.md) | `results/bidir_optoclamp/` | Preflight complete |
+| feature/bidir-v2-plant | cleo-worktrees/(main) | [Exp 28](ideas/modeling.md) | `results/bidir_v2_acausal/` | Preflight complete |
 
 ## Completed Experiments
 
