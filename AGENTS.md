@@ -101,14 +101,12 @@ The project maintains a living results dashboard at **`results/dashboard.html`**
 
 1. **Single source of truth**: All experiment metrics, sweep tables, training curves, and key findings go here.
 2. **Open locally**: `open results/dashboard.html` (macOS) or view in any browser. Images are referenced via relative paths from `results/`.
-3. **Structure**: The dashboard has tabs for sweep results, model comparisons, training curves, and a chronological experiment log.
-4. **Updating**: When you complete an experiment or sweep, update the dashboard by:
-   - Adding rows to the sweep results table (sorted by primary metric)
-   - Adding image cards for new training curves / prediction plots
-   - Appending a log entry with date, summary, and tags
-   - Updating the summary metric cards at the top if records are broken
-5. **Convention**: Save all plots as `.png` files in `results/` subdirectories. Use relative paths in the HTML.
-6. **Sweep scripts**: Training scripts should save a `sweep_summary.json` alongside logs. The dashboard can embed this data directly.
+3. **Structure**: The dashboard has tabs for sweep results, model comparisons, training curves, a chronological experiment log, and a **🧠 Plants** tab (3D renders + metadata for each plant design, the single source of truth for plant visualizations).
+4. **Per-experiment validation pages**: Each leaderboard model links (cyan ↗) to a standalone, self-contained page at `results/experiments/<slug>.html` showing **true-vs-inferred firing rates across all channels (heatmaps + top-variance traces) and projected onto the top principal components**, plus `val_metrics.json` (overall / per-channel / per-PC R²). Models with a saved `model.pt` get full plots; the rest are metadata-only.
+5. **Auto-generated — do NOT hand-edit**: The Plants tab, validation plots, experiment pages, and leaderboard rows are produced by the dashboard pipeline (`modeling/scripts/build_dashboard.py`, and automatically by `preflight complete` — see the Experiment Lifecycle below). To refresh everything manually: `conda run -n dtmodeling python -m modeling.scripts.build_dashboard` (`--skip-validation` to reuse existing plots). Adding a **new plant design** = add a builder in `modeling/plant.py` + an entry in `modeling/scripts/dashboard_common.py::PLANTS`, then run `build_dashboard` once.
+6. **Updating** (when editing by hand is unavoidable): add rows to the sweep table, image cards for curves/prediction plots, a dated log entry, and update the summary cards if a record is broken.
+7. **Convention**: Save all plots as `.png` files in `results/` subdirectories. Use relative paths in the HTML.
+8. **Sweep scripts**: Training scripts should save a `sweep_summary.json` alongside logs. The dashboard can embed this data directly.
 
 ## Agent Workflows
 
@@ -173,6 +171,8 @@ python -m modeling.scripts.preflight start \
   --machine <gpu1|gpu2> \
   --gpu-ids <comma-separated GPU indices> \
   --results-dir results/<unique-dir-name> \
+  --model-type <canode|latent_canode|latent_node|gru|n4sid|other> \
+  [--past-window 200] \
   [--worktree-path /snel/home/cbwash2/cleo-worktrees/<name>]
 ```
 
@@ -180,7 +180,9 @@ This enforces:
 - The idea entry exists in the specified ideas file and is not already completed
 - The results directory does NOT already contain files (prevents overwrites)
 - `branches.md` and the idea file mutually cross-reference each other
-- A `MANIFEST.json` is written with a preflight token
+- A `MANIFEST.json` is written with a preflight token, the `data_file`, and the
+  **`model_type`** (this drives the validation-plot inference path at completion —
+  set it correctly so `preflight complete` can render the validation plots)
 - Everything is committed atomically
 
 Training scripts (`fit_*.py`, `sweep_*.py`) **refuse to start** without a valid `--preflight-token`.
@@ -198,6 +200,9 @@ python -m modeling.scripts.fit_latent_canode \
 
 After training finishes, close the loop:
 
+> **Run `preflight complete` under the `dtmodeling` env** — the validation step
+> needs torch: `conda run -n dtmodeling python -m modeling.scripts.preflight complete ...`
+
 ```bash
 python -m modeling.scripts.preflight complete \
   --results-dir results/<dir> \
@@ -210,6 +215,12 @@ This updates:
 - The idea entry with `✅ COMPLETE` or `❌` status and results notes
 - `branches.md` status column
 - `MANIFEST.json` with completion timestamp and metrics
+- **Regenerates the dashboard for this experiment**: validation plots
+  (`val_*.png` + `val_metrics.json`), its `results/experiments/<slug>.html` page,
+  the Plants tab, and the leaderboard row + link — then force-adds and commits
+  those artifacts. Validation is best-effort (GRU/N4SID/no-checkpoint → the page
+  is metadata-only, completion is not blocked); the page + leaderboard row are
+  guaranteed.
 - Commits everything atomically
 
 **No experiment is considered finished until `preflight complete` has been run.**
@@ -238,9 +249,10 @@ python -m modeling.scripts.preflight start \
   --experiment-name "Descriptive Name" \
   --branch feature/branch-name \
   --hypothesis "What you're testing" \
-  --data data/training_trials_bidirectional.h5 \
+  --data data/training_trials_bidir_v2.h5 \
   --machine gpu1 --gpu-ids 0,1,2,3 \
   --results-dir results/unique_dir_name \
+  --model-type latent_canode \
   --worktree-path /snel/home/cbwash2/cleo-worktrees/name
 ```
 Save the printed token for the next step.
@@ -270,10 +282,10 @@ python -m modeling.scripts.preflight complete \
   --status completed --best-r2 0.864 \
   --notes "Summary of findings"
 ```
-This enforces (all are hard gates — failure blocks completion):
-1. **Eval results exist** — `results.json` must be present
-2. **Dashboard updated** — `update_dashboard_leaderboard.py` must succeed
-3. **Git push** — auto-pushes to `origin/modeling-dev`
+Run this under `dtmodeling` (torch is needed for validation). It enforces these gates:
+1. **Eval results exist** — `results.json` must be present (hard)
+2. **Dashboard regenerated** — validation plots (best-effort) → experiment page (hard) → Plants tab → leaderboard row (hard); artifacts are force-added and committed
+3. **Git push** — auto-pushes to `origin/modeling-dev` (hard)
 4. **Worktree cleanup** — merges branch, removes worktree, deletes branch
 
 #### 7. Repeat
@@ -294,6 +306,13 @@ Select the next experiment and go to step 2.
 ### Results Digestion Protocol
 
 Every new set of experiment results **MUST** be digested through a structured git commit that updates all tracking artifacts. No results are considered "landed" until this process completes.
+
+> **For preflight-managed experiments, `preflight complete` already does steps 2
+> and 5 for you** — it regenerates the leaderboard row, validation plots, and the
+> experiment page, and force-adds + commits them. The manual steps below apply to
+> results that did **not** go through preflight, or to hand-tweaks (Key Findings,
+> Experiment Log narrative) that the pipeline doesn't author. Do not hand-edit the
+> auto-generated leaderboard rows / Plants tab / experiment pages.
 
 #### Required Steps
 
