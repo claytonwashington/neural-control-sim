@@ -273,55 +273,75 @@ EXPERIMENT_REGISTRY = [
 ]
 
 
-def discover_manifest_experiments(results_root: Path | None = None) -> list[dict]:
-    """Discover experiments that ship a ``MANIFEST.json`` (newer/bidirectional).
+def manifest_to_entry(exp_dir: Path | str) -> dict | None:
+    """Build a registry-shaped entry from one results dir's ``MANIFEST.json``.
 
-    Returns a list of registry-shaped dicts. Picks the best run (lowest-indexed
-    ``run_*`` with the highest ``r2`` in its ``results.json``) as the checkpoint
-    for validation. Reads from the shared results root by default.
+    Picks the best checkpoint: the ``run_*`` with the highest ``r2`` that has a
+    saved ``model.pt`` (falling back to a single-run ``model.pt`` in the dir, then
+    None for metadata-only). ``checkpoint_dir`` is relative to ``results/`` so it
+    resolves via :func:`find_checkpoint`. Returns None if the dir has no manifest.
     """
     import glob
     import json
 
+    exp_dir = Path(exp_dir)
+    manifest_path = exp_dir / "MANIFEST.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        with open(manifest_path) as f:
+            man = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    rel_exp = exp_dir.name
+
+    best_run, best_r2 = None, -1.0
+    for rj in glob.glob(str(exp_dir / "run_*" / "results.json")):
+        try:
+            with open(rj) as f:
+                r = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        r2 = r.get("r2", r.get("r2_200step", r.get("val_r2", -1)))
+        run_dir = Path(rj).parent
+        if r2 > best_r2 and (run_dir / "model.pt").exists():
+            best_r2, best_run = r2, run_dir
+    if best_run is not None:
+        checkpoint_dir = f"{rel_exp}/{best_run.name}"
+    elif (exp_dir / "model.pt").exists():
+        checkpoint_dir = rel_exp  # single-run experiment
+    else:
+        checkpoint_dir = None
+
+    data_file = man.get("data_file", "data/training_trials.h5")
+    return {
+        "name": man.get("experiment_name", rel_exp),
+        "checkpoint_dir": checkpoint_dir,
+        "model_type": man.get("model_type", "latent_canode"),
+        "data_file": data_file,
+        "plant_id": _plant_id_for_data(data_file),
+        "past_window": man.get("past_window", 200),
+        "hypothesis": man.get("hypothesis", ""),
+        "idea_id": man.get("idea_id"),
+        "best_r2": man.get("best_r2", best_r2 if best_r2 > 0 else None),
+        "note": man.get("notes", ""),
+    }
+
+
+def discover_manifest_experiments(results_root: Path | None = None) -> list[dict]:
+    """Discover all experiments that ship a ``MANIFEST.json`` under ``results_root``.
+
+    Returns registry-shaped dicts (see :func:`manifest_to_entry`). Reads from the
+    shared results root by default.
+    """
+    import glob
+
     root = Path(results_root) if results_root is not None else SHARED_RESULTS
     found: list[dict] = []
     for manifest_path in sorted(glob.glob(str(root / "*" / "MANIFEST.json"))):
-        try:
-            with open(manifest_path) as f:
-                man = json.load(f)
-        except (OSError, json.JSONDecodeError):
-            continue
-        exp_dir = Path(manifest_path).parent
-        rel_exp = exp_dir.name
-
-        # Pick the best run with a checkpoint.
-        best_run, best_r2 = None, -1.0
-        for rj in glob.glob(str(exp_dir / "run_*" / "results.json")):
-            try:
-                with open(rj) as f:
-                    r = json.load(f)
-            except (OSError, json.JSONDecodeError):
-                continue
-            r2 = r.get("r2", r.get("r2_200step", r.get("val_r2", -1)))
-            run_dir = Path(rj).parent
-            if r2 > best_r2 and (run_dir / "model.pt").exists():
-                best_r2, best_run = r2, run_dir
-        checkpoint_dir = f"{rel_exp}/{best_run.name}" if best_run else None
-
-        found.append(
-            {
-                "name": man.get("experiment_name", rel_exp),
-                "checkpoint_dir": checkpoint_dir,
-                "model_type": man.get("model_type", "latent_canode"),
-                "data_file": man.get("data_file", "data/training_trials_bidirectional.h5"),
-                "plant_id": _plant_id_for_data(man.get("data_file", "")),
-                "past_window": man.get("past_window", 200),
-                "hypothesis": man.get("hypothesis", ""),
-                "idea_id": man.get("idea_id"),
-                "best_r2": man.get("best_r2", best_r2 if best_r2 > 0 else None),
-                "note": man.get("notes", ""),
-            }
-        )
+        entry = manifest_to_entry(Path(manifest_path).parent)
+        if entry is not None:
+            found.append(entry)
     return found
 
 

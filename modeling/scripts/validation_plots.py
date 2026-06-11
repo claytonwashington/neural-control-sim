@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -45,9 +46,13 @@ from modeling.config import DEFAULT_SEED, DEFAULT_TEST_TRIALS, set_seed  # noqa:
 from modeling.data import load_trials_h5  # noqa: E402
 from modeling.scripts.dashboard_common import (  # noqa: E402
     COLORS,
+    REPO,
     RESULTS,
+    SHARED_REPO,
+    SHARED_RESULTS,
     all_experiments,
     find_checkpoint,
+    manifest_to_entry,
     resolve_data,
     slugify,
 )
@@ -401,13 +406,57 @@ def _find_entry(results_dir: str) -> dict | None:
     return None
 
 
+def _resolve_exp_dir(results_dir: str) -> "Path | None":
+    """Resolve a results dir (abs, 'results/foo', or 'foo') to the on-disk dir
+    that actually holds a MANIFEST.json (shared checkout preferred)."""
+    rd = Path(results_dir)
+    candidates = [rd] if rd.is_absolute() else [
+        SHARED_REPO / rd, REPO / rd, SHARED_RESULTS / rd.name, RESULTS / rd.name,
+    ]
+    for c in candidates:
+        if (c / "MANIFEST.json").exists():
+            return c
+    return None
+
+
+def validate_experiment(results_dir: str, device: str | None = None) -> dict | None:
+    """Generate validation plots for one experiment from its MANIFEST.json.
+
+    Used by ``preflight complete``. Resolves the best checkpoint + model_type via
+    ``manifest_to_entry`` and runs ``generate_validation_plots``. Returns the
+    metrics dict, or None if skipped (no manifest/checkpoint, unsupported model) —
+    it never raises, so a completion is never blocked by validation.
+    """
+    exp_dir = _resolve_exp_dir(results_dir)
+    if exp_dir is None:
+        print(f"  [skip] validate_experiment: no MANIFEST.json for {results_dir}")
+        return None
+    entry = manifest_to_entry(exp_dir)
+    if entry is None:
+        print(f"  [skip] validate_experiment: could not read manifest in {exp_dir}")
+        return None
+    try:
+        return generate_validation_plots(entry, device)
+    except Exception as exc:
+        print(f"  [warn] validate_experiment failed for {entry.get('name')}: {exc}")
+        return None
+
+
 def main():
     ap = argparse.ArgumentParser(description="Generate validation plots for digital-twin models")
     ap.add_argument("--results-dir", help="results sub-dir (checkpoint dir) or experiment slug")
+    ap.add_argument("--experiment-dir",
+                    help="experiment results dir with a MANIFEST.json (used by preflight); "
+                         "resolves the best run + model_type from the manifest")
     ap.add_argument("--all", action="store_true", help="run every registry entry with a checkpoint")
     ap.add_argument("--model-type", help="override inferred model_type")
     ap.add_argument("--data-file", help="override data file")
     args = ap.parse_args()
+
+    if args.experiment_dir:
+        # Best-effort single-experiment validation from its manifest.
+        validate_experiment(args.experiment_dir)
+        return
 
     if args.all:
         entries = all_experiments()

@@ -14,6 +14,12 @@ Also supports completing experiments:
     --status completed --best-r2 0.864 \
     --notes "Closes 35% of causal-acausal gap"
 
+On `complete`, the dashboard gate regenerates this experiment's validation plots
+(true-vs-inferred firing rates across channels + top PCs), its standalone
+experiment page, the plants tab, and the leaderboard row, then commits/pushes
+them. Validation inference needs the `dtmodeling` env (torch); run `complete`
+under it. The `start` `--model-type` selects the validation inference path.
+
 Usage:
   python -m modeling.scripts.preflight \
     --idea-file ideas/modeling.md \
@@ -302,6 +308,34 @@ def git_commit(repo_root, message, files):
     subprocess.run(["git", "commit", "-m", message], check=True, cwd=repo_root)
 
 
+def _commit_completion(repo_root, message, tracked_files, results_dir):
+    """Commit the completion: tracked files + force-added dashboard artifacts.
+
+    The dashboard outputs live under the git-ignored ``results/`` tree, so they
+    are force-added (matching how the repo already version-controls select result
+    files) to ensure they are committed and pushed with the experiment.
+    """
+    import glob
+
+    subprocess.run(["git", "add"] + tracked_files, check=True, cwd=repo_root)
+
+    # Self-contained dashboard + standalone pages + plant renders + metrics.
+    artifacts = ["results/dashboard.html", "results/experiments", "results/plants"]
+    artifacts += [
+        os.path.relpath(p, repo_root)
+        for p in glob.glob(os.path.join(results_dir, "**", "val_metrics.json"), recursive=True)
+    ]
+    # Only stage paths inside this repo that exist (never escape repo_root).
+    existing = [
+        a for a in artifacts
+        if not a.startswith("..") and os.path.exists(os.path.join(repo_root, a))
+    ]
+    if existing:
+        subprocess.run(["git", "add", "-f"] + existing, check=False, cwd=repo_root)
+
+    subprocess.run(["git", "commit", "-m", message], check=True, cwd=repo_root)
+
+
 # ── Main ─────────────────────────────────────────────────────────────────
 
 def main():
@@ -326,6 +360,11 @@ def main():
     start.add_argument("--results-dir", required=True, help="Results directory (must not exist)")
     start.add_argument("--worktree-path", default=None)
     start.add_argument("--base-branch", default="modeling-dev")
+    start.add_argument("--model-type", default="latent_canode",
+                       choices=["canode", "latent_canode", "latent_node", "gru", "n4sid", "other"],
+                       help="Model family — drives the validation-plot inference path at completion")
+    start.add_argument("--past-window", type=int, default=200,
+                       help="Causal past-window (ms) for latent_canode validation")
     start.add_argument("--dry-run", action="store_true")
 
     # ── COMPLETE subcommand ──
@@ -396,6 +435,8 @@ def _do_start(args, repo_root):
         "worktree_path": args.worktree_path,
         "commit_sha": get_commit_sha(),
         "data_file": args.data,
+        "model_type": args.model_type,
+        "past_window": args.past_window,
         "machine": args.machine,
         "gpu_ids": args.gpu_ids,
         "results_dir": args.results_dir,
@@ -504,10 +545,14 @@ def _do_complete(args, repo_root):
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)
 
-    # Commit
-    git_commit(repo_root,
-               f"results(Exp {idea_id}): {args.status} \u2014 R\u00b2={args.best_r2} \u2014 {args.notes[:60]}",
-               ["branches.md", idea_file])
+    # Commit \u2014 include the regenerated dashboard artifacts (git-ignored, so
+    # force-added per the repo's convention) alongside branches.md / idea file.
+    _commit_completion(
+        repo_root,
+        f"results(Exp {idea_id}): {args.status} \u2014 R\u00b2={args.best_r2} \u2014 {args.notes[:60]}",
+        ["branches.md", idea_file],
+        results_dir,
+    )
     print(f"[preflight] \u2713 Experiment {idea_id} marked as {args.status}")
 
     # GATE 3: Git push (auto-pushes, fails if push fails)
@@ -541,26 +586,60 @@ def _require_eval_results(results_dir):
     print(f"[preflight] \u2713 Found {len(found)} result file(s): {basenames}")
 
 
-def _require_dashboard_update(repo_root, results_dir):
-    """HARD GATE: Run dashboard update; exit non-zero if it fails."""
-    dashboard_script = os.path.join(repo_root, "modeling/scripts/update_dashboard_leaderboard.py")
-    if not os.path.exists(dashboard_script):
-        print("[preflight] SKIP: Dashboard script not found (non-blocking)")
-        return
-    result = subprocess.run(
-        ["python", dashboard_script, "--results-dir", results_dir],
-        cwd=repo_root, capture_output=True, text=True, timeout=120,
+def _run_dashboard_step(repo_root, module, extra, timeout=900):
+    """Run one dashboard pipeline module via -m, with repo_root on PYTHONPATH."""
+    env = dict(os.environ)
+    env["PYTHONPATH"] = repo_root + os.pathsep + env.get("PYTHONPATH", "")
+    return subprocess.run(
+        [sys.executable, "-m", f"modeling.scripts.{module}", *extra],
+        cwd=repo_root, env=env, capture_output=True, text=True, timeout=timeout,
     )
-    if result.returncode != 0:
-        print(
-            f"ERROR: Dashboard update failed (exit {result.returncode}):\n"
-            f"  stdout: {result.stdout[:300]}\n"
-            f"  stderr: {result.stderr[:300]}\n"
-            f"Fix the dashboard script and re-run preflight complete.",
-            file=sys.stderr,
-        )
+
+
+def _require_dashboard_update(repo_root, results_dir):
+    """HARD GATE: regenerate the full dashboard for this experiment.
+
+    Ordered so leaderboard links resolve to freshly-written pages:
+      1. validation_plots  --experiment-dir  (best-effort: warn, don't block)
+      2. generate_experiment_pages           (HARD: every experiment gets a page)
+      3. update_dashboard --plants-only       (idempotent: soft)
+      4. update_dashboard_leaderboard --results-dir  (HARD: leaderboard row)
+
+    Validation is best-effort because GRU/N4SID are intentionally inference-less
+    and GPU/env hiccups must not block a completion; the page + leaderboard row
+    are guaranteed. Requires the dtmodeling env (torch) for step 1.
+    """
+    # 1. Per-experiment validation plots (best-effort).
+    r = _run_dashboard_step(repo_root, "validation_plots", ["--experiment-dir", results_dir])
+    if r.returncode != 0:
+        print(f"[preflight] WARNING: validation plots step failed (non-blocking):\n"
+              f"  {r.stderr[-300:].strip()}")
+    else:
+        print("[preflight] \u2713 Validation plots generated")
+
+    # 2. Standalone experiment pages (HARD GATE).
+    r = _run_dashboard_step(repo_root, "generate_experiment_pages", [])
+    if r.returncode != 0:
+        print(f"ERROR: Experiment-page generation failed (exit {r.returncode}):\n"
+              f"  stdout: {r.stdout[-300:]}\n  stderr: {r.stderr[-300:]}\n"
+              f"Fix and re-run preflight complete.", file=sys.stderr)
         sys.exit(1)
-    print("[preflight] \u2713 Dashboard updated")
+    print("[preflight] \u2713 Experiment pages generated")
+
+    # 3. Plants tab (idempotent, soft).
+    r = _run_dashboard_step(repo_root, "update_dashboard", ["--plants-only"])
+    if r.returncode != 0:
+        print(f"[preflight] WARNING: plants-tab injection failed (non-blocking):\n"
+              f"  {r.stderr[-300:].strip()}")
+
+    # 4. Leaderboard row + links (HARD GATE).
+    r = _run_dashboard_step(repo_root, "update_dashboard_leaderboard", ["--results-dir", results_dir])
+    if r.returncode != 0:
+        print(f"ERROR: Dashboard leaderboard update failed (exit {r.returncode}):\n"
+              f"  stdout: {r.stdout[-300:]}\n  stderr: {r.stderr[-300:]}\n"
+              f"Fix the dashboard script and re-run preflight complete.", file=sys.stderr)
+        sys.exit(1)
+    print("[preflight] \u2713 Dashboard leaderboard updated")
 
 
 def _require_git_push(repo_root):
