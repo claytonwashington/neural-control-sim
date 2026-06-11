@@ -425,7 +425,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Controllers: PI baseline vs NODE MPC with periodic re-encoding
 
 ### Experiment 28. Bidir V2 Acausal NODE
-**Status**: 🔄 IN PROGRESS
+**Status**: ✅ COMPLETE — R²=0.9560
+**Results notes**: Best: run_05 z64 h256 lr=5e-4. Acausal teacher for distillation.
 **Results dir**: `results/bidir_v2_acausal/`
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/(main)`
 - Hypothesis: Acausal latent NODE on ChR2(H134R)+eNpHR3.0 bidir plant (replacing GtACR2 which had E_rev=-69.5mV, nearly identical to E_L=-70mV, producing paradoxical inhibition)
