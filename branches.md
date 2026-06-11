@@ -15,7 +15,7 @@
 | feature/bidir-v2-plant | cleo-worktrees/(main) | [Exp 29](ideas/modeling.md) | `results/bidir_v2_aligned_distill/` | Done — R²=0.9170 |
 | feature/bidir-v2-plant | cleo-worktrees/(main) | [Exp 30](ideas/modeling.md) | `results/bidir_v2_periodic_reencode/` | Done — R²=0.9350 |
 | feature/bidir-v2-plant | cleo-worktrees/(main) | [Exp 31](ideas/modeling.md) | `results/bidir_v2_enkf/` | Done — R²=0.9998 |
-| feature/bidir-v2-plant | cleo-worktrees/(main) | [Exp 32](ideas/modeling.md) | `results/bidir_v2_optoclamp/` | Preflight complete |
+| feature/bidir-v2-plant | cleo-worktrees/(main) | [Exp 32](ideas/modeling.md) | `results/bidir_v2_optoclamp/` | Failed —  |
 
 ## Completed Experiments
 

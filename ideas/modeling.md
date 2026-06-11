@@ -457,7 +457,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 
 
 ### Experiment 32. Bidir V2 Optoclamp MPC vs PI
-**Status**: 🔄 IN PROGRESS
+**Status**: ❌ DID NOT BEAT BASELINE — 
+**Results notes**: PI beats MPC overall. MPC tuning sweep in progress on gpu2.
 **Results dir**: `results/bidir_v2_optoclamp/`
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/(main)`
 - Hypothesis: MPC with sign-splitting outperforms PI on v2 plant at all target levels
