@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Latent NODE (z=64, h256)",
+    "slug": "latent-node-z-64-h256",
+    "has_validation": false
+  },
+  {
+    "name": "CA-NODE (no skip \u2014 baseline)",
+    "slug": "ca-node-no-skip-baseline",
+    "has_validation": true
+  },
+  {
+    "name": "CA-NODE (skip linear, swd=1.0)",
+    "slug": "ca-node-skip-linear-swd-1-0",
+    "has_validation": true
+  },
+  {
+    "name": "Causal Latent CA-NODE (z=64, lr=3e-4) \ud83c\udd95",
+    "slug": "causal-latent-ca-node-z-64-lr-3e-4",
+    "has_validation": true
+  },
+  {
+    "name": "GRU (best)",
+    "slug": "gru-best",
+    "has_validation": false
+  },
+  {
+    "name": "N4SID (40/10)",
+    "slug": "n4sid-40-10",
+    "has_validation": false
+  },
+  {
+    "name": "Bidirectional Aligned Distillation",
+    "slug": "bidirectional-aligned-distillation",
+    "has_validation": true
+  },
+  {
+    "name": "Bidirectional Optoclamp MPC vs PI",
+    "slug": "bidirectional-optoclamp-mpc-vs-pi",
+    "has_validation": false
+  }
+]

@@ -24,7 +24,7 @@ To ensure coordinate development across different agents (IDE, 2.0 CLI, Jules, G
   - Branch: `feature/skip-connections`
   - Worktree: `/snel/home/cbwash2/cleo-worktrees/skip-connections`
   - Linear-only state/input skip connections. Overfitting was avoided by applying separate weight decay (best: `swd=1.0` got R²=0.9144), but still did not beat the pure CA-NODE baseline (R²=0.9219).
-- `[ ]` Frequency-Aware Loss: Spectral Loss to break R² ceiling ([details](file:///snel/home/cbwash2/cleo/tasks/spectral_loss.md))
+- `[x]` Frequency-Aware Loss: Spectral Loss to break R² ceiling (Completed R²=0.8993 ❌ — did not beat baseline) ([details](file:///snel/home/cbwash2/cleo/tasks/spectral_loss.md))
   - Branch: `feature/spectral-loss`
   - Worktree: `/snel/home/cbwash2/cleo-worktrees/spectral-loss`
   - Agent: Antigravity (Instance 2)
@@ -51,6 +51,12 @@ To ensure coordinate development across different agents (IDE, 2.0 CLI, Jules, G
   - Branch: `feature/digital-twin-phase1`
   - Agent: Antigravity
   - Added `modeling/wandb_utils.py` shared utilities. Integrated into `fit_canode.py`, `fit_gru.py`, `sweep_canode.py`.
+- `[x]` Dashboard: Plants page + per-experiment validation plots
+  - Branch: `feature/dashboard-validation`
+  - Worktree: `/snel/home/cbwash2/cleo-worktrees/dashboard-validation`
+  - Plants tab (excitatory + bidirectional 3D renders), per-experiment validation plots
+    (true-vs-inferred firing rates across channels + top PCs), clickable leaderboard pages.
+    One-command refresh: `python -m modeling.scripts.build_dashboard` (under `dtmodeling`).
 
 ### Backlog — Ideas to Break the R²≈0.90 Ceiling
 

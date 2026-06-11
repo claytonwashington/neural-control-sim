@@ -36,3 +36,11 @@
 | feature/residual-v2 | cleo-worktrees/residual-v2 | Exp 18: Residual v2 | — | Done |
 | feature/aligned-distill | cleo-worktrees/aligned-distill | Exp 20: Aligned Distillation | — | R²=0.8640 ✅ |
 | feature/periodic-reencode | cleo-worktrees/periodic-reencode | Exp 21/22: EnKF + Periodic Re-Encoding | — | R²=0.877 ✅ |
+
+## Tooling / Infrastructure Branches
+
+(Not preflight experiments — kept out of the auto-managed table above.)
+
+| Branch | Worktree | Purpose | Status |
+|--------|----------|---------|--------|
+| feature/dashboard-validation | cleo-worktrees/dashboard-validation | Plants page + per-experiment validation plots (true-vs-inferred firing rates across channels & top PCs) + clickable leaderboard experiment pages | Active |

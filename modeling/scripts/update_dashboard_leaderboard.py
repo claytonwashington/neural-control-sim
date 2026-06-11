@@ -6,6 +6,8 @@ from datetime import datetime
 
 import argparse
 
+from modeling.scripts.dashboard_common import EXPERIMENTS_DIR, slugify
+
 def _update_leaderboard_from_results(repo_root, results_dir):
     """Add entries from a results directory to leaderboard.json."""
     import glob
@@ -103,7 +105,14 @@ def main():
     
     leaderboard_path = os.path.join(repo_root, "results/leaderboard.json")
     dashboard_path = os.path.join(repo_root, "results/dashboard.html")
-    
+
+    # leaderboard.json is git-ignored and may live only in the shared checkout.
+    if not os.path.exists(leaderboard_path):
+        from modeling.scripts.dashboard_common import SHARED_RESULTS
+        shared_lb = str(SHARED_RESULTS / "leaderboard.json")
+        if os.path.exists(shared_lb):
+            leaderboard_path = shared_lb
+
     if not os.path.exists(leaderboard_path):
         print(f"Error: {leaderboard_path} not found.")
         return
@@ -162,7 +171,15 @@ def main():
             row_tr = '            <tr>'
             
         html_lines.append(row_tr)
-        html_lines.append(f'              <td class="td-label">{model}</td>')
+        # Link the model name to its standalone experiment page when one exists.
+        slug = slugify(model)
+        if (EXPERIMENTS_DIR / f"{slug}.html").exists():
+            label = (f'<a href="experiments/{slug}.html" target="_blank" '
+                     f'style="color:var(--cyan);text-decoration:none">{model} '
+                     f'<span style="opacity:.6">↗</span></a>')
+        else:
+            label = model
+        html_lines.append(f'              <td class="td-label">{label}</td>')
         html_lines.append(f'              <td>{m_type}</td>')
         html_lines.append(f'              <td><div class="r2-cell">{r2_span}</div></td>')
         html_lines.append(f'              <td>{mse_str}</td>')

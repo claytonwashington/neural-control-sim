@@ -32,6 +32,138 @@ def make_image_card(title, data_uri, caption=''):
       </div>'''
 
 
+# ===========================================================================
+# Plants tab (idempotent, marker-guarded)
+# ===========================================================================
+PLANTS_BTN_START = '<!-- PLANTS_TAB_BTN_START -->'
+PLANTS_BTN_END = '<!-- PLANTS_TAB_BTN_END -->'
+PLANTS_START = '<!-- PLANTS_TAB_START -->'
+PLANTS_END = '<!-- PLANTS_TAB_END -->'
+
+
+def _upsert(html, start, end, payload, anchor, before=False):
+    """Insert or replace ``start+payload+end`` (idempotent).
+
+    If the markers already exist, replace what's between them. Otherwise insert
+    the whole block immediately after ``anchor`` (or before it if ``before``).
+    """
+    block = f'{start}\n{payload}\n{end}'
+    if start in html and end in html:
+        pre, rest = html.split(start, 1)
+        _, post = rest.split(end, 1)
+        return pre + block + post
+    idx = html.find(anchor)
+    if idx == -1:
+        print(f'  ⚠️  anchor not found, skipping inject: {anchor[:40]!r}')
+        return html
+    if before:
+        return html[:idx] + block + '\n\n  ' + html[idx:]
+    idx += len(anchor)
+    return html[:idx] + '\n  ' + block + html[idx:]
+
+
+def build_plants_tab():
+    """Return (button_html, content_html) for the Plants tab from plants.json."""
+    import json
+    from modeling.scripts.dashboard_common import (
+        PLANTS_DIR, EXPERIMENTS_DIR, all_experiments, slugify,
+    )
+
+    plants_json = PLANTS_DIR / 'plants.json'
+    if not plants_json.exists():
+        print(f'  ⚠️  {plants_json} not found — run generate_plant_assets first')
+        return None, None
+    with open(plants_json) as f:
+        plants = json.load(f)
+
+    # Map plant_id -> [(name, slug, has_page), ...]
+    exps_by_plant = {}
+    for e in all_experiments():
+        slug = slugify(e['name'])
+        has_page = (EXPERIMENTS_DIR / f'{slug}.html').exists()
+        exps_by_plant.setdefault(e.get('plant_id'), []).append((e['name'], slug, has_page))
+
+    cards = []
+    for p in plants:
+        img_html = ''
+        png = PLANTS_DIR / f"{p['id']}_setup.png"
+        if png.exists():
+            img_html = (f'<img src="{png_to_data_uri(png)}" alt="{p["title"]}" '
+                        f'onclick="openLightbox(this)" '
+                        f'style="max-width:560px;width:100%;cursor:zoom-in;background:#0a0e1a;border-radius:8px;">')
+        datasets = ''.join(
+            f'<code style="background:var(--bg-secondary);padding:2px 6px;border-radius:4px;'
+            f'font-size:0.72rem;margin-right:6px;">{d}</code>' for d in p.get('datasets', [])
+        )
+        exp_links = []
+        for name, slug, has_page in exps_by_plant.get(p['id'], []):
+            if has_page:
+                exp_links.append(f'<a href="experiments/{slug}.html" target="_blank" '
+                                 f'style="color:var(--cyan);">{name}</a>')
+            else:
+                exp_links.append(f'<span style="color:var(--text-muted);">{name}</span>')
+        exp_html = ' · '.join(exp_links) if exp_links else '<span style="color:var(--text-muted);">—</span>'
+
+        cards.append(f'''
+      <div class="section">
+        <div style="background: var(--gradient-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
+          <div style="padding: 14px 18px; border-bottom: 1px solid var(--border); font-size: 0.95rem; font-weight: 700;">🧠 {p['title']}</div>
+          <div style="display:flex; gap:20px; padding:18px; flex-wrap:wrap;">
+            <div style="flex:0 0 auto;">{img_html}</div>
+            <div style="flex:1; min-width:280px; font-size:0.82rem; color:var(--text-secondary);">
+              <p>{p['desc']}</p>
+              <p style="margin-top:10px;"><strong style="color:var(--text-primary);">Neurons:</strong> {p['neurons']}<br>
+                 <strong style="color:var(--text-primary);">Opsins:</strong> {p['opsins']}<br>
+                 <strong style="color:var(--text-primary);">Inputs:</strong> {p['inputs']}<br>
+                 <strong style="color:var(--text-primary);">Probe:</strong> {p['probe']}</p>
+              <p style="margin-top:10px;"><strong style="color:var(--text-primary);">Datasets:</strong><br>{datasets}</p>
+              <p style="margin-top:10px;"><strong style="color:var(--text-primary);">Experiments:</strong> {exp_html}</p>
+            </div>
+          </div>
+        </div>
+      </div>''')
+
+    button = ('  <button class="tab-btn" onclick="showTab(\'plants\')" '
+              'style="background: linear-gradient(135deg, #0ea5e9, #6366f1);">🧠 Plants</button>')
+    content = (f'  <!-- ========== Tab: Plants ========== -->\n'
+               f'  <div id="tab-plants" class="tab-content">\n'
+               f'    <div class="section">\n'
+               f'      <div class="section-header"><h2>Simulated Plants</h2>'
+               f'<span class="badge">Cleo</span></div>\n'
+               f'      <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:8px;">'
+               f'The digital-twin datasets come from these Cleo simulations. Click an image to enlarge.</p>\n'
+               f'    </div>\n'
+               + '\n'.join(cards) +
+               f'\n  </div>')
+    return button, content
+
+
+def inject_plants_tab(html):
+    """Idempotently add the Plants tab button + content to the dashboard HTML."""
+    button, content = build_plants_tab()
+    if button is None:
+        return html
+    html = _upsert(html, PLANTS_BTN_START, PLANTS_BTN_END, button, '<div class="tabs">')
+    # Insert the content just before the first tab-content block.
+    html = _upsert(html, PLANTS_START, PLANTS_END, content,
+                   '<!-- ========== Tab: Latent NODE', before=True)
+    return html
+
+
+def plants_only():
+    """Inject just the Plants tab into the existing dashboard (idempotent)."""
+    from modeling.scripts.dashboard_common import RESULTS
+    dashboard_path = str(RESULTS / 'dashboard.html')
+    with open(dashboard_path) as f:
+        html = f.read()
+    html = inject_plants_tab(html)
+    now_str = datetime.now().strftime('%Y-%m-%d %H:%M EDT')
+    html = re.sub(r'Last updated: [\d\-]+ [\d:]+ EDT', f'Last updated: {now_str}', html)
+    with open(dashboard_path, 'w') as f:
+        f.write(html)
+    print(f'✅ Plants tab injected into {dashboard_path}')
+
+
 def main():
     os.chdir('/snel/home/cbwash2/cleo')
     
@@ -82,28 +214,12 @@ def main():
         print('  ⚠️  Could not find tabs marker')
     
     # ====================================================================
-    # 2. PLANT VISUALIZATION — add to dataset section or as separate
+    # 2. PLANT VISUALIZATION — removed. The Plants tab (inject_plants_tab /
+    #    update_dashboard.py --plants-only) is now the single source of truth
+    #    for plant visualizations; the old static plant_setup.png card was
+    #    redundant and could show an outdated plant.
     # ====================================================================
-    plant_path = 'results/plant_setup.png'
-    if os.path.exists(plant_path):
-        plant_uri = png_to_data_uri(plant_path)
-        plant_card = f'''
-  <!-- Plant Visualization -->
-  <div class="section" style="margin-bottom: 24px;">
-    <div style="background: var(--gradient-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
-      <div style="padding: 14px 18px; border-bottom: 1px solid var(--border); font-size: 0.85rem; font-weight: 600;">🧠 3D Plant Setup — 800E + 200I Neurons, 2 Fibers, 50-ch Probe</div>
-      <div style="display: flex; justify-content: center; padding: 8px; background: #0a0e1a;">
-        <img src="{plant_uri}" alt="Plant Setup" style="max-width: 700px; width: 100%; cursor: zoom-in;" onclick="openLightbox(this)">
-      </div>
-    </div>
-  </div>
-'''
-        # Insert after dataset section, before tabs
-        html = html.replace(tabs_marker, plant_card + '\n' + tabs_marker)
-        print(f'  ✅ Embedded plant visualization ({os.path.getsize(plant_path)//1024} KB)')
-    else:
-        print(f'  ⚠️  Plant image not found: {plant_path}')
-    
+
     # ====================================================================
     # 3. PREDICTION PLOTS — embed in relevant tabs
     # ====================================================================
@@ -211,4 +327,12 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    import argparse
+    ap = argparse.ArgumentParser(description='Update dashboard.html')
+    ap.add_argument('--plants-only', action='store_true',
+                    help='Only (re)inject the Plants tab — idempotent, safe to re-run')
+    args = ap.parse_args()
+    if args.plants_only:
+        plants_only()
+    else:
+        main()

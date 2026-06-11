@@ -1,0 +1,30 @@
+[
+  {
+    "id": "unidirectional_v0",
+    "title": "Plant 1 \u2014 Unidirectional Excitatory (v0)",
+    "neurons": "800 excitatory + 200 inhibitory LIF (p=0.1)",
+    "opsins": "ChrimsonR (590 nm, excitatory) + GtACR2 (470 nm) \u2014 GtACR2 inhibition is negligible (E\u2248E_L), so this plant is effectively excitatory-only",
+    "inputs": "u[0] = red fiber (excite) \u00b7 u[1] = blue fiber (no effective drive)",
+    "probe": "50-channel MultiUnitActivity probe (planar MEA, Y=0)",
+    "datasets": [
+      "data/training_trials.h5"
+    ],
+    "desc": "The original baseline plant (Exp 1\u201327). ChrimsonR provides excitation; GtACR2's reversal potential (E=\u221269.5 mV) sits almost on top of rest (E_L=\u221270 mV), giving only ~0.5 mV of hyperpolarizing drive \u2014 so inhibition is effectively absent and the plant behaves as excitatory-only. Produced the canonical 50-trial dataset used by N4SID, CA-NODE, the causal/acausal Latent NODE, and GRU experiments.",
+    "image": "plants/unidirectional_v0_setup.png",
+    "status": "ok"
+  },
+  {
+    "id": "bidirectional_v2",
+    "title": "Plant 3 \u2014 Bidirectional v2 (ChR2-H134R + eNpHR3.0)",
+    "neurons": "800 excitatory + 200 inhibitory LIF (p=0.1)",
+    "opsins": "ChR2(H134R) (450 nm, excitatory cation channel) + eNpHR3.0 (590 nm, inhibitory chloride pump, E=\u2212400 mV)",
+    "inputs": "u[0] = blue fiber (excite) \u00b7 u[1] = yellow fiber (inhibit)",
+    "probe": "50-channel MultiUnitActivity probe (planar MEA, Y=0)",
+    "datasets": [
+      "data/training_trials_bidir_v2.h5"
+    ],
+    "desc": "The current primary plant (Exp 28\u201332). eNpHR3.0 is a chloride pump with E=\u2212400 mV, delivering ~330 mV of hyperpolarizing drive (vs GtACR2's ~0.5 mV) \u2014 enabling genuine, monotonic inhibition below baseline (287 \u2192 6 Hz, ~98% suppression). This is the plant to use for true bidirectional optoclamp control.",
+    "image": "plants/bidirectional_v2_setup.png",
+    "status": "ok"
+  }
+]
