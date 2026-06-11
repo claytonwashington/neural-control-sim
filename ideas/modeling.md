@@ -433,7 +433,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 
 
 ### Experiment 29. Bidir V2 Aligned Distillation
-**Status**: 🔄 IN PROGRESS
+**Status**: ✅ COMPLETE — R²=0.9170
+**Results notes**: Best: run_05 alpha=0.9 pw=200 lr=1e-3. +11% over naive causal (0.825).
 **Results dir**: `results/bidir_v2_aligned_distill/`
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/(main)`
 - Hypothesis: Causal CA-NODE distilled from acausal teacher (Exp 28 run_05, R²=0.956) on v2 plant
