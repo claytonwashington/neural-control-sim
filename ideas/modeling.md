@@ -449,7 +449,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 
 
 ### Experiment 31. Bidir V2 EnKF Evaluation
-**Status**: 🔄 IN PROGRESS
+**Status**: ✅ COMPLETE — R²=0.9998
+**Results notes**: K=1 Q=0.1 R=0.01 R2=0.9998. Near-perfect state estimation.
 **Results dir**: `results/bidir_v2_enkf/`
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/(main)`
 - Hypothesis: EnKF corrections improve causal model predictions under observation delay
