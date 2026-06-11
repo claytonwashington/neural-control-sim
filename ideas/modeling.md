@@ -441,7 +441,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 
 
 ### Experiment 30. Bidir V2 Periodic Re-Encoding
-**Status**: 🔄 IN PROGRESS
+**Status**: ✅ COMPLETE — R²=0.9350
+**Results notes**: K=1 R2=0.935, K=20 R2=0.930. Stable across all K.
 **Results dir**: `results/bidir_v2_periodic_reencode/`
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/(main)`
 - Hypothesis: Periodic re-encoding with K=20 gives best R² on v2 causal model
