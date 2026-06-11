@@ -444,3 +444,10 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/(main)`
 - Hypothesis: Periodic re-encoding with K=20 gives best R² on v2 causal model
 
+
+### Experiment 31. Bidir V2 EnKF Evaluation
+**Status**: 🔄 IN PROGRESS
+**Results dir**: `results/bidir_v2_enkf/`
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/(main)`
+- Hypothesis: EnKF corrections improve causal model predictions under observation delay
+

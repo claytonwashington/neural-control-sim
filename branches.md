@@ -14,6 +14,7 @@
 | feature/bidir-v2-plant | cleo-worktrees/(main) | [Exp 28](ideas/modeling.md) | `results/bidir_v2_acausal/` | Preflight complete |
 | feature/bidir-v2-plant | cleo-worktrees/(main) | [Exp 29](ideas/modeling.md) | `results/bidir_v2_aligned_distill/` | Preflight complete |
 | feature/bidir-v2-plant | cleo-worktrees/(main) | [Exp 30](ideas/modeling.md) | `results/bidir_v2_periodic_reencode/` | Preflight complete |
+| feature/bidir-v2-plant | cleo-worktrees/(main) | [Exp 31](ideas/modeling.md) | `results/bidir_v2_enkf/` | Preflight complete |
 
 ## Completed Experiments
 
