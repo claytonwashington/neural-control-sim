@@ -437,3 +437,10 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/(main)`
 - Hypothesis: Causal CA-NODE distilled from acausal teacher (Exp 28 run_05, R²=0.956) on v2 plant
 
+
+### Experiment 30. Bidir V2 Periodic Re-Encoding
+**Status**: 🔄 IN PROGRESS
+**Results dir**: `results/bidir_v2_periodic_reencode/`
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/(main)`
+- Hypothesis: Periodic re-encoding with K=20 gives best R² on v2 causal model
+
