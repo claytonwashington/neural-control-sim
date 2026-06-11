@@ -95,6 +95,9 @@ class NeuralODEMPC(LatencyIOProcessor):
         light_name: str = "fibers",
         probe_name: str = "probe",
         mua_name: str = "mua",
+        bidirectional: bool = False,
+        light_name_exc: str = "fiber_exc",
+        light_name_inh: str = "fiber_inh",
     ):
         super().__init__(sample_period=sample_period_ms * ms)
 
@@ -111,6 +114,9 @@ class NeuralODEMPC(LatencyIOProcessor):
         self.light_name = light_name
         self.probe_name = probe_name
         self.mua_name = mua_name
+        self.bidirectional = bidirectional
+        self.light_name_exc = light_name_exc
+        self.light_name_inh = light_name_inh
 
         # Load model
         self._load_model(checkpoint_path)
@@ -186,6 +192,27 @@ class NeuralODEMPC(LatencyIOProcessor):
         """Denormalize inputs back to mW/mm²."""
         return u_norm * self.u_std + self.u_mean
 
+
+    def _build_output_dict(self, u_raw):
+        """Build the Cleo output dict, handling bidirectional sign-splitting.
+
+        In bidirectional mode, the model already produces 2D control
+        [u_exc, u_inh] since n_u=2. We route each component to its
+        respective fiber device instead of sending both to a single device.
+
+        The v1 plant sent the same scalar to both exc and inh fibers,
+        which is self-defeating. Sign-splitting routes positive error
+        (rate too low) to excitation and negative error (rate too high)
+        to inhibition.
+        """
+        if self.bidirectional:
+            return {
+                self.light_name_exc: u_raw[0:1] * mwatt / mm**2,
+                self.light_name_inh: u_raw[1:2] * mwatt / mm**2,
+            }
+        else:
+            return {self.light_name: u_raw * mwatt / mm**2}
+
     def process(self, state_dict: dict, t_samp) -> Tuple[dict, float]:
         """Process one observation and compute control action.
 
@@ -230,7 +257,7 @@ class NeuralODEMPC(LatencyIOProcessor):
         if self._step < self.warmup_steps:
             u_out = np.zeros(self.n_u)
             self.u_log.append(u_out)
-            return {self.light_name: u_out * mwatt / mm**2}, t_samp
+            return self._build_output_dict(u_out), t_samp
 
         # 6. Encode z₀ from past window
         z0 = self._encode_z0()
@@ -247,7 +274,7 @@ class NeuralODEMPC(LatencyIOProcessor):
 
         # 9. Return with processing delay
         return (
-            {self.light_name: u_raw * mwatt / mm**2},
+            self._build_output_dict(u_raw),
             t_samp + self.compute_delay,
         )
 
@@ -411,7 +438,7 @@ class PeriodicNeuralODEMPC(NeuralODEMPC):
         if self._step < self.warmup_steps:
             u_out = np.zeros(self.n_u)
             self.u_log.append(u_out)
-            return {self.light_name: u_out * mwatt / mm**2}, t_samp
+            return self._build_output_dict(u_out), t_samp
 
         # 6. Periodic Re-encoding
         if (self._step - self.warmup_steps) % self.reencode_period == 0 or self._z_current is None:
@@ -442,6 +469,6 @@ class PeriodicNeuralODEMPC(NeuralODEMPC):
 
         # 9. Return with processing delay
         return (
-            {self.light_name: u_raw * mwatt / mm**2},
+            self._build_output_dict(u_raw),
             t_samp + self.compute_delay,
         )

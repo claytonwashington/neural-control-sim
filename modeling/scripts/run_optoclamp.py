@@ -39,7 +39,7 @@ from cleo.ioproc import LatencyIOProcessor, exp_firing_rate_estimate
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from modeling.plant import build_plant
+from modeling.plant import build_plant_v2
 
 
 # ─── Recording-only IOProcessor for baseline measurement ───────────────────
@@ -48,12 +48,14 @@ class BaselineRecorder(LatencyIOProcessor):
     """Record firing rates without any stimulation."""
 
     def __init__(self, sample_period_ms=1.0, tau_rate_ms=20.0,
-                 probe_name="probe", mua_name="mua", light_name="fibers"):
+                 probe_name="probe", mua_name="mua",
+                 light_name_exc="fiber_exc", light_name_inh="fiber_inh"):
         super().__init__(sample_period=sample_period_ms * ms)
         self.tau_rate = tau_rate_ms * ms
         self.probe_name = probe_name
         self.mua_name = mua_name
-        self.light_name = light_name
+        self.light_name_exc = light_name_exc
+        self.light_name_inh = light_name_inh
         self._rates = None
         self.rate_log = []
 
@@ -66,8 +68,11 @@ class BaselineRecorder(LatencyIOProcessor):
             counts, self.sample_period, self._rates, self.tau_rate
         )
         self.rate_log.append(np.array(self._rates, dtype=np.float64))
-        # Zero stimulation
-        return {self.light_name: np.zeros(2) * mwatt / mm**2}, t_samp
+        # Zero stimulation — output to both fibers independently
+        return {
+            self.light_name_exc: np.zeros(1) * mwatt / mm**2,
+            self.light_name_inh: np.zeros(1) * mwatt / mm**2,
+        }, t_samp
 
     def _base_reset(self):
         super()._base_reset()
@@ -145,7 +150,7 @@ def run_optoclamp(args):
     print("Phase 0: Measuring baseline spontaneous rate")
     print("=" * 60)
 
-    sim, devices = build_plant(seed=args.seed)
+    sim, devices = build_plant_v2(seed=args.seed)
     recorder = BaselineRecorder(sample_period_ms=1.0)
     sim.set_io_processor(recorder)
     sim.run(1000 * ms)  # 1 second baseline
@@ -174,7 +179,7 @@ def run_optoclamp(args):
         {"Kp": 2.0, "Ki": 0.02},
     ]
 
-    from modeling.controllers.pi_controller import PIController
+    from modeling.controllers.pi_controller import BidirectionalPIController
 
     best_pi = None
     best_pi_rmse = float("inf")
@@ -183,14 +188,15 @@ def run_optoclamp(args):
         print(f"\n  PI: Kp={pi_cfg['Kp']}, Ki={pi_cfg['Ki']}")
         target = targets[1]  # 75% for tuning
 
-        sim, devices = build_plant(seed=args.seed)
-        ctrl = PIController(
+        sim, devices = build_plant_v2(seed=args.seed)
+        ctrl = BidirectionalPIController(
             target_rate=target,
             Kp=pi_cfg["Kp"],
             Ki=pi_cfg["Ki"],
-            n_u=2,
             sample_period_ms=1.0,
             warmup_steps=200,
+            light_name_exc="fiber_exc",
+            light_name_inh="fiber_inh",
         )
         sim.set_io_processor(ctrl)
 
@@ -215,13 +221,14 @@ def run_optoclamp(args):
     pi_results = {}
     for frac, target in zip(target_fractions, targets):
         print(f"\n  PI @ {frac*100:.0f}% target ({target:.1f} Hz)...")
-        sim, devices = build_plant(seed=args.seed)
-        ctrl = PIController(
+        sim, devices = build_plant_v2(seed=args.seed)
+        ctrl = BidirectionalPIController(
             target_rate=target,
             Kp=best_pi["Kp"],
             Ki=best_pi["Ki"],
-            n_u=2,
             warmup_steps=200,
+            light_name_exc="fiber_exc",
+            light_name_inh="fiber_inh",
         )
         sim.set_io_processor(ctrl)
         sim.run(200 * ms)
@@ -245,58 +252,67 @@ def run_optoclamp(args):
     # ── Phase 2: Neural ODE MPC ─────────────────────────────────────────
     if args.model_checkpoint:
         print("\n" + "=" * 60)
-        print("Phase 2: Neural ODE MPC")
+        print("Phase 2: Neural ODE MPC (horizon sweep)")
         print("=" * 60)
 
-        from modeling.controllers.node_mpc import NeuralODEMPC
+        from modeling.controllers.node_mpc import PeriodicNeuralODEMPC
 
-        mpc_results = {}
-        for frac, target in zip(target_fractions, targets):
-            print(f"\n  MPC @ {frac*100:.0f}% target ({target:.1f} Hz)...")
+        for horizon in args.mpc_horizons:
+            print(f"\n  --- MPC horizon={horizon} ---")
+            mpc_results = {}
+            for frac, target in zip(target_fractions, targets):
+                print(f"\n  MPC (H={horizon}) @ {frac*100:.0f}% target ({target:.1f} Hz)...")
 
-            # Build target rate vector (broadcast to all channels)
-            target_rate_vec = np.full(50, target)
+                # Build target rate vector (broadcast to all channels)
+                target_rate_vec = np.full(50, target)
 
-            sim, devices = build_plant(seed=args.seed)
-            ctrl = NeuralODEMPC(
-                checkpoint_path=args.model_checkpoint,
-                target_rate=target_rate_vec,
-                sample_period_ms=1.0,
-                mpc_horizon=args.mpc_horizon,
-                mpc_iters=args.mpc_iters,
-                compute_delay_ms=args.mpc_delay,
-                u_max=50.0,
-                device=args.device,
-                warmup_steps=200,
-            )
-            sim.set_io_processor(ctrl)
+                sim, devices = build_plant_v2(seed=args.seed)
+                # Re-encoding period K=20 chosen as default based on prior
+                # experiments (Exp 22)
+                ctrl = PeriodicNeuralODEMPC(
+                    checkpoint_path=args.model_checkpoint,
+                    target_rate=target_rate_vec,
+                    sample_period_ms=1.0,
+                    mpc_horizon=horizon,
+                    mpc_iters=args.mpc_iters,
+                    compute_delay_ms=args.mpc_delay,
+                    u_max=50.0,
+                    device=args.device,
+                    warmup_steps=200,
+                    bidirectional=True,
+                    light_name_exc="fiber_exc",
+                    light_name_inh="fiber_inh",
+                    reencode_period=args.reencode_k,
+                )
+                sim.set_io_processor(ctrl)
 
-            t0 = time.time()
-            sim.run(200 * ms)   # baseline (warmup / fill encoder buffer)
-            sim.run(1000 * ms)  # clamping
-            sim.run(200 * ms)   # recovery
-            elapsed = time.time() - t0
+                t0 = time.time()
+                sim.run(200 * ms)   # baseline (warmup / fill encoder buffer)
+                sim.run(1000 * ms)  # clamping
+                sim.run(200 * ms)   # recovery
+                elapsed = time.time() - t0
 
-            results = ctrl.get_results()
-            metrics = compute_metrics(results["rates"], target, 200, 1200)
-            metrics["wall_time_s"] = elapsed
+                results = ctrl.get_results()
+                metrics = compute_metrics(results["rates"], target, 200, 1200)
+                metrics["wall_time_s"] = elapsed
 
-            mpc_results[f"{int(frac*100)}pct"] = {
-                "target": target,
-                "metrics": metrics,
+                mpc_results[f"{int(frac*100)}pct"] = {
+                    "target": target,
+                    "metrics": metrics,
+                }
+                print(f"    RMSE={metrics['tracking_rmse']:.2f}, "
+                      f"Settling={metrics['settling_time_ms']:.0f}ms, "
+                      f"Wall time={elapsed:.1f}s")
+
+            all_results[f"NODE_MPC_H{horizon}"] = {
+                "config": {
+                    "horizon": horizon,
+                    "iters": args.mpc_iters,
+                    "delay_ms": args.mpc_delay,
+                    "reencode_k": args.reencode_k,
+                },
+                "targets": mpc_results,
             }
-            print(f"    RMSE={metrics['tracking_rmse']:.2f}, "
-                  f"Settling={metrics['settling_time_ms']:.0f}ms, "
-                  f"Wall time={elapsed:.1f}s")
-
-        all_results["NODE_MPC"] = {
-            "config": {
-                "horizon": args.mpc_horizon,
-                "iters": args.mpc_iters,
-                "delay_ms": args.mpc_delay,
-            },
-            "targets": mpc_results,
-        }
 
     # ── Save results ────────────────────────────────────────────────────
     results_path = os.path.join(args.output_dir, "optoclamp_results.json")
@@ -387,7 +403,11 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", type=str, default="results/optoclamp")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--mpc-horizon", type=int, default=20)
+    parser.add_argument("--mpc-horizons", type=int, nargs="+", default=[5, 10, 20, 50],
+                        help="MPC planning horizons to sweep (default: [5, 10, 20, 50])")
+    parser.add_argument("--reencode-k", type=int, default=20,
+                        help="Re-encoding period K for PeriodicNeuralODEMPC "
+                             "(default: 20, chosen based on Exp 22)")
     parser.add_argument("--mpc-iters", type=int, default=30)
     parser.add_argument("--mpc-delay", type=float, default=5.0,
                         help="MPC compute delay in ms")
