@@ -283,6 +283,7 @@ def run_optoclamp(args):
                     light_name_exc="fiber_exc",
                     light_name_inh="fiber_inh",
                     reencode_period=args.reencode_k,
+                    lambda_u=args.lambda_u,
                 )
                 sim.set_io_processor(ctrl)
 
@@ -411,5 +412,7 @@ if __name__ == "__main__":
     parser.add_argument("--mpc-iters", type=int, default=30)
     parser.add_argument("--mpc-delay", type=float, default=5.0,
                         help="MPC compute delay in ms")
+    parser.add_argument("--lambda-u", type=float, default=0.01,
+                        help="MPC control effort penalty (default: 0.01)")
     args = parser.parse_args()
     run_optoclamp(args)

@@ -90,6 +90,7 @@ def main():
     print(f"Max parallel workers: {args.max_workers} across {args.n_gpus} GPUs")
     print("=" * 70)
 
+    _preflight_token = getattr(args, "preflight_token", None) or os.environ.get("PREFLIGHT_TOKEN", "")
     active_processes = []
     completed_runs = []
     pending_configs = list(enumerate(configs))
