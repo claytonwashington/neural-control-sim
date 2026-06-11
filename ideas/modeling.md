@@ -451,3 +451,10 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/(main)`
 - Hypothesis: EnKF corrections improve causal model predictions under observation delay
 
+
+### Experiment 32. Bidir V2 Optoclamp MPC vs PI
+**Status**: 🔄 IN PROGRESS
+**Results dir**: `results/bidir_v2_optoclamp/`
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/(main)`
+- Hypothesis: MPC with sign-splitting outperforms PI on v2 plant at all target levels
+
