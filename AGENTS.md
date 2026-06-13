@@ -200,8 +200,20 @@ python -m modeling.scripts.fit_latent_canode \
 
 After training finishes, close the loop:
 
-> **Run `preflight complete` under the `dtmodeling` env** — the validation step
-> needs torch: `conda run -n dtmodeling python -m modeling.scripts.preflight complete ...`
+> **Run `preflight complete` from the MAIN checkout (`/snel/home/cbwash2/cleo`,
+> on `modeling-dev`), under the `dtmodeling` env** — NOT from inside the
+> experiment's worktree:
+> ```bash
+> cd /snel/home/cbwash2/cleo
+> conda run -n dtmodeling python -m modeling.scripts.preflight complete ...
+> ```
+> Why: completion merges the feature branch into `modeling-dev`, pushes, and
+> regenerates the dashboard — all of which must run against the main checkout. It
+> also means completion always executes `modeling-dev`'s copy of the harness
+> code, so every experiment is bound by the current rules at merge time
+> regardless of when its worktree was branched. (Running it from a stale worktree
+> would execute that worktree's old `preflight.py` and break the merge step.) The
+> validation step needs torch, hence `dtmodeling`.
 
 ```bash
 python -m modeling.scripts.preflight complete \
@@ -276,13 +288,15 @@ python -m modeling.scripts.preflight monitor \
 This blocks until all runs produce `results.json`, then prints the best result and the exact `preflight complete` command to run.
 
 #### 6. Complete Experiment (Postflight)
+Run from the **main checkout** (`/snel/home/cbwash2/cleo`, on `modeling-dev`), under `dtmodeling` — never from the experiment's worktree:
 ```bash
-python -m modeling.scripts.preflight complete \
+cd /snel/home/cbwash2/cleo
+conda run -n dtmodeling python -m modeling.scripts.preflight complete \
   --results-dir results/unique_dir_name \
   --status completed --best-r2 0.864 \
   --notes "Summary of findings"
 ```
-Run this under `dtmodeling` (torch is needed for validation). It enforces these gates:
+It enforces these gates:
 1. **Eval results exist** — `results.json` must be present (hard)
 2. **Dashboard regenerated** — validation plots (best-effort) → experiment page (hard) → Plants tab → leaderboard row (hard); artifacts are force-added and committed
 3. **Git push** — auto-pushes to `origin/modeling-dev` (hard)
