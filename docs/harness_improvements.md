@@ -3,7 +3,10 @@
 Audit of the experiment harness (`modeling/scripts/preflight.py` + the dashboard
 pipeline: `validation_plots.py`, `generate_experiment_pages.py`,
 `update_dashboard*.py`, `build_dashboard.py`, `dashboard_common.py`).
-Findings grouped by severity; nothing here is implemented yet.
+Findings grouped by severity.
+
+**Status:** Phase 1 ✅ (M4, H3, L4, M5) and Phase 2 ✅ (H1, H2, M2, M3) implemented.
+Remaining: Phase 3 (M1 artifact strategy — needs a design decision; L1, L2, L3, L5).
 
 _Last updated: 2026-06-13._
 
@@ -103,17 +106,19 @@ code still `os.chdir`'s to main).
 
 ## Suggested plan (ordered by value/effort)
 
-**Phase 1 — cheap, high-value:**
-1. **M4** branch/cwd guard in `_do_complete`.
-2. **H3/L4** `html.escape()` + markdown sanitization.
-3. **M5** minimal harness smoke test.
+**Phase 1 — cheap, high-value:** ✅ done
+1. ✅ **M4** branch/cwd guard in `_do_complete` (`_assert_main_checkout`).
+2. ✅ **H3/L4** `html.escape()` in the generators + `_md_inline` markdown sanitization.
+3. ✅ **M5** harness smoke test (`tests/test_harness_smoke.py`).
 
-**Phase 2 — concurrency correctness:**
-4. **H1** flock around `complete`.
-5. **H2 + M3** fetch/rebase + retry on push; idempotent/resumable tail.
-6. **M2** re-order so dashboard regen commits atomically.
+**Phase 2 — concurrency correctness:** ✅ done
+4. ✅ **H1** `flock` around `complete` (`_completion_lock`, on the shared git dir).
+5. ✅ **H2 + M3** `_require_git_push` fetch/rebase + retry; `_commit_completion`
+   tolerates empty staging (idempotent re-run).
+6. ✅ **M2** `_do_complete` reordered — dashboard regen runs after the
+   idea/branches/manifest mutations, immediately before the atomic commit.
 
-**Phase 3 — scaling/strategic:**
+**Phase 3 — scaling/strategic:** _pending_
 7. **M1** artifact strategy (build-artifact vs LFS vs pages) — biggest long-term
    win; needs a design decision.
 8. **L1/L2/L3/L5** hardening cleanups.

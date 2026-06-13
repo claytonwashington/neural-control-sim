@@ -31,12 +31,15 @@ Usage:
 """
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
+import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 
 
@@ -103,6 +106,41 @@ def _md_inline(s):
     row) and escapes pipes (which break table columns).
     """
     return str(s).replace("\r", " ").replace("\n", " ").replace("|", "\\|").strip()
+
+
+@contextmanager
+def _completion_lock(repo_root):
+    """Serialize `preflight complete` across all worktrees of this repo.
+
+    Completion mutates the single shared working tree + git index; without a lock
+    two concurrent completions race. We hold an advisory ``flock`` on a file in
+    the *shared* git dir (``--git-common-dir``), so worktrees contend on the same
+    lock. The lock auto-releases when the process exits, even on crash, so there
+    are no stale locks.
+    """
+    common = subprocess.run(
+        ["git", "rev-parse", "--git-common-dir"],
+        cwd=repo_root, capture_output=True, text=True,
+    ).stdout.strip()
+    common = common if os.path.isabs(common) else os.path.join(repo_root, common)
+    lock_path = os.path.join(common, "preflight-complete.lock")
+
+    f = open(lock_path, "w")
+    try:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            print("[preflight] Another `preflight complete` is in progress — "
+                  "waiting for the lock...")
+            fcntl.flock(f, fcntl.LOCK_EX)  # block until the holder releases
+        f.write(f"{os.getpid()} {datetime.now(timezone.utc).isoformat()}\n")
+        f.flush()
+        yield
+    finally:
+        try:
+            fcntl.flock(f, fcntl.LOCK_UN)
+        finally:
+            f.close()
 
 
 def generate_token(experiment_name, branch, data_file, timestamp):
@@ -380,6 +418,11 @@ def _commit_completion(repo_root, message, tracked_files, results_dir):
     if existing:
         subprocess.run(["git", "add", "-f"] + existing, check=False, cwd=repo_root)
 
+    # Idempotent: if a prior (partial) completion already committed everything,
+    # there's nothing staged — don't crash, just continue to push (M3).
+    if subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=repo_root).returncode == 0:
+        print("[preflight] (nothing new to commit — completion is already recorded)")
+        return
     subprocess.run(["git", "commit", "-m", message], check=True, cwd=repo_root)
 
 
@@ -553,65 +596,57 @@ def _do_complete(args, repo_root):
     ideas_path = os.path.join(repo_root, idea_file)
     sep = "=" * 60
 
-    # ═══════════════════════════════════════════════════════════
-    # ALL GATES FIRE BEFORE ANY STATE CHANGES
-    # If any gate fails, nothing is modified.
-    # ═══════════════════════════════════════════════════════════
-
-    # GATE 1: Require eval results (unless --status failed)
+    # GATE 1 (cheap, no mutation): fail early if eval results are missing.
     if args.status != "failed":
         _require_eval_results(results_dir)
 
-    # GATE 2: Dashboard update must succeed
-    _require_dashboard_update(repo_root, results_dir)
+    # Everything past here mutates the shared working tree. Serialize across
+    # worktrees (H1), do all mutations, then commit atomically and push — so a
+    # re-run after any failure safely resumes (every step is idempotent: M3).
+    with _completion_lock(repo_root):
+        print()
+        print(sep)
+        print(f"POSTFLIGHT — Completing Exp {idea_id}: {manifest.get('experiment_name', '?')}")
+        print(sep)
+        print(f"  Status:  {args.status}")
+        print(f"  R²:      {args.best_r2}")
+        print(f"  Notes:   {args.notes}")
+        print()
 
-    # ═══════════════════════════════════════════════════════════
-    # GATES PASSED — now make state changes
-    # ═══════════════════════════════════════════════════════════
+        # 1. Mark the experiment complete (idea entry, branches.md, manifest).
+        complete_idea(ideas_path, idea_id, args.status, args.best_r2, args.notes)
+        complete_branches_md(repo_root, args.results_dir, args.status, args.best_r2)
+        manifest["status"] = args.status
+        manifest["completed_at"] = datetime.now(timezone.utc).isoformat()
+        manifest["best_r2"] = args.best_r2
+        if args.best_mse is not None:
+            manifest["best_mse"] = args.best_mse
+        manifest["notes"] = args.notes
+        with open(manifest_path, "w") as f:
+            json.dump(manifest, f, indent=2)
 
-    print(f"\n{sep}")
-    print(f"POSTFLIGHT \u2014 Completing Exp {idea_id}: {manifest.get('experiment_name', '?')}")
-    print(f"{sep}")
-    print(f"  Status:  {args.status}")
-    print(f"  R\u00b2:     {args.best_r2}")
-    print(f"  Notes:   {args.notes}")
+        # 2. Regenerate the dashboard from the now-completed manifest (HARD gates
+        #    inside), then commit idea/branches/manifest + dashboard atomically
+        #    (M2: regen immediately precedes the commit; minimal dirty window).
+        _require_dashboard_update(repo_root, results_dir)
+        _commit_completion(
+            repo_root,
+            f"results(Exp {idea_id}): {args.status} — R²={args.best_r2} — {args.notes[:60]}",
+            ["branches.md", idea_file],
+            results_dir,
+        )
+        print(f"[preflight] ✓ Experiment {idea_id} marked as {args.status}")
+
+        # 3. Push (fetch + rebase + retry to survive concurrent pushes: H2).
+        _require_git_push(repo_root)
+
+        # 4. Merge + remove the experiment worktree.
+        worktree = manifest.get("worktree_path")
+        if worktree and os.path.exists(worktree):
+            _cleanup_worktree(repo_root, worktree)
+
     print()
-
-    # Update idea entry
-    complete_idea(ideas_path, idea_id, args.status, args.best_r2, args.notes)
-
-    # Update branches.md
-    complete_branches_md(repo_root, args.results_dir, args.status, args.best_r2)
-
-    # Update MANIFEST.json
-    manifest["status"] = args.status
-    manifest["completed_at"] = datetime.now(timezone.utc).isoformat()
-    manifest["best_r2"] = args.best_r2
-    if args.best_mse is not None:
-        manifest["best_mse"] = args.best_mse
-    manifest["notes"] = args.notes
-    with open(manifest_path, "w") as f:
-        json.dump(manifest, f, indent=2)
-
-    # Commit \u2014 include the regenerated dashboard artifacts (git-ignored, so
-    # force-added per the repo's convention) alongside branches.md / idea file.
-    _commit_completion(
-        repo_root,
-        f"results(Exp {idea_id}): {args.status} \u2014 R\u00b2={args.best_r2} \u2014 {args.notes[:60]}",
-        ["branches.md", idea_file],
-        results_dir,
-    )
-    print(f"[preflight] \u2713 Experiment {idea_id} marked as {args.status}")
-
-    # GATE 3: Git push (auto-pushes, fails if push fails)
-    _require_git_push(repo_root)
-
-    # AUTO 4: Worktree cleanup
-    worktree = manifest.get("worktree_path")
-    if worktree and os.path.exists(worktree):
-        _cleanup_worktree(repo_root, worktree)
-
-    print(f"\n[preflight] \u2713 Experiment {idea_id} fully completed, pushed, and cleaned up.")
+    print(f"[preflight] ✓ Experiment {idea_id} fully completed, pushed, and cleaned up.")
 
 
 def _require_eval_results(results_dir):
@@ -690,29 +725,66 @@ def _require_dashboard_update(repo_root, results_dir):
     print("[preflight] \u2713 Dashboard leaderboard updated")
 
 
-def _require_git_push(repo_root):
-    """HARD GATE: Auto-push to remote; exit non-zero if push fails."""
-    result = subprocess.run(
-        ["git", "rev-list", "--count", "origin/modeling-dev..HEAD"],
-        capture_output=True, text=True, cwd=repo_root,
+def _require_git_push(repo_root, attempts=3):
+    """HARD GATE: fetch + rebase + push, retrying on concurrent-push rejection.
+
+    A bare push races other agents: if origin advanced since we committed, the
+    push is rejected non-fast-forward. We instead fetch, rebase our local
+    completion commits onto ``origin/modeling-dev``, and push \u2014 retrying the
+    whole cycle a few times. A rebase conflict (e.g. two completions touching the
+    same file) is aborted and surfaced clearly rather than corrupting the tree.
+    """
+    def _git(*a, **kw):
+        return subprocess.run(["git", *a], cwd=repo_root,
+                              capture_output=True, text=True, **kw)
+
+    for attempt in range(1, attempts + 1):
+        _git("fetch", "origin", "modeling-dev", timeout=60)
+
+        ahead = _git("rev-list", "--count", "origin/modeling-dev..HEAD")
+        behind = _git("rev-list", "--count", "HEAD..origin/modeling-dev")
+        n_ahead = int(ahead.stdout.strip()) if ahead.returncode == 0 else 0
+        n_behind = int(behind.stdout.strip()) if behind.returncode == 0 else 0
+
+        if n_ahead == 0 and n_behind == 0:
+            print("[preflight] \u2713 Already in sync with remote")
+            return
+
+        if n_behind > 0:
+            print(f"[preflight] origin advanced by {n_behind} commit(s); rebasing ...")
+            rb = _git("rebase", "origin/modeling-dev")
+            if rb.returncode != 0:
+                _git("rebase", "--abort")
+                print(
+                    "ERROR: Rebase onto origin/modeling-dev hit a conflict "
+                    "(likely a concurrent completion touched the same file).\n"
+                    f"  {rb.stdout[-300:]}\n{rb.stderr[-300:]}\n"
+                    "  Resolve manually (git pull --rebase), then re-run "
+                    "`preflight complete` (it is idempotent).",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            n_ahead = int(_git("rev-list", "--count", "origin/modeling-dev..HEAD").stdout.strip() or 0)
+
+        print(f"[preflight] Pushing {n_ahead} commit(s) to origin/modeling-dev "
+              f"(attempt {attempt}/{attempts}) ...")
+        push = _git("push", "origin", "modeling-dev", timeout=60)
+        if push.returncode == 0:
+            print(f"[preflight] \u2713 Pushed {n_ahead} commit(s) to origin/modeling-dev")
+            return
+
+        # Rejected \u2014 someone pushed during our window; refetch + retry.
+        print(f"[preflight] push rejected (attempt {attempt}); refetching ...\n"
+              f"  {push.stderr[-200:].strip()}")
+        time.sleep(1.5 * attempt)
+
+    print(
+        "ERROR: Git push failed after retries (remote keeps advancing).\n"
+        "  Push manually (git pull --rebase && git push), then re-run "
+        "`preflight complete`.",
+        file=sys.stderr,
     )
-    ahead = int(result.stdout.strip()) if result.returncode == 0 else 0
-    if ahead == 0:
-        print("[preflight] \u2713 Already in sync with remote")
-        return
-    print(f"[preflight] Pushing {ahead} commit(s) to origin/modeling-dev ...")
-    result = subprocess.run(
-        ["git", "push", "origin", "modeling-dev"],
-        capture_output=True, text=True, cwd=repo_root, timeout=60,
-    )
-    if result.returncode != 0:
-        print(
-            f"ERROR: Git push failed:\n  {result.stderr[:500]}\n"
-            f"Push manually and re-run preflight complete.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    print(f"[preflight] \u2713 Pushed {ahead} commit(s) to origin/modeling-dev")
+    sys.exit(1)
 
 
 def _cleanup_worktree(repo_root, worktree_path):

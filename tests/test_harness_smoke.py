@@ -25,7 +25,7 @@ sys.path.insert(0, str(REPO))
 
 from modeling.scripts.dashboard_common import manifest_to_entry, slugify  # noqa: E402
 from modeling.scripts.generate_experiment_pages import build_page  # noqa: E402
-from modeling.scripts.preflight import _md_inline  # noqa: E402
+from modeling.scripts.preflight import _completion_lock, _md_inline  # noqa: E402
 
 MALICIOUS = '<script>alert(1)</script> & "q" |pipe'
 
@@ -42,6 +42,29 @@ def test_md_inline_sanitizes_pipes_and_newlines():
     out = _md_inline("line1\nline2 | col")
     assert "\n" not in out
     assert "|" not in out.replace("\\|", "")  # only escaped pipes remain
+
+
+def test_completion_lock_is_mutually_exclusive(tmp_path):
+    """H1: while the completion lock is held, a second acquirer must fail (and
+    the lock must be reusable after release)."""
+    import fcntl
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+
+    with _completion_lock(str(tmp_path)):
+        common = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            cwd=tmp_path, capture_output=True, text=True,
+        ).stdout.strip()
+        common = common if os.path.isabs(common) else os.path.join(str(tmp_path), common)
+        f2 = open(os.path.join(common, "preflight-complete.lock"), "w")
+        with pytest.raises(OSError):  # held -> non-blocking acquire raises
+            fcntl.flock(f2, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        f2.close()
+
+    # released -> acquirable again
+    with _completion_lock(str(tmp_path)):
+        pass
 
 
 def test_experiment_page_escapes_injection():
