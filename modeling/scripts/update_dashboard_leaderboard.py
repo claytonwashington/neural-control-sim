@@ -6,6 +6,8 @@ from datetime import datetime
 
 import argparse
 
+from html import escape as _esc
+
 from modeling.scripts.dashboard_common import EXPERIMENTS_DIR, slugify
 
 def _update_leaderboard_from_results(repo_root, results_dir):
@@ -158,11 +160,11 @@ def main():
         else:
             mse_str = str(mse)
             
-        # Verdict column
+        # Verdict column (verdict text escaped; color is controlled)
         if verdict_color:
-            verdict_td = f'<td style="color:{verdict_color}">{verdict}</td>'
+            verdict_td = f'<td style="color:{verdict_color}">{_esc(verdict)}</td>'
         else:
-            verdict_td = f'<td>{verdict}</td>'
+            verdict_td = f'<td>{_esc(verdict)}</td>'
             
         # Row class
         if is_best_row:
@@ -173,14 +175,15 @@ def main():
         html_lines.append(row_tr)
         # Link the model name to its standalone experiment page when one exists.
         slug = slugify(model)
+        model_e = _esc(model)
         if (EXPERIMENTS_DIR / f"{slug}.html").exists():
             label = (f'<a href="experiments/{slug}.html" target="_blank" '
-                     f'style="color:var(--cyan);text-decoration:none">{model} '
+                     f'style="color:var(--cyan);text-decoration:none">{model_e} '
                      f'<span style="opacity:.6">↗</span></a>')
         else:
-            label = model
+            label = model_e
         html_lines.append(f'              <td class="td-label">{label}</td>')
-        html_lines.append(f'              <td>{m_type}</td>')
+        html_lines.append(f'              <td>{_esc(m_type)}</td>')
         html_lines.append(f'              <td><div class="r2-cell">{r2_span}</div></td>')
         html_lines.append(f'              <td>{mse_str}</td>')
         html_lines.append(f'              {verdict_td}')

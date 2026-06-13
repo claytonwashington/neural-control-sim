@@ -58,6 +58,53 @@ def get_commit_sha():
     return result.stdout.strip()
 
 
+def _assert_main_checkout(repo_root):
+    """HARD GATE: `complete` must run from the MAIN checkout on `modeling-dev`.
+
+    Running from a linked worktree would execute that worktree's (possibly stale)
+    harness code — the `cleosim.pth` makes this silent — and `_cleanup_worktree`'s
+    `git merge <branch>` would run against the wrong HEAD. We detect a linked
+    worktree by comparing `--git-dir` to `--git-common-dir` (equal only in the
+    main checkout). Set `PREFLIGHT_ALLOW_ANY_CHECKOUT=1` to bypass (tests).
+    """
+    if os.environ.get("PREFLIGHT_ALLOW_ANY_CHECKOUT"):
+        return
+
+    def _git(*a):
+        return subprocess.run(["git", *a], cwd=repo_root,
+                              capture_output=True, text=True).stdout.strip()
+
+    git_dir = os.path.realpath(os.path.join(repo_root, _git("rev-parse", "--git-dir")))
+    common = os.path.realpath(os.path.join(repo_root, _git("rev-parse", "--git-common-dir")))
+    branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+
+    problems = []
+    if git_dir != common:
+        problems.append(f"this is a linked worktree ({repo_root})")
+    if branch != "modeling-dev":
+        problems.append(f"current branch is '{branch}', not 'modeling-dev'")
+    if problems:
+        print(
+            "ERROR: `preflight complete` must run from the main checkout on modeling-dev.\n"
+            "  - " + "\n  - ".join(problems) + "\n"
+            "  Run it from the main repo instead:\n"
+            "    cd /snel/home/cbwash2/cleo\n"
+            "    conda run -n dtmodeling python -m modeling.scripts.preflight complete ...\n"
+            "  (set PREFLIGHT_ALLOW_ANY_CHECKOUT=1 to bypass for testing).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+def _md_inline(s):
+    """Sanitize free text for a single markdown line/cell.
+
+    Collapses newlines (which would inject extra markdown lines / break a table
+    row) and escapes pipes (which break table columns).
+    """
+    return str(s).replace("\r", " ").replace("\n", " ").replace("|", "\\|").strip()
+
+
 def generate_token(experiment_name, branch, data_file, timestamp):
     payload = f"{experiment_name}|{branch}|{data_file}|{timestamp}"
     return hashlib.sha256(payload.encode()).hexdigest()
@@ -189,7 +236,7 @@ def complete_idea(ideas_path, idea_id, status, best_r2, notes):
     if notes:
         for j in range(line_idx + 1, min(line_idx + 15, len(lines))):
             if lines[j].strip().startswith("**Status**"):
-                lines.insert(j + 1, f"**Results notes**: {notes}\n")
+                lines.insert(j + 1, f"**Results notes**: {_md_inline(notes)}\n")
                 break
 
     with open(ideas_path, "w") as f:
@@ -485,6 +532,7 @@ def _do_start(args, repo_root):
 
 
 def _do_complete(args, repo_root):
+    _assert_main_checkout(repo_root)
     results_dir = os.path.join(repo_root, args.results_dir) if not os.path.isabs(args.results_dir) else args.results_dir
     manifest_path = os.path.join(results_dir, "MANIFEST.json")
 

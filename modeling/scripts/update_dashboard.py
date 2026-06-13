@@ -65,6 +65,7 @@ def _upsert(html, start, end, payload, anchor, before=False):
 def build_plants_tab():
     """Return (button_html, content_html) for the Plants tab from plants.json."""
     import json
+    from html import escape as _esc
     from modeling.scripts.dashboard_common import (
         PLANTS_DIR, EXPERIMENTS_DIR, all_experiments, slugify,
     )
@@ -88,34 +89,34 @@ def build_plants_tab():
         img_html = ''
         png = PLANTS_DIR / f"{p['id']}_setup.png"
         if png.exists():
-            img_html = (f'<img src="{png_to_data_uri(png)}" alt="{p["title"]}" '
+            img_html = (f'<img src="{png_to_data_uri(png)}" alt="{_esc(p["title"], quote=True)}" '
                         f'onclick="openLightbox(this)" '
                         f'style="max-width:560px;width:100%;cursor:zoom-in;background:#0a0e1a;border-radius:8px;">')
         datasets = ''.join(
             f'<code style="background:var(--bg-secondary);padding:2px 6px;border-radius:4px;'
-            f'font-size:0.72rem;margin-right:6px;">{d}</code>' for d in p.get('datasets', [])
+            f'font-size:0.72rem;margin-right:6px;">{_esc(d)}</code>' for d in p.get('datasets', [])
         )
         exp_links = []
         for name, slug, has_page in exps_by_plant.get(p['id'], []):
             if has_page:
                 exp_links.append(f'<a href="experiments/{slug}.html" target="_blank" '
-                                 f'style="color:var(--cyan);">{name}</a>')
+                                 f'style="color:var(--cyan);">{_esc(name)}</a>')
             else:
-                exp_links.append(f'<span style="color:var(--text-muted);">{name}</span>')
+                exp_links.append(f'<span style="color:var(--text-muted);">{_esc(name)}</span>')
         exp_html = ' · '.join(exp_links) if exp_links else '<span style="color:var(--text-muted);">—</span>'
 
         cards.append(f'''
       <div class="section">
         <div style="background: var(--gradient-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
-          <div style="padding: 14px 18px; border-bottom: 1px solid var(--border); font-size: 0.95rem; font-weight: 700;">🧠 {p['title']}</div>
+          <div style="padding: 14px 18px; border-bottom: 1px solid var(--border); font-size: 0.95rem; font-weight: 700;">🧠 {_esc(p['title'])}</div>
           <div style="display:flex; gap:20px; padding:18px; flex-wrap:wrap;">
             <div style="flex:0 0 auto;">{img_html}</div>
             <div style="flex:1; min-width:280px; font-size:0.82rem; color:var(--text-secondary);">
-              <p>{p['desc']}</p>
-              <p style="margin-top:10px;"><strong style="color:var(--text-primary);">Neurons:</strong> {p['neurons']}<br>
-                 <strong style="color:var(--text-primary);">Opsins:</strong> {p['opsins']}<br>
-                 <strong style="color:var(--text-primary);">Inputs:</strong> {p['inputs']}<br>
-                 <strong style="color:var(--text-primary);">Probe:</strong> {p['probe']}</p>
+              <p>{_esc(p['desc'])}</p>
+              <p style="margin-top:10px;"><strong style="color:var(--text-primary);">Neurons:</strong> {_esc(p['neurons'])}<br>
+                 <strong style="color:var(--text-primary);">Opsins:</strong> {_esc(p['opsins'])}<br>
+                 <strong style="color:var(--text-primary);">Inputs:</strong> {_esc(p['inputs'])}<br>
+                 <strong style="color:var(--text-primary);">Probe:</strong> {_esc(p['probe'])}</p>
               <p style="margin-top:10px;"><strong style="color:var(--text-primary);">Datasets:</strong><br>{datasets}</p>
               <p style="margin-top:10px;"><strong style="color:var(--text-primary);">Experiments:</strong> {exp_html}</p>
             </div>
@@ -125,16 +126,16 @@ def build_plants_tab():
 
     button = ('  <button class="tab-btn" onclick="showTab(\'plants\')" '
               'style="background: linear-gradient(135deg, #0ea5e9, #6366f1);">🧠 Plants</button>')
-    content = (f'  <!-- ========== Tab: Plants ========== -->\n'
-               f'  <div id="tab-plants" class="tab-content">\n'
-               f'    <div class="section">\n'
-               f'      <div class="section-header"><h2>Simulated Plants</h2>'
-               f'<span class="badge">Cleo</span></div>\n'
-               f'      <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:8px;">'
-               f'The digital-twin datasets come from these Cleo simulations. Click an image to enlarge.</p>\n'
-               f'    </div>\n'
+    content = ('  <!-- ========== Tab: Plants ========== -->\n'
+               '  <div id="tab-plants" class="tab-content">\n'
+               '    <div class="section">\n'
+               '      <div class="section-header"><h2>Simulated Plants</h2>'
+               '<span class="badge">Cleo</span></div>\n'
+               '      <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:8px;">'
+               'The digital-twin datasets come from these Cleo simulations. Click an image to enlarge.</p>\n'
+               '    </div>\n'
                + '\n'.join(cards) +
-               f'\n  </div>')
+               '\n  </div>')
     return button, content
 
 

@@ -18,6 +18,7 @@ Run::
 from __future__ import annotations
 
 import json
+from html import escape as _esc
 
 from modeling.scripts.dashboard_common import (
     EXPERIMENTS_DIR,
@@ -160,17 +161,17 @@ def build_page(entry: dict, lb: dict) -> str:
     plant_html = ""
     if plant:
         pimg = PLANTS_DIR / f"{plant['id']}_setup.png"
-        thumb = (f'<img src="{png_to_data_uri(pimg)}" alt="{plant["title"]}" onclick="zoom(this)">'
+        thumb = (f'<img src="{png_to_data_uri(pimg)}" alt="{_esc(plant["title"], quote=True)}" onclick="zoom(this)">'
                  if pimg.exists() else "")
         plant_html = f"""  <div class="card">
-    <h3>🧠 Plant — {plant['title']}</h3>
+    <h3>🧠 Plant — {_esc(plant['title'])}</h3>
     <div class="plantrow">
       {thumb}
       <div class="small muted" style="flex:1; min-width:260px">
-        <p>{plant['desc']}</p>
-        <p><strong>Neurons:</strong> {plant['neurons']}<br>
-           <strong>Opsins:</strong> {plant['opsins']}<br>
-           <strong>Inputs:</strong> {plant['inputs']}</p>
+        <p>{_esc(plant['desc'])}</p>
+        <p><strong>Neurons:</strong> {_esc(plant['neurons'])}<br>
+           <strong>Opsins:</strong> {_esc(plant['opsins'])}<br>
+           <strong>Inputs:</strong> {_esc(plant['inputs'])}</p>
         <p><a href="../dashboard.html">↗ View all plants on the dashboard</a></p>
       </div>
     </div>
@@ -180,9 +181,9 @@ def build_page(entry: dict, lb: dict) -> str:
     idea = entry.get("idea_id")
     pills = []
     if entry.get("model_type"):
-        pills.append(f'<span class="pill">{entry["model_type"]}</span>')
+        pills.append(f'<span class="pill">{_esc(str(entry["model_type"]))}</span>')
     if entry.get("data_file"):
-        pills.append(f'<span class="pill">{entry["data_file"]}</span>')
+        pills.append(f'<span class="pill">{_esc(str(entry["data_file"]))}</span>')
     if idea is not None:
         pills.append(f'<span class="pill">idea #{idea}</span>')
     if not ckpt_dir:
@@ -193,17 +194,17 @@ def build_page(entry: dict, lb: dict) -> str:
         '(no saved checkpoint). Aggregate leaderboard metrics are shown above.</div>')
 
     hyp_html = (f"""  <div class="card"><h3>Hypothesis / Notes</h3>
-    <p class="muted">{hypothesis}</p></div>""" if hypothesis else "")
+    <p class="muted">{_esc(hypothesis)}</p></div>""" if hypothesis else "")
 
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{name} — Experiment</title>
+<title>{_esc(name)} — Experiment</title>
 <style>{STYLE}</style></head>
 <body>
   <header><div class="wrap">
     <div class="back"><a href="../dashboard.html">← Back to dashboard</a></div>
-    <h1>{name}</h1>
+    <h1>{_esc(name)}</h1>
     <div>{''.join(pills)}</div>
   </div></header>
   <div class="wrap">
