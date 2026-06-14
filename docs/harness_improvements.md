@@ -5,8 +5,11 @@ pipeline: `validation_plots.py`, `generate_experiment_pages.py`,
 `update_dashboard*.py`, `build_dashboard.py`, `dashboard_common.py`).
 Findings grouped by severity.
 
-**Status:** Phase 1 ✅ (M4, H3, L4, M5) and Phase 2 ✅ (H1, H2, M2, M3) implemented.
-Remaining: Phase 3 (M1 artifact strategy — needs a design decision; L1, L2, L3, L5).
+**Status:** Phase 1 ✅ (M4, H3, L4, M5), Phase 2 ✅ (H1, H2, M2, M3), and
+**M1 ✅ (Option D)** — version `dashboard.html` (the base template the pipeline
+mutates) + the JSON facts; the regenerable `experiments/*.html` pages and
+`plants/*.png` (the bulk of the bloat) are git-ignored and rebuilt via
+`build_dashboard.py`. Remaining: L1, L2, L3, L5 (low-severity cleanups).
 
 _Last updated: 2026-06-13._
 

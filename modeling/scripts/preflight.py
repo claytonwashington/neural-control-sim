@@ -393,30 +393,47 @@ def git_commit(repo_root, message, files):
     subprocess.run(["git", "commit", "-m", message], check=True, cwd=repo_root)
 
 
-def _commit_completion(repo_root, message, tracked_files, results_dir):
-    """Commit the completion: tracked files + force-added dashboard artifacts.
+def _completion_artifacts(repo_root, results_dir):
+    """The artifacts to version with a completion (Option D).
 
-    The dashboard outputs live under the git-ignored ``results/`` tree, so they
-    are force-added (matching how the repo already version-controls select result
-    files) to ensure they are committed and pushed with the experiment.
+    We version the hand-authored dashboard *base* (``dashboard.html`` — the
+    pipeline mutates it in place via markers, so it can't be regenerated from
+    scratch) plus the small, diffable JSON facts (leaderboard, plant metadata,
+    experiment index, per-experiment validation metrics).
+
+    We do NOT version the heavy *regenerable* renders: the ~MB-each
+    ``experiments/*.html`` pages and ``plants/*.png`` images. Those are rebuilt
+    from the facts via ``build_dashboard.py`` (they were the bulk of the
+    ~MBs-per-commit history bloat). Returns repo-relative paths that exist.
     """
     import glob
 
-    subprocess.run(["git", "add"] + tracked_files, check=True, cwd=repo_root)
-
-    # Self-contained dashboard + standalone pages + plant renders + metrics.
-    artifacts = ["results/dashboard.html", "results/experiments", "results/plants"]
-    artifacts += [
+    candidates = [
+        "results/dashboard.html",
+        "results/leaderboard.json",
+        "results/plants/plants.json",
+        "results/experiments/index.json",
+    ]
+    candidates += [
         os.path.relpath(p, repo_root)
         for p in glob.glob(os.path.join(results_dir, "**", "val_metrics.json"), recursive=True)
     ]
-    # Only stage paths inside this repo that exist (never escape repo_root).
-    existing = [
-        a for a in artifacts
-        if not a.startswith("..") and os.path.exists(os.path.join(repo_root, a))
+    return [
+        c for c in candidates
+        if not c.startswith("..") and os.path.exists(os.path.join(repo_root, c))
     ]
-    if existing:
-        subprocess.run(["git", "add", "-f"] + existing, check=False, cwd=repo_root)
+
+
+def _commit_completion(repo_root, message, tracked_files, results_dir):
+    """Commit the completion: tracked files + force-added artifacts (Option D).
+
+    Heavy regenerable renders are excluded — see :func:`_completion_artifacts`.
+    """
+    subprocess.run(["git", "add"] + tracked_files, check=True, cwd=repo_root)
+
+    facts = _completion_artifacts(repo_root, results_dir)
+    if facts:
+        subprocess.run(["git", "add", "-f"] + facts, check=False, cwd=repo_root)
 
     # Idempotent: if a prior (partial) completion already committed everything,
     # there's nothing staged — don't crash, just continue to push (M3).

@@ -1,0 +1,112 @@
+[
+  {
+    "model": "Latent NODE (z=64, h256)",
+    "type": "Non-Causal Latent ODE",
+    "r2": 0.9387,
+    "mse": 0.0614,
+    "verdict": "\ud83c\udfc6 BEST",
+    "verdict_color": "var(--green)",
+    "is_best_row": true,
+    "r2_style": "color:var(--green);font-weight:700"
+  },
+  {
+    "model": "Latent NODE (z=64, h128)",
+    "type": "Non-Causal Latent ODE",
+    "r2": 0.934,
+    "mse": 0.0665,
+    "verdict": "\ud83e\udd48",
+    "verdict_color": "var(--green)",
+    "is_best_row": true,
+    "r2_style": "color:var(--green);font-weight:700"
+  },
+  {
+    "model": "CA-NODE (no skip \u2014 baseline)",
+    "type": "Channel-Level ODE (dopri5)",
+    "r2": 0.9009,
+    "mse": 0.0981,
+    "verdict": "\u2705 Real-time \u00b7 Best Channel-Level",
+    "verdict_color": "var(--cyan)",
+    "is_best_row": false,
+    "r2_style": "color:var(--green)"
+  },
+  {
+    "model": "Discrete CA-NODE (Euler, lr=5e-5)",
+    "type": "Euler-Discretized CA",
+    "r2": 0.8968,
+    "mse": 0.1022,
+    "verdict": "Near-ODE with slow LR",
+    "verdict_color": "var(--text-muted)",
+    "is_best_row": false,
+    "r2_style": ""
+  },
+  {
+    "model": "CA-NODE (skip linear, swd=1.0)",
+    "type": "Channel-Level ODE + Skips",
+    "r2": 0.8911,
+    "mse": 0.108,
+    "verdict": "\u274c Overfitting",
+    "verdict_color": "var(--yellow)",
+    "is_best_row": false,
+    "r2_style": ""
+  },
+  {
+    "model": "Multi-rate CA-NODE (M=1)",
+    "type": "Multi-Rate ODE (dopri5)",
+    "r2": 0.8907,
+    "mse": 0.1084,
+    "verdict": "\u274c Sub-stepping = zero benefit",
+    "verdict_color": "var(--text-muted)",
+    "is_best_row": false,
+    "r2_style": ""
+  },
+  {
+    "model": "Bidirectional Aligned Distillation",
+    "type": "run_05_a0.9_pw200_lr0.001",
+    "r2": 0.8613,
+    "mse": 0.1341,
+    "verdict": "BELOW BASELINE",
+    "verdict_color": "#ff9800",
+    "is_best_row": false,
+    "r2_style": ""
+  },
+  {
+    "model": "Causal Latent CA-NODE (z=64, lr=3e-4) \ud83c\udd95",
+    "type": "Causal Latent ODE",
+    "r2": 0.8252,
+    "mse": 0.175,
+    "verdict": "\u2705 173ms \u00b7 Best Deployable Latent",
+    "verdict_color": "var(--green)",
+    "is_best_row": true,
+    "r2_style": "color:var(--green);font-weight:700"
+  },
+  {
+    "model": "GRU (best)",
+    "type": "Black-Box RNN",
+    "r2": 0.5798,
+    "mse": 0.4232,
+    "verdict": "\u274c Poor generalization",
+    "verdict_color": "var(--red)",
+    "is_best_row": false,
+    "r2_style": "color:var(--yellow)"
+  },
+  {
+    "model": "Causal Latent CA-NODE (z=32, old)",
+    "type": "Causal Forecasting (z=32)",
+    "r2": 0.5531,
+    "mse": 0.4526,
+    "verdict": "Superseded by z=64",
+    "verdict_color": "var(--text-muted)",
+    "is_best_row": false,
+    "r2_style": "color:var(--yellow)"
+  },
+  {
+    "model": "N4SID (40/10)",
+    "type": "Linear Subspace",
+    "r2": 0.4013,
+    "mse": 18586.0,
+    "verdict": "Linear baseline",
+    "verdict_color": "var(--text-muted)",
+    "is_best_row": false,
+    "r2_style": "color:var(--yellow)"
+  }
+]

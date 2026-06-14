@@ -25,7 +25,11 @@ sys.path.insert(0, str(REPO))
 
 from modeling.scripts.dashboard_common import manifest_to_entry, slugify  # noqa: E402
 from modeling.scripts.generate_experiment_pages import build_page  # noqa: E402
-from modeling.scripts.preflight import _completion_lock, _md_inline  # noqa: E402
+from modeling.scripts.preflight import (  # noqa: E402
+    _completion_artifacts,
+    _completion_lock,
+    _md_inline,
+)
 
 MALICIOUS = '<script>alert(1)</script> & "q" |pipe'
 
@@ -42,6 +46,36 @@ def test_md_inline_sanitizes_pipes_and_newlines():
     out = _md_inline("line1\nline2 | col")
     assert "\n" not in out
     assert "|" not in out.replace("\\|", "")  # only escaped pipes remain
+
+
+def test_completion_artifacts_versions_base_and_facts_not_heavy_renders(tmp_path):
+    """Option D: version dashboard.html (the base template) + JSON facts, but
+    NOT the regenerable experiment pages / plant PNGs."""
+    r = tmp_path / "results"
+    (r / "plants").mkdir(parents=True)
+    (r / "experiments").mkdir(parents=True)
+    exp = r / "myexp" / "run_00"
+    exp.mkdir(parents=True)
+    # versioned: base template + JSON facts
+    (r / "dashboard.html").write_text("<html></html>")
+    (r / "leaderboard.json").write_text("[]")
+    (r / "plants" / "plants.json").write_text("[]")
+    (r / "experiments" / "index.json").write_text("[]")
+    (exp / "val_metrics.json").write_text("{}")
+    # regenerable: must be excluded
+    (r / "experiments" / "foo.html").write_text("x")
+    (r / "plants" / "p_setup.png").write_bytes(b"x")
+
+    arts = _completion_artifacts(str(tmp_path), str(r / "myexp"))
+
+    assert "results/dashboard.html" in arts
+    assert "results/leaderboard.json" in arts
+    assert "results/plants/plants.json" in arts
+    assert "results/experiments/index.json" in arts
+    assert any(a.endswith("val_metrics.json") for a in arts)
+    # no heavy renders
+    assert not any(a.endswith("_setup.png") for a in arts)
+    assert not any(a.endswith(".html") and "experiments/" in a for a in arts)
 
 
 def test_completion_lock_is_mutually_exclusive(tmp_path):
