@@ -27,6 +27,7 @@ from modeling.scripts.dashboard_common import (
     RESULTS,
     SHARED_RESULTS,
     all_experiments,
+    no_plots_reason,
     png_to_data_uri,
     slugify,
 )
@@ -189,9 +190,13 @@ def build_page(entry: dict, lb: dict) -> str:
     if not ckpt_dir:
         pills.append('<span class="pill">metadata only</span>')
 
-    body_imgs = "\n".join(img_blocks) if img_blocks else (
-        '<div class="card muted small">No validation plots available for this experiment '
-        '(no saved checkpoint). Aggregate leaderboard metrics are shown above.</div>')
+    if img_blocks:
+        body_imgs = "\n".join(img_blocks)
+    else:
+        reason = _esc(no_plots_reason(entry) or "Validation plots are not available.")
+        body_imgs = (
+            f'<div class="card muted small"><strong>No validation plots.</strong> '
+            f'{reason} Aggregate leaderboard metrics are shown above.</div>')
 
     hyp_html = (f"""  <div class="card"><h3>Hypothesis / Notes</h3>
     <p class="muted">{_esc(hypothesis)}</p></div>""" if hypothesis else "")

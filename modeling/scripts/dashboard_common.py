@@ -70,6 +70,26 @@ def resolve_data(data_file: str | os.PathLike) -> Path:
     return SHARED_DATA / p
 
 
+# Model families for which validation_plots can run inference (kept here, torch-free,
+# so the page generator can explain *why* an experiment has no plots).
+SUPPORTED_MODEL_TYPES = {"canode", "latent_canode", "latent_node"}
+
+
+def no_plots_reason(entry: dict) -> str | None:
+    """Human-readable reason an experiment has no validation plots, or None if it
+    should have them. Used on the experiment page (L2)."""
+    cd = entry.get("checkpoint_dir")
+    if not cd or find_checkpoint(cd) is None:
+        return ("No saved checkpoint — this model was never persisted (the run kept "
+                "only logs/curves), so it can't be reloaded for validation.")
+    mt = entry.get("model_type", "")
+    if mt not in SUPPORTED_MODEL_TYPES:
+        return (f"Validation inference for model type “{mt or 'unknown'}” isn't "
+                f"implemented yet (only {', '.join(sorted(SUPPORTED_MODEL_TYPES))}).")
+    return ("Validation plots haven't been generated yet — run "
+            "`build_dashboard.py` / complete the experiment via preflight.")
+
+
 # ---------------------------------------------------------------------------
 # Dark theme palette (matches dashboard.html / existing plot styling)
 # ---------------------------------------------------------------------------

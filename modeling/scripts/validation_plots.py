@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -50,6 +51,7 @@ from modeling.scripts.dashboard_common import (  # noqa: E402
     RESULTS,
     SHARED_REPO,
     SHARED_RESULTS,
+    SUPPORTED_MODEL_TYPES,
     all_experiments,
     find_checkpoint,
     manifest_to_entry,
@@ -57,7 +59,7 @@ from modeling.scripts.dashboard_common import (  # noqa: E402
     slugify,
 )
 
-SUPPORTED = {"canode", "latent_canode", "latent_node"}
+SUPPORTED = SUPPORTED_MODEL_TYPES  # single source of truth in dashboard_common
 HORIZON = 200  # ms reset/window length, matches the dashboard convention
 
 
@@ -98,9 +100,31 @@ def _clean_state(sd: dict) -> dict:
     return {k.replace("_orig_mod.", ""): v for k, v in sd.items()}
 
 
+def _safe_torch_load(ckpt_path, device):
+    """Load a checkpoint, preferring the safe ``weights_only=True`` path (L1).
+
+    Our checkpoints embed numpy normalization stats, which ``weights_only=True``
+    rejects, so we fall back to a full (code-executing) load — but ONLY for
+    checkpoints under the trusted in-repo ``results/`` tree, never an arbitrary
+    external path. This removes the "load any .pt" footgun while still loading our
+    own training outputs.
+    """
+    try:
+        return torch.load(ckpt_path, map_location=device, weights_only=True)
+    except Exception:
+        rp = os.path.realpath(str(ckpt_path))
+        trusted = [os.path.realpath(str(SHARED_RESULTS)) + os.sep,
+                   os.path.realpath(str(RESULTS)) + os.sep]
+        if not any(rp.startswith(t) for t in trusted):
+            raise RuntimeError(
+                f"Refusing to full-load an untrusted checkpoint outside results/: {ckpt_path}"
+            )
+        return torch.load(ckpt_path, map_location=device, weights_only=False)
+
+
 def load_model(model_type: str, ckpt_path, device: str):
     """Instantiate the right model class and return (model, norms dict)."""
-    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
+    ckpt = _safe_torch_load(ckpt_path, device)
     state = _clean_state(ckpt["model_state"])
     if model_type == "canode":
         from modeling.models.canode import ControlAffineODE

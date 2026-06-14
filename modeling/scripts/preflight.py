@@ -685,6 +685,34 @@ def _require_eval_results(results_dir):
     basenames = [os.path.relpath(f, results_dir) for f in found[:5]]
     print(f"[preflight] \u2713 Found {len(found)} result file(s): {basenames}")
 
+    # L3: sanity-check the recorded R\u00b2 values so NaN/inf garbage doesn't silently
+    # poison the leaderboard. Warn (don't block) \u2014 some result files legitimately
+    # omit r2 (e.g. control experiments).
+    import math
+    bad, n_r2 = [], 0
+    for fp in found:
+        try:
+            with open(fp) as fh:
+                data = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            continue
+        records = data if isinstance(data, list) else [data]
+        for rec in records:
+            if not isinstance(rec, dict):
+                continue
+            r2 = rec.get("r2", rec.get("r2_200step", rec.get("val_r2")))
+            if r2 is None:
+                continue
+            n_r2 += 1
+            try:
+                if not math.isfinite(float(r2)):
+                    bad.append((os.path.relpath(fp, results_dir), r2))
+            except (TypeError, ValueError):
+                bad.append((os.path.relpath(fp, results_dir), r2))
+    if bad:
+        print(f"[preflight] \u26a0\ufe0f  {len(bad)}/{n_r2} result(s) have non-finite R\u00b2 "
+              f"(check before trusting the leaderboard): {bad[:3]}")
+
 
 def _run_dashboard_step(repo_root, module, extra, timeout=900):
     """Run one dashboard pipeline module via -m, with repo_root on PYTHONPATH."""

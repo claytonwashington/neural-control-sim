@@ -9,7 +9,9 @@ Findings grouped by severity.
 **M1 ✅ (Option D)** — version `dashboard.html` (the base template the pipeline
 mutates) + the JSON facts; the regenerable `experiments/*.html` pages and
 `plants/*.png` (the bulk of the bloat) are git-ignored and rebuilt via
-`build_dashboard.py`. Remaining: L1, L2, L3, L5 (low-severity cleanups).
+`build_dashboard.py`. **L1, L2, L3, L5 ✅** (guarded `torch.load`; accurate
+"why no plots" reason on pages; results.json R² sanity check; legacy
+`update_dashboard.main()` removed). All findings now resolved.
 
 _Last updated: 2026-06-13._
 
