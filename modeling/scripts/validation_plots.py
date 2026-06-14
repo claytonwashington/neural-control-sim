@@ -155,6 +155,14 @@ def load_model(model_type: str, ckpt_path, device: str):
             n_x=ckpt["n_x"], n_u=ckpt["n_u"], z_dim=ckpt["z_dim"],
             hidden_dim=ckpt["hidden"], n_layers=ckpt["n_layers"],
         )
+    elif model_type == "gru":
+        from modeling.models.sequence import GRUModel
+
+        # NB: checkpoint stores `n_layers`, but the constructor arg is `num_layers`.
+        model = GRUModel(
+            n_x=ckpt["n_x"], n_u=ckpt["n_u"],
+            hidden=ckpt["hidden"], num_layers=ckpt["n_layers"],
+        )
     else:
         raise ValueError(f"Unsupported model_type for inference: {model_type}")
 
@@ -192,6 +200,19 @@ def infer(model_type, model, x_n, u_n, dt, device, past_window=200):
             u_win = torch.tensor(u_n[:, t0:t1].T, dtype=torch.float32, device=device).unsqueeze(0)
             with torch.no_grad():
                 out = model.predict(x_win, u_win, tw, method="dopri5")
+                pred[:, t0:t1] = out[0].cpu().numpy().T
+
+    elif model_type == "gru":
+        # Reset to truth at each window start, like canode; GRU.predict takes
+        # x0 (B, n_x), t (T,), u (B, T, n_u) and returns (B, T, n_x).
+        t_win = torch.arange(HORIZON, dtype=torch.float32, device=device) * dt
+        for t0 in range(0, T - 1, HORIZON):
+            t1 = min(t0 + HORIZON, T)
+            tw = t_win[: t1 - t0]
+            x0 = torch.tensor(x_n[:, t0], dtype=torch.float32, device=device).unsqueeze(0)
+            u_win = torch.tensor(u_n[:, t0:t1].T, dtype=torch.float32, device=device).unsqueeze(0)
+            with torch.no_grad():
+                out = model.predict(x0, tw, u_win)
                 pred[:, t0:t1] = out[0].cpu().numpy().T
 
     elif model_type == "latent_canode":

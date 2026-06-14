@@ -72,7 +72,7 @@ def resolve_data(data_file: str | os.PathLike) -> Path:
 
 # Model families for which validation_plots can run inference (kept here, torch-free,
 # so the page generator can explain *why* an experiment has no plots).
-SUPPORTED_MODEL_TYPES = {"canode", "latent_canode", "latent_node"}
+SUPPORTED_MODEL_TYPES = {"canode", "latent_canode", "latent_node", "gru"}
 
 
 def no_plots_reason(entry: dict) -> str | None:
@@ -241,7 +241,9 @@ def _plant_id_for_data(data_file: str) -> str:
 EXPERIMENT_REGISTRY = [
     {
         "name": "Latent NODE (z=64, h256)",
-        "checkpoint_dir": "sweep_latent_node_40_10/run_05_z64_h256_l2_lr0.0005_dopri5",
+        # Checkpoint recovered via fit_latent_node (the original sweep never
+        # persisted model.pt); see results/latent_node_recovered/.
+        "checkpoint_dir": "latent_node_recovered",
         "model_type": "latent_node",
         "data_file": "data/training_trials.h5",
         "plant_id": "unidirectional_v0",
