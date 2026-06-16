@@ -126,7 +126,7 @@ def main():
             run_id = f"run_{idx:02d}_pw{config['past_window']}_h{config['hidden']}_lr{config['lr']}_{config['method']}"
             
             log_path = os.path.join(args.output_dir, f"{run_id}.log")
-            model_path = os.path.join(args.output_dir, f"{run_id}.pt")
+            model_path = os.path.join(args.output_dir, run_id, "model.pt")  # inside run dir (find_checkpoint expects <run>/model.pt)
 
             cmd = [
                 "python", "-m", "modeling.scripts.fit_latent_canode",

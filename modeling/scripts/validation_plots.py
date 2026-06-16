@@ -54,6 +54,7 @@ from modeling.scripts.dashboard_common import (  # noqa: E402
     SUPPORTED_MODEL_TYPES,
     all_experiments,
     find_checkpoint,
+    find_n4sid,
     manifest_to_entry,
     resolve_data,
     slugify,
@@ -234,6 +235,33 @@ def infer(model_type, model, x_n, u_n, dt, device, past_window=200):
     return pred
 
 
+def infer_n4sid(npz_path, x_test, u_test, horizon=HORIZON):
+    """Windowed forward-simulation of a fitted N4SID linear state-space model.
+
+    N4SID was fit on RAW firing rates (no normalization), so prediction is in raw
+    space. At each window we reset to truth: the initial state is estimated from
+    the true output at the window start (y0 = x[:, t0]), then the LSS is simulated
+    forward over the window — matching the 200 ms reset convention of the others.
+    """
+    from modeling.models.n4sid import N4SIDModel
+
+    d = np.load(npz_path)
+    m = N4SIDModel(n_states=int(d["A"].shape[0]))
+    m.A, m.B, m.C, m.D = d["A"], d["B"], d["C"], d["D"]
+    m.n_outputs = int(d["C"].shape[0])
+    m.n_inputs = int(d["B"].shape[1])
+    m.n_states = int(d["A"].shape[0])
+
+    n_ch, T = x_test.shape
+    pred = np.full((n_ch, T), np.nan, dtype=np.float32)
+    for t0 in range(0, T - 1, horizon):
+        t1 = min(t0 + horizon, T)
+        y0 = x_test[:, t0]          # (n_ch,)
+        u_win = u_test[:, t0:t1]    # (n_u, T_win)
+        pred[:, t0:t1] = m.predict(y0, u_win)
+    return pred
+
+
 # ---------------------------------------------------------------------------
 # Plotting
 # ---------------------------------------------------------------------------
@@ -380,7 +408,7 @@ def generate_validation_plots(entry: dict, device: str | None = None) -> dict | 
     if model_type not in SUPPORTED:
         print(f"  [skip] {name}: model_type '{model_type}' inference not implemented")
         return None
-    ckpt_path = find_checkpoint(ckpt_dir)
+    ckpt_path = find_n4sid(ckpt_dir) if model_type == "n4sid" else find_checkpoint(ckpt_dir)
     if ckpt_path is None:
         print(f"  [skip] {name}: checkpoint not found under {ckpt_dir}")
         return None
@@ -394,14 +422,19 @@ def generate_validation_plots(entry: dict, device: str | None = None) -> dict | 
     n_train = x_all.shape[0] - DEFAULT_TEST_TRIALS
     x_test, u_test = x_all[n_train], u_all[n_train]  # first held-out test trial
 
-    model, norms = load_model(model_type, ckpt_path, device)
-    x_n = (x_test - norms["x_mean"]) / norms["x_std"]
-    u_n = (u_test - norms["u_mean"]) / norms["u_std"]
-
-    print(f"  {name}: inferring ({model_type}, T={x_test.shape[1]}, dev={device}) ...")
-    pred_n = infer(model_type, model, x_n, u_n, dt, device, entry.get("past_window", 200))
-    x_pred = pred_n * norms["x_std"] + norms["x_mean"]
-    x_true = x_test
+    if model_type == "n4sid":
+        # Linear state-space model, fit on RAW rates (no normalization).
+        print(f"  {name}: inferring (n4sid LSS, T={x_test.shape[1]}, raw space) ...")
+        x_pred = infer_n4sid(str(ckpt_path), x_test, u_test)
+        x_true = x_test
+    else:
+        model, norms = load_model(model_type, ckpt_path, device)
+        x_n = (x_test - norms["x_mean"]) / norms["x_std"]
+        u_n = (u_test - norms["u_mean"]) / norms["u_std"]
+        print(f"  {name}: inferring ({model_type}, T={x_test.shape[1]}, dev={device}) ...")
+        pred_n = infer(model_type, model, x_n, u_n, dt, device, entry.get("past_window", 200))
+        x_pred = pred_n * norms["x_std"] + norms["x_mean"]
+        x_true = x_test
 
     # metrics
     overall = r2_score(x_true, x_pred)

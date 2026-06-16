@@ -79,6 +79,9 @@ STYLE = """
   .lb{position:fixed; inset:0; background:rgba(0,0,0,.92); display:none;
     align-items:center; justify-content:center; z-index:50; cursor:zoom-out}
   .lb img{max-width:96%; max-height:96%}
+  .ctbl{border-collapse:collapse; width:100%; font-size:.82rem; margin-top:10px}
+  .ctbl th,.ctbl td{border:1px solid var(--border); padding:5px 10px; text-align:left}
+  .ctbl th{color:var(--muted); font-weight:600}
 """
 
 LIGHTBOX_JS = """
@@ -110,6 +113,70 @@ def _img(path, title, caption):
       <img src="{png_to_data_uri(path)}" alt="{title}" onclick="zoom(this)">
       <div class="cap">{caption}</div>
     </div>"""
+
+
+# Control experiments (closed-loop, e.g. optoclamp) need a different "validation"
+# view: how well the controller tracks firing-rate targets, not true-vs-inferred.
+_CTRL_METRICS = [
+    ("tracking_rmse", "Tracking RMSE (Hz)"),
+    ("settling_time_ms", "Settling (ms)"),
+    ("steady_state_error", "SS error (Hz)"),
+    ("overshoot", "Overshoot (Hz)"),
+]
+_CTRL_PLOTS = [
+    ("optoclamp_comparison.png", "Tracking — controlled rate vs. target"),
+    ("optoclamp_rmse_comparison.png", "Tracking RMSE by controller × target"),
+]
+
+
+def _control_view(entry: dict) -> str:
+    """Closed-loop control view (tracking plots + metrics table) for a control
+    experiment, or "" if it isn't one / has no control results."""
+    rd = entry.get("results_dir") or ((entry.get("checkpoint_dir") or "").split("/")[0] or None)
+    if not rd:
+        return ""
+    base = next((root / rd for root in (RESULTS, SHARED_RESULTS)
+                 if (root / rd / "optoclamp_results.json").exists()), None)
+    if base is None:
+        return ""
+    with open(base / "optoclamp_results.json") as f:
+        res = json.load(f)
+
+    controllers = list(res.keys())
+    targets = []
+    for c in controllers:
+        for t in res[c].get("targets", {}):
+            if t not in targets:
+                targets.append(t)
+
+    def _fmt_m(v):
+        return f"{v:.2f}" if isinstance(v, (int, float)) else _esc(str(v))
+
+    rows = []
+    for t in targets:
+        for c in controllers:
+            tg = res[c].get("targets", {}).get(t, {})
+            tgt_hz = tg.get("target")
+            m = tg.get("metrics", {})
+            cells = "".join(f"<td>{_fmt_m(m.get(k))}</td>" for k, _ in _CTRL_METRICS)
+            tlabel = f"{_esc(t)}" + (f" ({tgt_hz:.0f} Hz)" if isinstance(tgt_hz, (int, float)) else "")
+            rows.append(f"<tr><td>{tlabel}</td><td>{_esc(c)}</td>{cells}</tr>")
+    header = "".join(f"<th>{lbl}</th>" for _, lbl in _CTRL_METRICS)
+    table = (f'<table class="ctbl"><thead><tr><th>Target</th><th>Controller</th>'
+             f'{header}</tr></thead><tbody>{"".join(rows)}</tbody></table>')
+
+    imgs = []
+    for png, title in _CTRL_PLOTS:
+        p = base / png
+        if p.exists():
+            imgs.append(_img(p, title, ""))
+
+    return (
+        '  <div class="card"><h3>🎛️ Closed-loop control performance</h3>'
+        '<p class="muted small">This is a control experiment, so "validation" means how well '
+        'the controller tracks firing-rate targets (lower RMSE / SS-error is better), not '
+        'true-vs-inferred rates. Per-step trajectories aren\'t persisted, so these are the '
+        f"run's saved figures and recorded metrics.</p>{table}</div>\n" + "\n".join(imgs))
 
 
 def build_page(entry: dict, lb: dict) -> str:
@@ -190,13 +257,19 @@ def build_page(entry: dict, lb: dict) -> str:
     if not ckpt_dir:
         pills.append('<span class="pill">metadata only</span>')
 
+    twin_subtext = ("True vs. inferred firing rates on the held-out test trial "
+                    "(40/10 split, seed 42).")
+    control_html = _control_view(entry)
     if img_blocks:
-        body_imgs = "\n".join(img_blocks)
+        body_imgs, val_subtext = "\n".join(img_blocks), twin_subtext
+    elif control_html:
+        body_imgs, val_subtext = control_html, "Closed-loop control tracking performance."
     else:
         reason = _esc(no_plots_reason(entry) or "Validation plots are not available.")
         body_imgs = (
             f'<div class="card muted small"><strong>No validation plots.</strong> '
             f'{reason} Aggregate leaderboard metrics are shown above.</div>')
+        val_subtext = twin_subtext
 
     hyp_html = (f"""  <div class="card"><h3>Hypothesis / Notes</h3>
     <p class="muted">{_esc(hypothesis)}</p></div>""" if hypothesis else "")
@@ -217,8 +290,7 @@ def build_page(entry: dict, lb: dict) -> str:
 {hyp_html}
 {plant_html}
     <h2 style="font-size:1.1rem; margin:26px 0 4px">Validation</h2>
-    <p class="muted small">True vs. inferred firing rates on the held-out test trial
-      (40/10 split, seed 42).</p>
+    <p class="muted small">{val_subtext}</p>
 {body_imgs}
   </div>
   <div class="lb" id="lb" onclick="closeLb()"><img id="lbimg" src=""></div>

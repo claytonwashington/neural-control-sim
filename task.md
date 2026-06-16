@@ -51,12 +51,24 @@ To ensure coordinate development across different agents (IDE, 2.0 CLI, Jules, G
   - Branch: `feature/digital-twin-phase1`
   - Agent: Antigravity
   - Added `modeling/wandb_utils.py` shared utilities. Integrated into `fit_canode.py`, `fit_gru.py`, `sweep_canode.py`.
-- `[x]` Dashboard: Plants page + per-experiment validation plots
-  - Branch: `feature/dashboard-validation`
-  - Worktree: `/snel/home/cbwash2/cleo-worktrees/dashboard-validation`
-  - Plants tab (excitatory + bidirectional 3D renders), per-experiment validation plots
-    (true-vs-inferred firing rates across channels + top PCs), clickable leaderboard pages.
-    One-command refresh: `python -m modeling.scripts.build_dashboard` (under `dtmodeling`).
+- `[x]` Dashboard validation system + harness hardening (merged to `modeling-dev`)
+  - **Plants page**: 3D renders of Plant 1 (excitatory v0) + Plant 3 (bidirectional v2,
+    ChR2-H134R + eNpHR3.0); Plant 2 (ChrimsonR+GtACR2) retired. See `dashboard_common.PLANTS`.
+  - **Per-experiment validation pages** (`results/experiments/<slug>.html`, linked from the
+    leaderboard): true-vs-inferred firing rates (channel heatmaps + top-variance traces + top PCs)
+    for `canode/latent_canode/latent_node/gru/n4sid`; **control view** (tracking + metrics) for
+    control experiments like optoclamp; pages explain *why* when plots are missing.
+  - **Preflight integration**: `preflight complete` auto-regenerates validation plots + page +
+    leaderboard and commits them. `preflight start --model-type` selects the inference path.
+    Run `complete` from the **main checkout on `modeling-dev`** under `dtmodeling`.
+  - **Harness hardening** (`docs/harness_improvements.md`): completion guard, HTML/markdown
+    escaping, completion flock + fetch/rebase/retry push + idempotent tail, and **artifact
+    strategy (Option D)** — version `dashboard.html` + JSON facts; regenerate the heavy
+    `experiments/*.html` / `plants/*.png` via `build_dashboard.py`.
+  - **Model coverage**: recovered the missing acausal Latent NODE checkpoint
+    (`results/latent_node_recovered/`, R²=0.941); added GRU + N4SID inference; all four
+    `sweep_*.py` now save `<run>/model.pt`.
+  - One-command refresh: `python -m modeling.scripts.build_dashboard` (under `dtmodeling`).
 
 ### Backlog — Ideas to Break the R²≈0.90 Ceiling
 

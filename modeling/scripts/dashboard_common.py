@@ -72,14 +72,32 @@ def resolve_data(data_file: str | os.PathLike) -> Path:
 
 # Model families for which validation_plots can run inference (kept here, torch-free,
 # so the page generator can explain *why* an experiment has no plots).
-SUPPORTED_MODEL_TYPES = {"canode", "latent_canode", "latent_node", "gru"}
+SUPPORTED_MODEL_TYPES = {"canode", "latent_canode", "latent_node", "gru", "n4sid"}
+
+
+def find_n4sid(rel_dir: str | os.PathLike) -> Path | None:
+    """Locate an N4SID ``n4sid_model.npz`` (linear state-space, not a torch ckpt)."""
+    for root in (SHARED_RESULTS, RESULTS):
+        p = root / rel_dir / "n4sid_model.npz"
+        if p.exists():
+            return p
+    return None
+
+
+def entry_has_checkpoint(entry: dict) -> bool:
+    """Whether an experiment has a loadable model (torch model.pt, or N4SID npz)."""
+    cd = entry.get("checkpoint_dir")
+    if not cd:
+        return False
+    if entry.get("model_type") == "n4sid":
+        return find_n4sid(cd) is not None
+    return find_checkpoint(cd) is not None
 
 
 def no_plots_reason(entry: dict) -> str | None:
     """Human-readable reason an experiment has no validation plots, or None if it
     should have them. Used on the experiment page (L2)."""
-    cd = entry.get("checkpoint_dir")
-    if not cd or find_checkpoint(cd) is None:
+    if not entry_has_checkpoint(entry):
         return ("No saved checkpoint — this model was never persisted (the run kept "
                 "only logs/curves), so it can't be reloaded for validation.")
     mt = entry.get("model_type", "")
@@ -286,11 +304,11 @@ EXPERIMENT_REGISTRY = [
     },
     {
         "name": "N4SID (40/10)",
-        "checkpoint_dir": None,
+        "checkpoint_dir": "n4sid_40_10",  # holds n4sid_model.npz (A/B/C/D matrices)
         "model_type": "n4sid",
         "data_file": "data/training_trials.h5",
         "plant_id": "unidirectional_v0",
-        "note": "Linear subspace identification baseline (no torch checkpoint).",
+        "note": "Linear subspace identification baseline (state-space .npz, not a torch ckpt).",
     },
 ]
 
@@ -339,6 +357,7 @@ def manifest_to_entry(exp_dir: Path | str) -> dict | None:
     return {
         "name": man.get("experiment_name", rel_exp),
         "checkpoint_dir": checkpoint_dir,
+        "results_dir": rel_exp,  # for control experiments: where the control assets live
         "model_type": man.get("model_type", "latent_canode"),
         "data_file": data_file,
         "plant_id": _plant_id_for_data(data_file),

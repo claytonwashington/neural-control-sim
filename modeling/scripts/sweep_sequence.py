@@ -93,7 +93,7 @@ def main():
                 run_id += "_compiled"
 
             log_path = os.path.join(args.output_dir, f"{run_id}.log")
-            model_path = os.path.join(args.output_dir, f"{run_id}.pt")
+            model_path = os.path.join(args.output_dir, run_id, "model.pt")  # inside run dir (find_checkpoint expects <run>/model.pt)
 
             # Build command
             cmd = [

@@ -77,6 +77,9 @@ Every experiment **MUST** produce:
 - **R²=0.9387** 🏆 | Inference: 71ms
 - Encoder sees full 200ms window (bidirectional GRU)
 - 6-run sweep over z∈{32,64}, h∈{128,256}, lr∈{5e-4,1e-3}
+- **Checkpoint recovered** (2026-06): the original sweep saved only a training curve, so the
+  best `model.pt` was lost. Re-ran `fit_latent_node` (same config) → `results/latent_node_recovered/`
+  (validation test-trial R²=0.9408). All `sweep_*.py` now persist `<run>/model.pt` to prevent recurrence.
 - **Key finding**: Latent space compression (50 channels → 64 dims) dramatically improves generalization
 
 ### Experiment 4. Channel-Level CA-NODE Sweeps
