@@ -6,6 +6,7 @@ Cleo is a Python framework built on top of [Brian 2](https://brian2.readthedocs.
 
 > [!IMPORTANT]
 > Before starting any work, check these files:
+> - `KNOWN_ISSUES.md` — known bugs, machine quirks, and limitations
 > - `task.md` — active task list with links to detailed subtasks
 > - `branches.md` — which agent owns which branch
 > - `tasks/` — detailed checklists and implementation plans per task
@@ -341,6 +342,15 @@ When a subagent completes a sweep or training run, it MUST:
 4. The **parent agent** (or a dedicated results-digestion agent) then performs steps 2-6 above
 
 **Never leave results un-digested.** If a sweep finishes but the dashboard hasn't been updated, the results effectively don't exist for the project.
+
+#### Auditing the Logging and Dashboard Push
+
+To audit whether an experiment was properly logged and digested:
+1. Check the `results/<experiment>/` directory for `sweep_summary.json` and generated plots.
+2. Open `results/dashboard.html` and verify the metrics and hyperparameters exactly match the JSON summary.
+3. Check `ideas/modeling.md` (or relevant idea file) to confirm the experiment status is updated (`✅ COMPLETE` or `❌`).
+4. Ensure the changes were committed to git (e.g., `git log -1` to see the results commit).
+5. If any of these are missing, the agent MUST run the digestion protocol before moving on to new work.
 
 #### Standardization Rules
 

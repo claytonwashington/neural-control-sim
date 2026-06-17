@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import multiprocessing as mp
 import os
 import time
 
@@ -32,6 +33,7 @@ import matplotlib.pyplot as plt
 
 import brian2.only as b2
 from brian2 import ms, second, Hz, mwatt, mm
+b2.prefs.codegen.runtime.cython.cache_dir = f'/tmp/brian2_cache_{os.getpid()}'
 
 import cleo
 from cleo.ioproc import LatencyIOProcessor, exp_firing_rate_estimate
@@ -137,6 +139,88 @@ def compute_metrics(rates: np.ndarray, target: float,
         "steady_state_error": float(steady_state_error),
         "overshoot": float(overshoot),
         "baseline_std": float(baseline_std),
+    }
+
+
+# ─── Worker function for parallel target evaluation ──────────────────────
+
+def _run_mpc_target(kwargs):
+    """Run a single MPC target evaluation in a worker process.
+
+    Must be top-level for pickling. Sets up its own Brian2 cache.
+    """
+    import os
+    import brian2.only as b2
+    b2.prefs.codegen.runtime.cython.cache_dir = f'/tmp/brian2_cache_{os.getpid()}'
+
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+    from modeling.plant import build_plant_v2
+    from modeling.controllers.node_mpc import PeriodicNeuralODEMPC
+    from modeling.controllers.node_mpc import AdaptivePeriodicNeuralODEMPC
+
+    frac = kwargs["frac"]
+    target = kwargs["target"]
+    horizon = kwargs["horizon"]
+    args_dict = kwargs["args"]
+
+    print(f"\n  MPC (H={horizon}) @ {frac*100:.0f}% target ({target:.1f} Hz)...")
+
+    # Build target rate vector (broadcast to all channels)
+    target_rate_vec = np.full(50, target)
+
+    sim, devices = build_plant_v2(seed=args_dict["seed"])
+
+    # Choose controller class
+    ControllerClass = (AdaptivePeriodicNeuralODEMPC
+                       if args_dict.get("adaptive", False)
+                       else PeriodicNeuralODEMPC)
+    extra_kwargs = {}
+    if args_dict.get("adaptive", False):
+        extra_kwargs["adapt_lr"] = args_dict.get("adapt_lr", 1e-5)
+        extra_kwargs["adapt_params"] = args_dict.get("adapt_params", "g+decoder")
+        extra_kwargs["adapt_grad_clip"] = args_dict.get("adapt_grad_clip", 1.0)
+
+    ctrl = ControllerClass(
+        checkpoint_path=args_dict["model_checkpoint"],
+        target_rate=target_rate_vec,
+        sample_period_ms=1.0,
+        mpc_horizon=horizon,
+        mpc_iters=args_dict["mpc_iters"],
+        mpc_batch_size=args_dict["mpc_batch_size"],
+        mpc_solver=args_dict.get("mpc_solver", "euler"),
+        compute_delay_ms=args_dict["mpc_delay"],
+        u_max=50.0,
+        device=args_dict["device"],
+        warmup_steps=200,
+        bidirectional=True,
+        light_name_exc="fiber_exc",
+        light_name_inh="fiber_inh",
+        reencode_period=args_dict["reencode_k"],
+        lambda_u=args_dict["lambda_u"],
+        **extra_kwargs,
+    )
+    sim.set_io_processor(ctrl)
+
+    t0 = time.time()
+    sim.run(200 * ms)   # baseline (warmup / fill encoder buffer)
+    sim.run(1000 * ms)  # clamping
+    sim.run(200 * ms)   # recovery
+    elapsed = time.time() - t0
+
+    results = ctrl.get_results()
+    metrics = compute_metrics(results["rates"], target, 200, 1200)
+    metrics["wall_time_s"] = elapsed
+
+    print(f"    RMSE={metrics['tracking_rmse']:.2f}, "
+          f"Settling={metrics['settling_time_ms']:.0f}ms, "
+          f"Wall time={elapsed:.1f}s")
+
+    return {
+        "frac": frac,
+        "target": target,
+        "metrics": metrics,
     }
 
 
@@ -249,66 +333,63 @@ def run_optoclamp(args):
         "targets": pi_results,
     }
 
-    # ── Phase 2: Neural ODE MPC ─────────────────────────────────────────
+    # ── Phase 2: Neural ODE MPC (parallel targets) ──────────────────────
     if args.model_checkpoint:
         print("\n" + "=" * 60)
-        print("Phase 2: Neural ODE MPC (horizon sweep)")
+        print("Phase 2: Neural ODE MPC (parallel targets)")
+        print(f"  Batch size: {args.mpc_batch_size}")
         print("=" * 60)
 
-        from modeling.controllers.node_mpc import PeriodicNeuralODEMPC
+        # Serialize args for worker processes
+        args_dict = {
+            "model_checkpoint": args.model_checkpoint,
+            "mpc_iters": args.mpc_iters,
+            "mpc_batch_size": args.mpc_batch_size,
+            "mpc_solver": args.mpc_solver,
+            "mpc_delay": args.mpc_delay,
+            "reencode_k": args.reencode_k,
+            "lambda_u": args.lambda_u,
+            "device": args.device,
+            "seed": args.seed,
+            "adaptive": args.adaptive,
+            "adapt_lr": args.adapt_lr,
+            "adapt_params": args.adapt_params,
+            "adapt_grad_clip": args.adapt_grad_clip,
+        }
 
         for horizon in args.mpc_horizons:
             print(f"\n  --- MPC horizon={horizon} ---")
-            mpc_results = {}
-            for frac, target in zip(target_fractions, targets):
-                print(f"\n  MPC (H={horizon}) @ {frac*100:.0f}% target ({target:.1f} Hz)...")
 
-                # Build target rate vector (broadcast to all channels)
-                target_rate_vec = np.full(50, target)
-
-                sim, devices = build_plant_v2(seed=args.seed)
-                # Re-encoding period K=20 chosen as default based on prior
-                # experiments (Exp 22)
-                ctrl = PeriodicNeuralODEMPC(
-                    checkpoint_path=args.model_checkpoint,
-                    target_rate=target_rate_vec,
-                    sample_period_ms=1.0,
-                    mpc_horizon=horizon,
-                    mpc_iters=args.mpc_iters,
-                    compute_delay_ms=args.mpc_delay,
-                    u_max=50.0,
-                    device=args.device,
-                    warmup_steps=200,
-                    bidirectional=True,
-                    light_name_exc="fiber_exc",
-                    light_name_inh="fiber_inh",
-                    reencode_period=args.reencode_k,
-                    lambda_u=args.lambda_u,
-                )
-                sim.set_io_processor(ctrl)
-
-                t0 = time.time()
-                sim.run(200 * ms)   # baseline (warmup / fill encoder buffer)
-                sim.run(1000 * ms)  # clamping
-                sim.run(200 * ms)   # recovery
-                elapsed = time.time() - t0
-
-                results = ctrl.get_results()
-                metrics = compute_metrics(results["rates"], target, 200, 1200)
-                metrics["wall_time_s"] = elapsed
-
-                mpc_results[f"{int(frac*100)}pct"] = {
+            # Build worker kwargs for all 3 targets
+            worker_args = [
+                {
+                    "frac": frac,
                     "target": target,
-                    "metrics": metrics,
+                    "horizon": horizon,
+                    "args": args_dict,
                 }
-                print(f"    RMSE={metrics['tracking_rmse']:.2f}, "
-                      f"Settling={metrics['settling_time_ms']:.0f}ms, "
-                      f"Wall time={elapsed:.1f}s")
+                for frac, target in zip(target_fractions, targets)
+            ]
+
+            # Run targets in parallel (3 workers, same GPU)
+            ctx = mp.get_context("spawn")
+            with ctx.Pool(processes=len(target_fractions)) as pool:
+                target_results = pool.map(_run_mpc_target, worker_args)
+
+            # Collect results
+            mpc_results = {}
+            for res in target_results:
+                frac = res["frac"]
+                mpc_results[f"{int(frac*100)}pct"] = {
+                    "target": res["target"],
+                    "metrics": res["metrics"],
+                }
 
             all_results[f"NODE_MPC_H{horizon}"] = {
                 "config": {
                     "horizon": horizon,
                     "iters": args.mpc_iters,
+                    "batch_size": args.mpc_batch_size,
                     "delay_ms": args.mpc_delay,
                     "reencode_k": args.reencode_k,
                 },
@@ -414,5 +495,20 @@ if __name__ == "__main__":
                         help="MPC compute delay in ms")
     parser.add_argument("--lambda-u", type=float, default=0.01,
                         help="MPC control effort penalty (default: 0.01)")
+    parser.add_argument("--mpc-batch-size", type=int, default=1,
+                        help="Number of parallel MPC candidates (default: 1, "
+                             "set >1 for batched multi-start)")
+    parser.add_argument("--mpc-solver", type=str, default="euler",
+                        choices=["euler", "dopri5"],
+                        help="ODE solver for MPC rollout (default: euler)")
+    parser.add_argument("--adaptive", action="store_true",
+                        help="Enable online adaptive fine-tuning of g+decoder")
+    parser.add_argument("--adapt-lr", type=float, default=1e-5,
+                        help="Learning rate for online adaptation")
+    parser.add_argument("--adapt-params", type=str, default="g+decoder",
+                        choices=["decoder", "g+decoder", "f+g+decoder"],
+                        help="Which model params to adapt online")
+    parser.add_argument("--adapt-grad-clip", type=float, default=1.0,
+                        help="Gradient clipping for adaptation")
     args = parser.parse_args()
     run_optoclamp(args)

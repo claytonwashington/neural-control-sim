@@ -425,7 +425,7 @@
       <h1>⚡ Cleo Digital Twin — Experiment Dashboard</h1>
       <div class="subtitle">Control-Affine Neural ODE System Identification<span class="split-badge">Standardized 40/10 Split · seed=42</span></div>
     </div>
-    <div class="timestamp" id="timestamp">Last updated: 2026-06-08 13:22 EDT</div>
+    <div class="timestamp" id="timestamp">Last updated: 2026-06-11 13:33 EDT</div>
   </div>
 </header>
 
@@ -1078,81 +1078,11 @@
           <!-- LEADERBOARD_ROWS_START -->
           <tbody>
             <tr class="best-row">
-              <td class="td-label">Latent NODE (z=64, h256)</td>
-              <td>Non-Causal Latent ODE</td>
-              <td><div class="r2-cell"><span style="color:var(--green);font-weight:700">0.9387</span></div></td>
-              <td>0.0614</td>
-              <td style="color:var(--green)">🏆 BEST</td>
-            </tr>
-            <tr class="best-row">
-              <td class="td-label">Latent NODE (z=64, h128)</td>
-              <td>Non-Causal Latent ODE</td>
-              <td><div class="r2-cell"><span style="color:var(--green);font-weight:700">0.9340</span></div></td>
-              <td>0.0665</td>
-              <td style="color:var(--green)">🥈</td>
-            </tr>
-            <tr>
-              <td class="td-label">CA-NODE (no skip — baseline)</td>
-              <td>Channel-Level ODE (dopri5)</td>
-              <td><div class="r2-cell"><span style="color:var(--green)">0.9009</span></div></td>
-              <td>0.0981</td>
-              <td style="color:var(--cyan)">✅ Real-time · Best Channel-Level</td>
-            </tr>
-            <tr>
-              <td class="td-label">Discrete CA-NODE (Euler, lr=5e-5)</td>
-              <td>Euler-Discretized CA</td>
-              <td><div class="r2-cell"><span>0.8968</span></div></td>
-              <td>0.1022</td>
-              <td style="color:var(--text-muted)">Near-ODE with slow LR</td>
-            </tr>
-            <tr>
-              <td class="td-label">CA-NODE (skip linear, swd=1.0)</td>
-              <td>Channel-Level ODE + Skips</td>
-              <td><div class="r2-cell"><span>0.8911</span></div></td>
-              <td>0.1080</td>
-              <td style="color:var(--yellow)">❌ Overfitting</td>
-            </tr>
-            <tr>
-              <td class="td-label">Multi-rate CA-NODE (M=1)</td>
-              <td>Multi-Rate ODE (dopri5)</td>
-              <td><div class="r2-cell"><span>0.8907</span></div></td>
-              <td>0.1084</td>
-              <td style="color:var(--text-muted)">❌ Sub-stepping = zero benefit</td>
-            </tr>
-            <tr>
-              <td class="td-label">Bidirectional Aligned Distillation</td>
+              <td class="td-label">Bidir V2 Aligned Distillation</td>
               <td>run_05_a0.9_pw200_lr0.001</td>
-              <td><div class="r2-cell"><span>0.8613</span></div></td>
-              <td>0.1341</td>
-              <td style="color:#ff9800">BELOW BASELINE</td>
-            </tr>
-            <tr class="best-row">
-              <td class="td-label">Causal Latent CA-NODE (z=64, lr=3e-4) 🆕</td>
-              <td>Causal Latent ODE</td>
-              <td><div class="r2-cell"><span style="color:var(--green);font-weight:700">0.8252</span></div></td>
-              <td>0.1750</td>
-              <td style="color:var(--green)">✅ 173ms · Best Deployable Latent</td>
-            </tr>
-            <tr>
-              <td class="td-label">GRU (best)</td>
-              <td>Black-Box RNN</td>
-              <td><div class="r2-cell"><span style="color:var(--yellow)">0.5798</span></div></td>
-              <td>0.4232</td>
-              <td style="color:var(--red)">❌ Poor generalization</td>
-            </tr>
-            <tr>
-              <td class="td-label">Causal Latent CA-NODE (z=32, old)</td>
-              <td>Causal Forecasting (z=32)</td>
-              <td><div class="r2-cell"><span style="color:var(--yellow)">0.5531</span></div></td>
-              <td>0.4526</td>
-              <td style="color:var(--text-muted)">Superseded by z=64</td>
-            </tr>
-            <tr>
-              <td class="td-label">N4SID (40/10)</td>
-              <td>Linear Subspace</td>
-              <td><div class="r2-cell"><span style="color:var(--yellow)">0.4013</span></div></td>
-              <td>18,586</td>
-              <td style="color:var(--text-muted)">Linear baseline</td>
+              <td><div class="r2-cell"><span style="font-weight:bold;color:#4caf50">0.9173</span></div></td>
+              <td>0.0790</td>
+              <td style="color:#4caf50">NEW BEST</td>
             </tr>
           </tbody>
           <!-- LEADERBOARD_ROWS_END -->

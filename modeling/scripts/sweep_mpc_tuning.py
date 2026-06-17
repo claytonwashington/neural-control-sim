@@ -31,6 +31,15 @@ def main():
     parser.add_argument("--reencode-k", type=int, default=20)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--mpc-batch-size", type=int, default=1,
+                        help="Number of parallel MPC candidates (default: 1)")
+    parser.add_argument("--mpc-solver", type=str, default="euler",
+                        choices=["euler", "dopri5"],
+                        help="ODE solver for MPC rollout")
+    parser.add_argument("--adaptive", action="store_true",
+                        help="Enable online adaptive fine-tuning")
+    parser.add_argument("--adapt-lr", type=float, default=1e-5)
+    parser.add_argument("--adapt-params", type=str, default="g+decoder")
     args = parser.parse_args()
 
     gpu_ids = [int(g) for g in args.gpu_ids.split(",")]
@@ -85,7 +94,13 @@ def main():
             "--mpc-iters", str(config["mpc_iters"]),
             "--lambda-u", str(config["lambda_u"]),
             "--seed", str(args.seed),
+            "--mpc-batch-size", str(args.mpc_batch_size),
+            "--mpc-solver", args.mpc_solver,
         ]
+        if args.adaptive:
+            cmd.extend(["--adaptive",
+                        "--adapt-lr", str(args.adapt_lr),
+                        "--adapt-params", args.adapt_params])
 
         env = os.environ.copy()
         env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)

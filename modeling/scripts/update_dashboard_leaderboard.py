@@ -7,6 +7,12 @@ from datetime import datetime
 import argparse
 
 def _update_leaderboard_from_results(repo_root, results_dir):
+    try:
+        return _update_leaderboard_from_results_ORIG(repo_root, results_dir)
+    except Exception as e:
+        print(f"WARNING: Leaderboard update skipped: {e}")
+
+def _update_leaderboard_from_results_ORIG(repo_root, results_dir):
     """Add entries from a results directory to leaderboard.json."""
     import glob
     results_dir_abs = os.path.join(repo_root, results_dir) if not os.path.isabs(results_dir) else results_dir

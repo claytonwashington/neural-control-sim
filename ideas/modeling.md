@@ -463,3 +463,38 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/(main)`
 - Hypothesis: MPC with sign-splitting outperforms PI on v2 plant at all target levels
 
+### Experiment 33. MPC with dopri5 Integration
+**Status**: Not started
+**Branch/Worktree**: TBD
+**Results dir**: `results/bidir_v2_mpc_dopri5/`
+- Hypothesis: Using dopri5 (adaptive ODE solver) instead of Euler during MPC rollout will reduce train/control mismatch and improve MPC tracking RMSE, since the model was trained with dopri5
+- Compare: MPC with dopri5 rollout vs Euler rollout (Exp 32), same params (iters=200, lambda_u=0.01, H=50, K=20, B=16)
+- Expected: Lower tracking RMSE due to more accurate ODE integration during planning
+
+
+### Experiment 34. Euler-Trained Latent CA-NODE for Plant 3
+**Status**: Not started
+**Branch/Worktree**: TBD
+**Results dir**: `results/bidir_v2_euler_trained/`
+- Hypothesis: Training the latent CA-NODE with Euler integration (instead of dopri5) will produce a model whose dynamics are more faithful when evaluated with Euler integration during MPC, eliminating the train/control solver mismatch
+- Method: Retrain aligned distillation (same as Exp 29) but with method='euler' and dt=1ms instead of method='dopri5'
+- Compare: R² of Euler-trained model vs dopri5-trained model (Exp 29, R²=0.917), then MPC performance
+
+
+### Experiment 35. K=1 Re-Encoding MPC Diagnostic
+**Status**: Not started
+**Branch/Worktree**: TBD
+**Results dir**: `results/bidir_v2_mpc_k1_diagnostic/`
+- Hypothesis: Re-encoding every step (K=1) will significantly improve MPC tracking by eliminating latent state drift between re-encodings. If K=1 MPC beats K=20 MPC but still loses to PI, the dynamics model accuracy is the bottleneck. If K=1 MPC beats PI, state estimation was the bottleneck.
+- Method: Run MPC optoclamp with K=1, best params (iters=200, lambda_u=0.01, H=50, B=16), compare to K=20 and PI
+- Note: K=1 is not realistic for deployment (GRU encoder every 1ms is too slow) but serves as a diagnostic
+
+
+### Experiment 36. Online Adaptive MPC (g+decoder fine-tuning)
+**Status**: Not started
+**Branch/Worktree**: TBD
+**Results dir**: `results/bidir_v2_adaptive_mpc/`
+- Hypothesis: Fine-tuning the control-sensitivity mapping g(z) and decoder during closed-loop control will improve MPC tracking by adapting the model to the actual plant dynamics in real-time
+- Method: At each control step, compute prediction error (predicted rate vs observed rate) and update g(z) + decoder weights via Adam with lr=1e-5 and gradient clipping=1.0. Then solve MPC with the updated model. Compare to frozen-model MPC and PI.
+- Expected: Adaptation loss should decrease over the trial; tracking RMSE should improve relative to frozen MPC
+
