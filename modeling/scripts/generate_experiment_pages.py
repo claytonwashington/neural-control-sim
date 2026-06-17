@@ -125,6 +125,7 @@ _CTRL_METRICS = [
 ]
 _CTRL_PLOTS = [
     ("optoclamp_comparison.png", "Tracking — controlled rate vs. target"),
+    ("optoclamp_control_signals.png", "Control signal (optogenetic input) over time"),
     ("optoclamp_rmse_comparison.png", "Tracking RMSE by controller × target"),
 ]
 

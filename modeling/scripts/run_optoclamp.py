@@ -30,10 +30,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-import brian2.only as b2
-from brian2 import ms, second, Hz, mwatt, mm
+from brian2 import ms, Hz, mwatt, mm
 
-import cleo
 from cleo.ioproc import LatencyIOProcessor, exp_firing_rate_estimate
 
 import sys
@@ -160,6 +158,10 @@ def run_optoclamp(args):
     print(f"  Target rates: {[f'{t:.1f} Hz ({f*100:.0f}%)' for t, f in zip(targets, target_fractions)]}")
 
     all_results = {}
+    # Per (controller, target) time series, persisted so the (expensive) closed-loop
+    # run never has to be repeated just to re-plot. mean_rate: (n_steps,);
+    # u: (n_steps, n_u) optogenetic input.
+    trajectories: dict[tuple[str, str], dict] = {}
 
     # ── Phase 1: PI Controller ──────────────────────────────────────────
     print("\n" + "=" * 60)
@@ -230,10 +232,12 @@ def run_optoclamp(args):
 
         results = ctrl.get_results()
         metrics = compute_metrics(results["rates"], target, 200, 1200)
-        pi_results[f"{int(frac*100)}pct"] = {
+        tgt_key = f"{int(frac*100)}pct"
+        pi_results[tgt_key] = {
             "target": target,
             "metrics": metrics,
         }
+        trajectories[("PI", tgt_key)] = _extract_trajectory(results, target)
         print(f"    RMSE={metrics['tracking_rmse']:.2f}, "
               f"Settling={metrics['settling_time_ms']:.0f}ms")
 
@@ -281,10 +285,12 @@ def run_optoclamp(args):
             metrics = compute_metrics(results["rates"], target, 200, 1200)
             metrics["wall_time_s"] = elapsed
 
-            mpc_results[f"{int(frac*100)}pct"] = {
+            tgt_key = f"{int(frac*100)}pct"
+            mpc_results[tgt_key] = {
                 "target": target,
                 "metrics": metrics,
             }
+            trajectories[("NODE_MPC", tgt_key)] = _extract_trajectory(results, target)
             print(f"    RMSE={metrics['tracking_rmse']:.2f}, "
                   f"Settling={metrics['settling_time_ms']:.0f}ms, "
                   f"Wall time={elapsed:.1f}s")
@@ -298,14 +304,17 @@ def run_optoclamp(args):
             "targets": mpc_results,
         }
 
-    # ── Save results ────────────────────────────────────────────────────
+    # ── Save results + trajectories ─────────────────────────────────────
     results_path = os.path.join(args.output_dir, "optoclamp_results.json")
     with open(results_path, "w") as f:
         json.dump(all_results, f, indent=2, default=str)
     print(f"\nResults saved to {results_path}")
 
-    # ── Generate comparison plots ───────────────────────────────────────
-    _plot_comparison(all_results, targets, target_fractions, args.output_dir)
+    _save_trajectories(trajectories, args.output_dir)
+
+    # ── Generate plots (from the persisted trajectories) ────────────────
+    _plot_comparison(all_results, trajectories, targets, target_fractions, args.output_dir)
+    _plot_control_signals(trajectories, targets, target_fractions, args.output_dir)
     print(f"Plots saved to {args.output_dir}/")
 
     # ── Summary ─────────────────────────────────────────────────────────
@@ -321,63 +330,153 @@ def run_optoclamp(args):
                   f"{m['settling_time_ms']:<12.0f} {m['steady_state_error']:<10.2f}")
 
 
-def _plot_comparison(all_results, targets, fracs, output_dir):
-    """Generate comparison plots for all controllers and targets."""
-    fig, axes = plt.subplots(len(fracs), 1, figsize=(12, 4 * len(fracs)),
-                              sharex=True)
+CTRL_COLORS = {"PI": "#3b82f6", "NODE_MPC": "#ef4444", "LDS_LQR": "#10b981"}
+PHASES = (200, 1200, 1400)  # baseline_end, clamp_end, recovery_end (ms; dt=1ms)
+
+
+def _extract_trajectory(results, target):
+    """Pull the persistable time series out of a controller's get_results()."""
+    rates = results.get("rates", np.array([]))
+    mean_rate = rates.mean(axis=1) if getattr(rates, "size", 0) else np.array([])
+    u = results.get("u", np.array([]))
+    return {
+        "target": float(target),
+        "mean_rate": np.asarray(mean_rate, dtype=np.float32),
+        "u": np.asarray(u, dtype=np.float32),
+    }
+
+
+def _save_trajectories(trajectories, output_dir, dt_ms=1.0, phases=PHASES):
+    """Persist every (controller, target) time series to one .npz, so figures can
+    be regenerated later WITHOUT re-running the (slow) closed-loop experiment."""
+    if not trajectories:
+        return
+    arrays = {"dt_ms": np.asarray(dt_ms, dtype=np.float32),
+              "phases": np.asarray(phases, dtype=np.int32)}
+    meta = {}
+    for (ctrl, tgt), d in trajectories.items():
+        key = f"{ctrl}__{tgt}"
+        arrays[f"{key}__mean_rate"] = d["mean_rate"]
+        arrays[f"{key}__u"] = d["u"]
+        meta[key] = {"controller": ctrl, "target": tgt, "target_hz": d["target"]}
+    arrays["meta_json"] = np.asarray(json.dumps(meta))
+    path = os.path.join(output_dir, "optoclamp_trajectories.npz")
+    np.savez_compressed(path, **arrays)
+    print(f"Trajectories saved to {path} ({len(trajectories)} runs)")
+
+
+def load_trajectories(npz_path):
+    """Inverse of _save_trajectories -> (trajectories, dt_ms, phases)."""
+    d = np.load(npz_path, allow_pickle=False)
+    meta = json.loads(str(d["meta_json"]))
+    trajectories = {
+        (m["controller"], m["target"]): {
+            "target": m["target_hz"],
+            "mean_rate": d[f"{key}__mean_rate"],
+            "u": d[f"{key}__u"],
+        }
+        for key, m in meta.items()
+    }
+    return trajectories, float(d["dt_ms"]), tuple(int(p) for p in d["phases"])
+
+
+def _plot_comparison(all_results, trajectories, targets, fracs, output_dir,
+                     dt_ms=1.0, phases=PHASES):
+    """Rate-tracking trajectories (controlled population rate vs. target) per
+    target, plus the RMSE bar chart."""
+    fig, axes = plt.subplots(len(fracs), 1, figsize=(12, 3.4 * len(fracs)), sharex=True)
     if len(fracs) == 1:
         axes = [axes]
-
-    colors = {"PI": "#3b82f6", "NODE_MPC": "#ef4444", "LDS_LQR": "#10b981"}
-
+    b_end, c_end, r_end = phases
     for ax, frac, target in zip(axes, fracs, targets):
-        ax.axhline(target, color="gray", linestyle="--", alpha=0.5, label="Target")
-        ax.axvspan(0, 200, alpha=0.1, color="blue", label="Baseline")
-        ax.axvspan(200, 1200, alpha=0.1, color="green", label="Clamp")
-        ax.axvspan(1200, 1400, alpha=0.1, color="orange", label="Recovery")
-
-        for ctrl_name, ctrl_data in all_results.items():
-            tgt_key = f"{int(frac*100)}pct"
-            if tgt_key in ctrl_data["targets"]:
-                m = ctrl_data["targets"][tgt_key]["metrics"]
-                rmse = m["tracking_rmse"]
-                ax.text(0.98, 0.95, f"{ctrl_name}: RMSE={rmse:.2f}",
-                        transform=ax.transAxes, ha="right", va="top",
-                        fontsize=9, color=colors.get(ctrl_name, "black"))
-
-        ax.set_ylabel("Population Mean Rate (Hz)")
+        ax.axhline(target, color="gray", ls="--", alpha=0.6, label="Target")
+        ax.axvspan(0, b_end, alpha=0.06, color="blue")
+        ax.axvspan(b_end, c_end, alpha=0.06, color="green")
+        ax.axvspan(c_end, r_end, alpha=0.06, color="orange")
+        tgt_key = f"{int(frac*100)}pct"
+        for ctrl in CTRL_COLORS:
+            tr = trajectories.get((ctrl, tgt_key))
+            if tr is None or np.size(tr["mean_rate"]) == 0:
+                continue
+            mr = tr["mean_rate"]
+            t = np.arange(len(mr)) * dt_ms
+            rmse = (all_results.get(ctrl, {}).get("targets", {}).get(tgt_key, {})
+                    .get("metrics", {}).get("tracking_rmse"))
+            lbl = ctrl + (f" (RMSE={rmse:.1f})" if isinstance(rmse, (int, float)) else "")
+            ax.plot(t, mr, color=CTRL_COLORS[ctrl], lw=1.1, alpha=0.9, label=lbl)
+        ax.set_ylabel("Pop. mean rate (Hz)")
         ax.set_title(f"Target: {frac*100:.0f}% of baseline ({target:.1f} Hz)")
-        ax.legend(loc="lower right", fontsize=8)
-
-    axes[-1].set_xlabel("Time (ms)")
+        ax.legend(loc="upper right", fontsize=8)
+    axes[-1].set_xlabel("Time (ms)  ·  baseline | clamp | recovery")
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "optoclamp_comparison.png"), dpi=150)
     plt.close()
 
-    # Bar chart: RMSE comparison
+    # RMSE bar chart
     fig, ax = plt.subplots(figsize=(8, 5))
     x = np.arange(len(fracs))
     width = 0.25
     for i, (ctrl_name, ctrl_data) in enumerate(all_results.items()):
-        rmses = []
-        for frac in fracs:
-            tgt_key = f"{int(frac*100)}pct"
-            if tgt_key in ctrl_data["targets"]:
-                rmses.append(ctrl_data["targets"][tgt_key]["metrics"]["tracking_rmse"])
-            else:
-                rmses.append(0)
-        ax.bar(x + i * width, rmses, width,
-               label=ctrl_name, color=colors.get(ctrl_name, "gray"))
-
-    ax.set_xlabel("Target Level")
+        rmses = [ctrl_data["targets"].get(f"{int(f*100)}pct", {})
+                 .get("metrics", {}).get("tracking_rmse", 0) for f in fracs]
+        ax.bar(x + i * width, rmses, width, label=ctrl_name,
+               color=CTRL_COLORS.get(ctrl_name, "gray"))
+    ax.set_xlabel("Target level")
     ax.set_ylabel("Tracking RMSE (Hz)")
-    ax.set_title("Optoclamp: Controller Comparison")
+    ax.set_title("Optoclamp: controller comparison")
     ax.set_xticks(x + width / 2)
     ax.set_xticklabels([f"{int(f*100)}%" for f in fracs])
     ax.legend()
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "optoclamp_rmse_comparison.png"), dpi=150)
     plt.close()
+
+
+def _plot_control_signals(trajectories, targets, fracs, output_dir,
+                          dt_ms=1.0, phases=PHASES):
+    """Optogenetic control input over time per target (one line per fiber)."""
+    if not trajectories:
+        return
+    fig, axes = plt.subplots(len(fracs), 1, figsize=(12, 3.0 * len(fracs)), sharex=True)
+    if len(fracs) == 1:
+        axes = [axes]
+    b_end, c_end, _ = phases
+    for ax, frac in zip(axes, fracs):
+        ax.axvspan(b_end, c_end, alpha=0.06, color="green")
+        tgt_key = f"{int(frac*100)}pct"
+        for ctrl in CTRL_COLORS:
+            tr = trajectories.get((ctrl, tgt_key))
+            if tr is None or np.size(tr["u"]) == 0:
+                continue
+            u = np.atleast_2d(tr["u"])
+            if u.shape[0] != len(tr["mean_rate"]) and u.shape[1] == len(tr["mean_rate"]):
+                u = u.T  # ensure (n_steps, n_u)
+            t = np.arange(u.shape[0]) * dt_ms
+            for j in range(u.shape[1]):
+                ax.plot(t, u[:, j], color=CTRL_COLORS[ctrl], lw=0.9, alpha=0.85,
+                        ls=("-" if j == 0 else "--"), label=f"{ctrl} u{j}")
+        ax.set_ylabel("Input (mW/mm²)")
+        ax.set_title(f"Control signal — {frac*100:.0f}% target")
+        ax.legend(loc="upper right", fontsize=7)
+    axes[-1].set_xlabel("Time (ms)")
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "optoclamp_control_signals.png"), dpi=150)
+    plt.close()
+
+
+def replot_from_npz(npz_path, output_dir=None):
+    """Regenerate all optoclamp figures from a persisted trajectories .npz — no
+    closed-loop re-run needed (RMSE labels read from optoclamp_results.json)."""
+    output_dir = output_dir or os.path.dirname(npz_path)
+    trajectories, dt_ms, phases = load_trajectories(npz_path)
+    tgt_by_key = {tgt: tr["target"] for (ctrl, tgt), tr in trajectories.items()}
+    fracs = sorted({int(k.replace("pct", "")) / 100 for k in tgt_by_key})
+    targets = [tgt_by_key[f"{int(f*100)}pct"] for f in fracs]
+    rj = os.path.join(output_dir, "optoclamp_results.json")
+    all_results = json.load(open(rj)) if os.path.exists(rj) else {}
+    _plot_comparison(all_results, trajectories, targets, fracs, output_dir, dt_ms, phases)
+    _plot_control_signals(trajectories, targets, fracs, output_dir, dt_ms, phases)
+    print(f"Regenerated optoclamp figures in {output_dir}")
 
 
 if __name__ == "__main__":
@@ -391,5 +490,11 @@ if __name__ == "__main__":
     parser.add_argument("--mpc-iters", type=int, default=30)
     parser.add_argument("--mpc-delay", type=float, default=5.0,
                         help="MPC compute delay in ms")
+    parser.add_argument("--replot-from", type=str, default=None,
+                        help="Path to optoclamp_trajectories.npz: regenerate figures "
+                             "from persisted trajectories without re-running the sim.")
     args = parser.parse_args()
-    run_optoclamp(args)
+    if args.replot_from:
+        replot_from_npz(args.replot_from)
+    else:
+        run_optoclamp(args)
