@@ -472,13 +472,15 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Expected: Lower tracking RMSE due to more accurate ODE integration during planning
 
 
-### Experiment 34. Euler-Trained Latent CA-NODE for Plant 3
+### Experiment 34. Euler dt Sweep for Aligned Distillation
 **Status**: Not started
 **Branch/Worktree**: TBD
-**Results dir**: `results/bidir_v2_euler_trained/`
-- Hypothesis: Training the latent CA-NODE with Euler integration (instead of dopri5) will produce a model whose dynamics are more faithful when evaluated with Euler integration during MPC, eliminating the train/control solver mismatch
-- Method: Retrain aligned distillation (same as Exp 29) but with method='euler' and dt=1ms instead of method='dopri5'
-- Compare: R² of Euler-trained model vs dopri5-trained model (Exp 29, R²=0.917), then MPC performance
+**Results dir**: `results/bidir_v2_euler_dt_sweep/`
+- NOTE: Training already uses Euler integration (train_aligned_distill.py L270). Current Exp 29 trains with Euler dt=1ms but evaluates with dopri5 (L386). The train/eval mismatch is at eval time, not train time.
+- Hypothesis: Evaluating with Euler (matching MPC) instead of dopri5 will show the true R² the MPC controller operates with. Sweeping Euler dt during training (1ms, 5ms, 10ms) tests whether coarser integration during training produces dynamics that are still MPC-compatible.
+- Method: Sweep 3 dt values × best distillation hyperparams (alpha=0.9, pw=200, lr=1e-3). Evaluate each model with BOTH Euler (at matching dt) AND dopri5 for comparison.
+- Compare: R² under Euler eval vs dopri5 eval across dt values. Then run MPC optoclamp with best Euler-evaluated model.
+- Machine: gpu1
 
 
 ### Experiment 35. K=1 Re-Encoding MPC Diagnostic

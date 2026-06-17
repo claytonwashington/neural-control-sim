@@ -236,7 +236,23 @@ def main(args):
         "alpha": [], "lr": [],
     }
 
+    # Euler dt for integration (in seconds)
+    euler_dt_s = args.euler_dt * 1e-3  # convert ms to seconds
+    n_euler_steps = int(round(fw * 1e-3 / euler_dt_s))  # number of Euler steps
+    dt_tensor = torch.linspace(0, fw * 1e-3, n_euler_steps + 1, device=device)  # +1 for start point
+    # But the model forward() expects the time tensor to have fw points for the output
+    # So we keep fw points but the step size changes
     dt_tensor = torch.linspace(0, fw * 1e-3, fw, device=device)
+    # The effective dt per step is fw*1e-3/(fw-1) ≈ 1ms when fw=200
+    # For coarser training, subsample the data to match euler_dt
+    if args.euler_dt > 1:
+        subsample = args.euler_dt  # 5ms -> every 5th step, 10ms -> every 10th
+        fw_sub = fw // subsample
+        dt_tensor = torch.linspace(0, fw * 1e-3, fw_sub, device=device)
+        print(f"  Euler dt={args.euler_dt}ms -> {fw_sub} steps over {fw}ms")
+    else:
+        fw_sub = fw
+        print(f"  Euler dt={args.euler_dt}ms -> {fw_sub} steps over {fw}ms")
     best_val = float("inf")
 
     for epoch in range(args.n_epochs):
@@ -265,16 +281,24 @@ def main(args):
 
             optimizer.zero_grad()
 
+            # For coarser dt, subsample the future data to match
+            if args.euler_dt > 1:
+                x_future_sub = x_future[:, ::args.euler_dt, :]
+                u_future_sub = u_future[:, ::args.euler_dt, :]
+            else:
+                x_future_sub = x_future
+                u_future_sub = u_future
+
             # Causal encoder: only sees past
             x_pred, mu, logvar = causal_model.forward(
-                x_past, u_past, u_future, dt_tensor, method="euler", deterministic=True
+                x_past, u_past, u_future_sub, dt_tensor, method="euler", deterministic=True
             )
 
             # Distillation loss: match acausal z0
             distill_loss = nn.functional.mse_loss(mu, z0_target)
 
-            # Reconstruction loss: predict future
-            recon_loss = nn.functional.mse_loss(x_pred, x_future)
+            # Reconstruction loss: predict future (at subsampled resolution)
+            recon_loss = nn.functional.mse_loss(x_pred, x_future_sub)
 
             # Combined loss
             loss = alpha * distill_loss + (1 - alpha) * recon_loss
@@ -309,11 +333,18 @@ def main(args):
                 u_future = u_future.to(device)
                 z0_target = z0_target.to(device)
 
+                if args.euler_dt > 1:
+                    x_future_sub = x_future[:, ::args.euler_dt, :]
+                    u_future_sub = u_future[:, ::args.euler_dt, :]
+                else:
+                    x_future_sub = x_future
+                    u_future_sub = u_future
+
                 x_pred, mu, logvar = causal_model.forward(
-                    x_past, u_past, u_future, dt_tensor, method="euler", deterministic=True
+                    x_past, u_past, u_future_sub, dt_tensor, method="euler", deterministic=True
                 )
                 distill_loss = nn.functional.mse_loss(mu, z0_target)
-                recon_loss = nn.functional.mse_loss(x_pred, x_future)
+                recon_loss = nn.functional.mse_loss(x_pred, x_future_sub)
                 loss = alpha * distill_loss + (1 - alpha) * recon_loss
                 val_loss_sum += loss.item()
                 val_n += 1
@@ -333,6 +364,7 @@ def main(args):
                 "alpha_schedule": args.alpha_schedule,
                 "alpha_init": args.alpha_init,
                 "alpha_final": args.alpha_final,
+                "euler_dt_ms": args.euler_dt,
             }, os.path.join(args.output_dir, "best_model.pt"))
 
         if epoch % 10 == 0:
@@ -352,6 +384,7 @@ def main(args):
         "alpha_schedule": args.alpha_schedule,
         "alpha_init": args.alpha_init,
         "alpha_final": args.alpha_final,
+        "euler_dt_ms": args.euler_dt,
     }, os.path.join(args.output_dir, "model.pt"))
 
     # ── Evaluate best model ────────────────────────────────────────────
@@ -451,7 +484,47 @@ def main(args):
     plt.close()
 
     print(f"\nResults saved to {args.output_dir}/")
-    print(f"R² = {r2:.4f} (baseline causal: 0.8252, acausal: 0.9387)")
+    print(f"R² (dopri5) = {r2:.4f}")
+
+    # ── Also evaluate with Euler (matching MPC) ──────────────────────
+    print("\n" + "=" * 60)
+    print("Evaluating with Euler (matching MPC inference)")
+    print("=" * 60)
+
+    dt_eval_euler = torch.linspace(0, fw * 1e-3, fw, device=device)  # always 1ms for MPC match
+    all_preds_euler, all_trues_euler = [], []
+    with torch.no_grad():
+        for trial in range(x_test_n.shape[0]):
+            x_trial = torch.tensor(x_test_n[trial].T, dtype=torch.float32, device=device)
+            u_trial = torch.tensor(u_test_n[trial].T, dtype=torch.float32, device=device)
+            n_steps = x_trial.shape[0]
+            for t in range(0, n_steps - pw - fw, pw):
+                x_past = x_trial[t : t + pw].unsqueeze(0)
+                u_past = u_trial[t : t + pw].unsqueeze(0)
+                x_future = x_trial[t + pw : t + pw + fw]
+                u_future = u_trial[t + pw : t + pw + fw].unsqueeze(0)
+                x_pred_e = causal_model.predict(x_past, u_past, u_future, dt_eval_euler, method="euler")
+                all_preds_euler.append(x_pred_e.squeeze(0).cpu().numpy())
+                all_trues_euler.append(x_future.cpu().numpy())
+
+    all_preds_euler = np.concatenate(all_preds_euler, axis=0)
+    all_trues_euler = np.concatenate(all_trues_euler, axis=0)
+    ss_res_e = np.sum((all_trues_euler - all_preds_euler) ** 2)
+    ss_tot_e = np.sum((all_trues_euler - all_trues_euler.mean(axis=0)) ** 2)
+    r2_euler = 1 - ss_res_e / ss_tot_e
+    mse_euler = np.mean((all_trues_euler - all_preds_euler) ** 2)
+    print(f"  R² (Euler 1ms) = {r2_euler:.4f}")
+    print(f"  MSE (Euler 1ms) = {mse_euler:.6f}")
+    print(f"  R² gap (dopri5 - euler) = {r2 - r2_euler:.4f}")
+
+    # Update results with Euler metrics
+    results["r2_euler"] = float(r2_euler)
+    results["mse_euler"] = float(mse_euler)
+    results["euler_dt_ms"] = args.euler_dt
+    with open(os.path.join(args.output_dir, "results.json"), "w") as f:
+        json.dump(results, f, indent=2)
+
+    print(f"\nFinal: R²(dopri5)={r2:.4f}, R²(euler)={r2_euler:.4f} (baseline causal: 0.8252, acausal: 0.9387)")
 
 
 if __name__ == "__main__":
@@ -482,6 +555,9 @@ if __name__ == "__main__":
     parser.add_argument("--freeze-decoder-epochs", type=int, default=50,
                         help="Freeze decoder for this many epochs to anchor latent space")
     parser.add_argument("--n-test-trials", type=int, default=10)
+    parser.add_argument("--euler-dt", type=int, default=1,
+                        help="Euler integration dt in ms (1, 5, or 10). Controls time step "
+                             "during training. Evaluation always includes 1ms Euler.")
 
     add_preflight_args(parser)
     args = parser.parse_args()
