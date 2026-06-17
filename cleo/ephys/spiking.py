@@ -78,10 +78,13 @@ class Spiking(Signal, NeoExportable):
     @collision_prob_fn.validator
     def _validate_coll_prob_fn(self, attribute, value):
         if value is not None:
-            assert callable(value), "collision_prob_fn must be callable"
-            assert np.all(0 <= value([0, 1, 10] * ms) <= 1), (
-                "collision_prob_fn must return a value between 0 and 1"
-            )
+            if not callable(value):
+                raise ValueError("collision_prob_fn must be callable")
+            res = value([0, 1, 10] * ms)
+            if not np.all((0 <= res) & (res <= 1)):
+                raise ValueError(
+                    "collision_prob_fn must return a value between 0 and 1"
+                )
 
     simulate_false_positives: bool = True
     """Whether to simulate false positives from noise. In the case of :class:`SortedSpiking`,
@@ -516,7 +519,10 @@ class Spiking(Signal, NeoExportable):
 class MultiUnitActivity(Spiking):
     """Detects (unsorted) spikes per channel."""
 
-    collision_prob_fn: Callable[[Quantity], float] = lambda t: t < 1 * ms
+    collision_prob_fn: Callable[[Quantity], float] = field(
+        default=lambda t: t < 1 * ms,
+        validator=Spiking._validate_coll_prob_fn,
+    )
 
     @property
     def n(self):
@@ -591,8 +597,9 @@ class SortedSpiking(Spiking):
     Should be higher than :attr:`~Spiking.threshold_sigma`.
     Spikes from units with SNR < snr_cutoff still factor into collision sampling and
     are reported as unsorted (index -1), essentially "multi-unit activity"."""
-    collision_prob_fn: Callable[[Quantity], float] = lambda t: 0.2 * np.exp(
-        -t / (0.3 * ms)
+    collision_prob_fn: Callable[[Quantity], float] = field(
+        default=lambda t: 0.2 * np.exp(-t / (0.3 * ms)),
+        validator=Spiking._validate_coll_prob_fn,
     )
 
     @property

@@ -25,6 +25,24 @@ def no_collision(t2mt1):
     return 0
 
 
+def test_coll_prob_fn_validation():
+    # Should not raise
+    MultiUnitActivity(name="test1", collision_prob_fn=lambda t: t < 1 * ms)
+
+    with pytest.raises(ValueError, match="collision_prob_fn must be callable"):
+        MultiUnitActivity(name="test2", collision_prob_fn="not a callable")
+
+    with pytest.raises(
+        ValueError, match="collision_prob_fn must return a value between 0 and 1"
+    ):
+        MultiUnitActivity(name="test3", collision_prob_fn=lambda t: (t / ms) * 2)
+
+    with pytest.raises(
+        ValueError, match="collision_prob_fn must return a value between 0 and 1"
+    ):
+        MultiUnitActivity(name="test4", collision_prob_fn=lambda t: -1)
+
+
 def spike_generator_group(z_coords, indices=None, times_ms=None, **kwparams):
     N = len(z_coords)
     if indices is None:
