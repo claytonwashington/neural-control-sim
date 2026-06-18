@@ -116,9 +116,16 @@ def _manifests(root: str, include_worktrees: bool) -> list[dict]:
         exp_dir = os.path.dirname(mp)
         loc = "main" if mp.startswith(os.path.join(root, "results")) else \
             mp.split("cleo-worktrees" + os.sep, 1)[1].split(os.sep)[0]
+        # Recover idea_id from the name ("Exp 34: …") when the field is unset, so
+        # the manifest links to its idea entry instead of double-counting as UNTRACKED.
+        iid = j.get("idea_id")
+        if iid is None:
+            nm = re.search(r"\b(?:Exp|Experiment)\s+(\d+)", j.get("experiment_name", ""))
+            if nm:
+                iid = int(nm.group(1))
         found.append({
-            "idea_file": j.get("idea_file"),
-            "idea_id": j.get("idea_id"),
+            "idea_file": j.get("idea_file") or ("ideas/modeling.md" if iid is not None else None),
+            "idea_id": iid,
             "name": j.get("experiment_name", os.path.basename(exp_dir)),
             "status": j.get("status"),
             "created_at": j.get("created_at"),
