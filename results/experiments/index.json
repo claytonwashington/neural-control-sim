@@ -2,7 +2,7 @@
   {
     "name": "Latent NODE (z=64, h256)",
     "slug": "latent-node-z-64-h256",
-    "has_validation": false
+    "has_validation": true
   },
   {
     "name": "CA-NODE (no skip \u2014 baseline)",
@@ -22,12 +22,12 @@
   {
     "name": "GRU (best)",
     "slug": "gru-best",
-    "has_validation": false
+    "has_validation": true
   },
   {
     "name": "N4SID (40/10)",
     "slug": "n4sid-40-10",
-    "has_validation": false
+    "has_validation": true
   },
   {
     "name": "Bidirectional Aligned Distillation",
