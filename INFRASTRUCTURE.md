@@ -67,7 +67,7 @@ call_mcp_tool(ServerName="gpu1_shell", ToolName="run_command",
 
 To start a training job in a detached tmux session:
 ```bash
-tmux new-session -d -s jobname "bash -lc 'conda activate dtmodeling && cd ~/cleo && python script.py 2>&1 | tee logfile.log'"
+tmux new-session -d -s jobname "bash -lc 'conda activate dtmodeling && cd /mnt/cbwash2/cleo && python script.py 2>&1 | tee logfile.log'"
 ```
 
 Useful commands for managing tmux sessions:
