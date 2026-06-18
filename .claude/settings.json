@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /snel/home/cbwash2/cleo && { out=$(/home/cbwash2/miniconda3/envs/cleo/bin/python -m modeling.scripts.idea_status --quiet 2>/dev/null) && exit 0 || printf '{\"systemMessage\":%s}\\n' \"$(printf '%s' \"$out\" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read().strip()))')\"; } 2>/dev/null || true",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}
