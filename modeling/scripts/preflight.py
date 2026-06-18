@@ -473,6 +473,13 @@ def main():
     start.add_argument("--past-window", type=int, default=200,
                        help="Causal past-window (ms) for latent_canode validation")
     start.add_argument("--dry-run", action="store_true")
+    start.add_argument("--max-open-laggards", type=int, default=2,
+                       help="Block start if this many idea laggards are open (0=never block)")
+    start.add_argument("--allow-laggards", action="store_true",
+                       help="Launch even past the laggard threshold (or set PREFLIGHT_ALLOW_LAGGARDS=1)")
+
+    # ── AUDIT subcommand ──
+    sub.add_parser("audit", help="Report laggard experiments (open/un-closed ideas)")
 
     # ── COMPLETE subcommand ──
     complete = sub.add_parser("complete", help="Mark an experiment as finished")
@@ -500,6 +507,11 @@ def main():
         _do_start(args, repo_root)
     elif args.command == "complete":
         _do_complete(args, repo_root)
+    elif args.command == "audit":
+        from modeling.scripts import idea_status
+        laggards = idea_status.scan()
+        print(idea_status.format_report(laggards))
+        sys.exit(1 if laggards else 0)
     elif args.command == "gpu-status":
         _do_gpu_status(args)
     elif args.command == "monitor":
@@ -507,6 +519,23 @@ def main():
 
 
 def _do_start(args, repo_root):
+    # ── Laggard gate: never launch silently past open/un-closed ideas ──
+    from modeling.scripts import idea_status
+    laggards = idea_status.scan()
+    if laggards:
+        print(idea_status.format_report(laggards), file=sys.stderr)
+        allow = args.allow_laggards or os.environ.get("PREFLIGHT_ALLOW_LAGGARDS")
+        if args.max_open_laggards and len(laggards) >= args.max_open_laggards and not allow:
+            print(
+                f"\nERROR: {len(laggards)} open laggard(s) ≥ threshold "
+                f"({args.max_open_laggards}). Close some first — `preflight complete` "
+                f"the started ones, mark done ones ✅ COMPLETE, or register the "
+                f"untracked ones in ideas/ — or pass --allow-laggards "
+                f"(or PREFLIGHT_ALLOW_LAGGARDS=1) to launch anyway.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
     # Validate data file
     data_path = os.path.join(repo_root, args.data) if not os.path.isabs(args.data) else args.data
     if not os.path.exists(data_path):

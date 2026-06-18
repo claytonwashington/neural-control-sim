@@ -181,6 +181,7 @@ python -m modeling.scripts.preflight start \
 ```
 
 This enforces:
+- **Laggard gate (so ideas don't get lost)**: `start` first runs `idea_status.scan()` and prints every open *laggard* — an idea marked 🔄 IN PROGRESS, a `MANIFEST.json` stuck un-completed, a completed experiment never registered in `ideas/`, or a done-but-not-closed idea. It **always warns**, and **blocks** if `open ≥ --max-open-laggards` (default 2) unless `--allow-laggards` / `PREFLIGHT_ALLOW_LAGGARDS=1`. Check anytime with `python -m modeling.scripts.preflight audit` (or `modeling.scripts.idea_status`). Close laggards by completing them (`preflight complete`), marking the idea ✅ COMPLETE, or registering untracked ones in `ideas/`. A `Stop` hook also surfaces the laggard count every turn.
 - The idea entry exists in the specified ideas file and is not already completed
 - The results directory does NOT already contain files (prevents overwrites)
 - `branches.md` and the idea file mutually cross-reference each other

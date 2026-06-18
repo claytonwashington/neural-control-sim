@@ -143,6 +143,7 @@ def test_preflight_start_dry_run_accepts_model_type():
     """The CLI parses --model-type and a dry-run start exits cleanly."""
     env = dict(os.environ)
     env["PYTHONPATH"] = str(REPO) + os.pathsep + env.get("PYTHONPATH", "")
+    env["PREFLIGHT_ALLOW_LAGGARDS"] = "1"  # bypass the laggard gate; we're testing arg parsing
     r = subprocess.run(
         [sys.executable, "-m", "modeling.scripts.preflight", "start",
          "--idea-file", "ideas/modeling.md", "--idea-id", "23",
@@ -157,3 +158,27 @@ def test_preflight_start_dry_run_accepts_model_type():
         pytest.skip("dataset not present in this checkout")
     assert r.returncode == 0, r.stderr
     assert "dry-run" in (r.stdout + r.stderr).lower()
+
+
+def test_idea_status_classifies_laggards(tmp_path):
+    """The laggard detector flags WIP + untracked, but not done / never-started."""
+    from modeling.scripts.idea_status import scan
+
+    (tmp_path / "ideas").mkdir()
+    (tmp_path / "ideas" / "modeling.md").write_text(
+        "### Experiment 1. Done thing\n**Status**: ✅ COMPLETE\n\n"
+        "### Experiment 2. Wip thing\n**Status**: 🔄 IN PROGRESS\n\n"
+        "### Experiment 3. Idle thing\n**Status**: Not started\n")
+    ghost = tmp_path / "results" / "ghost"
+    ghost.mkdir(parents=True)
+    (ghost / "MANIFEST.json").write_text(json.dumps({
+        "idea_file": "ideas/modeling.md", "idea_id": 9,
+        "experiment_name": "Ghost run", "status": "completed",
+    }))
+
+    laggards = scan(root=str(tmp_path), include_worktrees=False)
+    kinds = {(d["idea_id"], d["kind"]) for d in laggards}
+    assert (2, "IN_PROGRESS") in kinds                 # WIP flagged
+    assert (9, "UNTRACKED") in kinds                   # ran but never registered
+    assert not any(d["idea_id"] == 1 for d in laggards)  # completed not flagged
+    assert not any(d["idea_id"] == 3 for d in laggards)  # never-started backlog not flagged

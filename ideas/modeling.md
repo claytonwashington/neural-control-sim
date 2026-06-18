@@ -156,7 +156,7 @@ Every experiment **MUST** produce:
 - **Key finding**: Cross-architecture distillation is at least as hard as same-architecture
 
 ### Experiment 10. Grokking (1000 Epochs, 500 Trials)
-**Status**: 🔄 IN PROGRESS — gpu2
+**Status**: ✅ COMPLETE — R²=0.8535 (causal z64); acausal variant killed
 **Results dir**: `results/grok_causal_z64/` (causal), `results/grok_acausal_z128/` (acausal)
 **Branch/Worktree**: `feature/grokking` / `cleo-worktrees/grokking`
 - Hypothesis: extended training on larger dataset may unlock delayed generalization (grokking)
@@ -427,9 +427,48 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Sweep: K ∈ {1, 20, 100, 999} × D ∈ {0, 10ms} × Q ∈ {0.1, 1.0} × R ∈ {0.01, 0.1}
 
 ### Experiment 27. Bidirectional Optoclamp MPC
-**Status**: 🔄 IN PROGRESS
+**Status**: ✅ COMPLETE — ran on the v1 (ChrimsonR+GtACR2) plant; superseded by Exp 32 (v2 plant)
 **Branch/Worktree**: `feature/bidir-optoclamp` / `cleo-worktrees/bidir-optoclamp`
 **Results dir**: `results/bidir_optoclamp/`
 - Hypothesis: MPC with the bidirectional aligned model can achieve inhibition (hitting 50% and 75% target rates) which was impossible on the excitatory-only plant. This is the primary validation of the bidirectional plant.
 - Targets: 50%, 75%, 100%, 125%
 - Controllers: PI baseline vs NODE MPC with periodic re-encoding
+- Note: GtACR2 inhibition on the v1 plant is negligible, so this was redone on Plant 3 (v2) — see Exp 32.
+
+---
+
+## Phase 6: Bidirectional v2 Plant (ChR2-H134R + eNpHR3.0) — Exp 28–34
+
+> Plant 3 (`build_plant_v2`): real bidirectional control via eNpHR3.0 (chloride
+> pump, ~330 mV hyperpolarizing drive). Data: `data/training_trials_bidir_v2.h5`.
+> Ran on branch `feature/bidir-v2-plant`. Back-filled into this log 2026-06.
+
+### Experiment 28. Bidir V2 Acausal NODE
+**Status**: ✅ COMPLETE — R²=0.956
+**Results dir**: `results/bidir_v2_acausal/`
+- Acausal latent NODE on the ChR2(H134R)+eNpHR3.0 bidirectional plant (best v2 twin).
+
+### Experiment 29. Bidir V2 Aligned Distillation
+**Status**: ✅ COMPLETE — R²=0.917
+**Results dir**: `results/bidir_v2_aligned_distill/`
+- Causal CA-NODE distilled from the Exp 28 acausal teacher on the v2 plant.
+
+### Experiment 30. Bidir V2 Periodic Re-Encoding
+**Status**: ✅ COMPLETE — R²=0.935
+**Results dir**: `results/bidir_v2_periodic_reencode/`
+- Periodic re-encoding evaluation on the v2 causal model (deployable real-time).
+
+### Experiment 31. Bidir V2 EnKF Evaluation
+**Status**: ✅ COMPLETE — R²=0.9998 (not real-time)
+**Results dir**: `results/bidir_v2_enkf/`
+- EnKF on the v2 causal model with observation delay.
+
+### Experiment 32. Bidir V2 Optoclamp MPC vs PI
+**Status**: ✅ COMPLETE — PI beats MPC on v2; MPC tuning sweep follow-up
+**Results dir**: `results/bidir_v2_optoclamp/`
+- MPC with sign-splitting vs PI on the genuinely-bidirectional v2 plant (replaces Exp 27).
+
+### Experiment 34. Euler dt Sweep for Aligned Distillation
+**Status**: 🔄 IN PROGRESS — branch `feature/bidir-v2-plant`
+**Results dir**: `results/bidir_v2_euler_sweep/`
+- Sweep the Euler integration dt for the aligned-distilled v2 model.
