@@ -34,9 +34,9 @@ from modeling.models.latent_canode import LatentControlAffineODE
 # --------------------------------------------------------------------------- #
 #  Absolute paths to data and checkpoints (on the cluster)
 # --------------------------------------------------------------------------- #
-ABS_DATA_PATH = "/snel/home/cbwash2/cleo/data/training_trials.h5"
-ABS_CAUSAL_CKPT = "/snel/home/cbwash2/cleo/results/causal_z64_pw200_h128_lr3e4/model.pt"
-ABS_ACAUSAL_CKPT = "/snel/home/cbwash2/cleo/results/sweep_latent_node_40_10/run_05_z64_h256_l2_lr0.0005_dopri5.pt"
+ABS_DATA_PATH = "/mnt/cbwash2/cleo/data/training_trials.h5"
+ABS_CAUSAL_CKPT = "/mnt/cbwash2/cleo/results/causal_z64_pw200_h128_lr3e4/model.pt"
+ABS_ACAUSAL_CKPT = "/mnt/cbwash2/cleo/results/sweep_latent_node_40_10/run_05_z64_h256_l2_lr0.0005_dopri5.pt"
 
 
 # --------------------------------------------------------------------------- #

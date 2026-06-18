@@ -20,7 +20,7 @@ Both machines share `/home/cbwash2/` via NAS — same conda envs, same code, sam
 
 ## Shared Storage (NAS)
 
-- Home directories are mounted via NAS at `/home/cbwash2/` (also `/snel/home/cbwash2/`)
+- Home directories are mounted via NAS at `/home/cbwash2/` (also `/snel/home/cbwash2/`). **Primary project location: `/mnt/cbwash2/cleo`**
 - Code, conda envs, data files are all shared between gpu1 and gpu2
 - **Implication:** A conda env created on one machine works on both
 - **Implication:** Files written on one machine are immediately visible on the other
@@ -45,7 +45,7 @@ Config file: `~/.gemini/antigravity/mcp_config.json`
 
 | Server | Type | Machine | Purpose |
 |--------|------|---------|--------|
-| `gpu1` | filesystem | gpu1 | Read/write files under /snel/home/cbwash2 |
+| `gpu1` | filesystem | gpu1 | Read/write files under /mnt/cbwash2 and /snel/home/cbwash2 |
 | `gpu1_shell` | shell | gpu1 | Execute commands on gpu1 |
 | `gpu2_shell` | shell | gpu2 | Execute commands on gpu2 |
 

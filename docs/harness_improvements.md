@@ -20,7 +20,7 @@ _Last updated: 2026-06-13._
 ### H1 — `preflight complete` has no mutual exclusion (concurrent completions corrupt state)
 `_do_complete` → `_require_dashboard_update` → `_commit_completion` →
 `_require_git_push` → `_cleanup_worktree` is a long multi-step mutation of a
-**single shared working tree** (`/snel/home/cbwash2/cleo`) with no lock. Two
+**single shared working tree** (`/mnt/cbwash2/cleo`) with no lock. Two
 agents completing at once interleave: git index races, one's dashboard
 regeneration clobbers the other's, `git add`/commit/merge collide. With multiple
 agents (the reason worktrees exist) this is a live hazard.
@@ -79,7 +79,7 @@ from a stale worktree → executes that worktree's old `preflight.py` (the
 `cleosim.pth` makes this silent) and `_cleanup_worktree`'s `git merge <branch>`
 runs against the wrong HEAD.
 **Fix:** at the top of `_do_complete`, assert `get_repo_root()` is
-`/snel/home/cbwash2/cleo` and the current branch is `modeling-dev`; hard-error
+`/mnt/cbwash2/cleo` and the current branch is `modeling-dev`; hard-error
 with the correct command otherwise.
 
 ### M5 — No tests for the harness; `cleosim.pth` hides breakage

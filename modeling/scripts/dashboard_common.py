@@ -33,7 +33,7 @@ from pathlib import Path
 # Filesystem roots
 # ---------------------------------------------------------------------------
 # Shared checkout where git-ignored checkpoints + datasets physically live.
-SHARED_REPO = Path(os.environ.get("CLEO_SHARED_REPO", "/snel/home/cbwash2/cleo"))
+SHARED_REPO = Path(os.environ.get("CLEO_SHARED_REPO", "/mnt/cbwash2/cleo"))
 # This checkout (worktree or main) — where we WRITE artifacts.
 REPO = Path(__file__).resolve().parents[2]
 

@@ -25,7 +25,7 @@ linked from the leaderboard.
   inputs (`model.pt`, `data/*.h5`) are git-ignored and resolved from the shared
   checkout via `dashboard_common` (`find_checkpoint`, `resolve_data`); generated
   artifacts are written to the current checkout's `results/`.
-- A `cleosim.pth` puts `/snel/home/cbwash2/cleo` on `sys.path`, so `import
+- A `cleosim.pth` puts `/mnt/cbwash2/cleo` on `sys.path`, so `import
   modeling` always resolves; preflight subprocesses therefore run the main
   checkout's code. We still pass `PYTHONPATH=repo_root` so it works from a
   worktree too.

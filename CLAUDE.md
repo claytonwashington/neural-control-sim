@@ -14,12 +14,12 @@ Cleo is a Python framework built on top of [Brian 2](https://brian2.readthedocs.
 
 To prevent file and execution collisions when multiple agents run experiments concurrently, each agent must operate in a dedicated **Git Worktree** checked out to their active branch.
 
-1. **Create the Worktree**: From the main/shared repository directory (`/snel/home/cbwash2/cleo`), create a new worktree directory and branch:
+1. **Create the Worktree**: From the main/shared repository directory (`/mnt/cbwash2/cleo`), create a new worktree directory and branch:
    ```bash
-   git worktree add /snel/home/cbwash2/cleo-worktrees/<branch-name> -b feature/<branch-name>
+   git worktree add /mnt/cbwash2/cleo-worktrees/<branch-name> -b feature/<branch-name>
    ```
 2. **Register the Worktree**: Update [branches.md](branches.md) and [task.md](task.md) to document the new worktree path and branch assignment.
-3. **Shift Workspace**: Conduct all subsequent file edits, command runs (such as sweeps or tests), and git commits inside the dedicated `/snel/home/cbwash2/cleo-worktrees/<branch-name>` directory.
+3. **Shift Workspace**: Conduct all subsequent file edits, command runs (such as sweeps or tests), and git commits inside the dedicated `/mnt/cbwash2/cleo-worktrees/<branch-name>` directory.
 
 ## Environment
 
@@ -29,7 +29,7 @@ To prevent file and execution collisions when multiple agents run experiments co
 - **Infrastructure**: See [`INFRASTRUCTURE.md`](INFRASTRUCTURE.md) for full details on machines, GPUs, MCP servers, and NAS storage.
   - **gpu1**: 8× RTX 2080 Ti (11GB), 48 CPUs. MCP: `gpu1` (filesystem), `gpu1_shell` (commands).
   - **gpu2**: 8× A100 80GB, 128 CPUs. MCP: `gpu2_shell` (active), or SSH.
-  - **NAS**: Home dirs shared at `/snel/home/cbwash2/` — code, envs, data visible on both machines.
+  - **NAS**: Home dirs shared at `/snel/home/cbwash2/`. Project repo lives at `/mnt/cbwash2/cleo` (migrated from `/snel/home/cbwash2/cleo`).
 - **Brian2 limitation**: Single-threaded. For parallel simulations, use `multiprocessing.Pool` with `spawn` context and `brian2.start_scope()` per worker.
 - **Running commands via MCP**: Use `bash -lc '...'` wrapper for conda activation:
   ```
@@ -82,7 +82,7 @@ Some tutorials require additional packages beyond core Cleo:
 - Multi-device interactions: use `DeviceInteractionRegistry`
 - Visualization: use `cleo.viz`
 - All Python commands should run within the appropriate conda env (`cleo` or `dtmodeling`)
-- **Reproducibility & Data Split**: Always use a 40/10 train/test split (10 test trials out of 50 total trials) when training digital twin models (CA-NODE, GRU, N4SID). Set and pass a fixed random seed (default: `42`, configured centrally in [config.py](file:///snel/home/cbwash2/cleo-worktrees/extended-training/modeling/config.py)) to all random number generators to ensure complete reproducibility of train/val dataset splits and network parameter initialization.
+- **Reproducibility & Data Split**: Always use a 40/10 train/test split (10 test trials out of 50 total trials) when training digital twin models (CA-NODE, GRU, N4SID). Set and pass a fixed random seed (default: `42`, configured centrally in [config.py](file:///mnt/cbwash2/cleo-worktrees/extended-training/modeling/config.py)) to all random number generators to ensure complete reproducibility of train/val dataset splits and network parameter initialization.
 - **Always explain actions and rationale beforehand**: Under no circumstances should you call any tool or execute any shell command without first outputting a message explaining what you are doing, why you are doing it, and what you expect to achieve. Do not perform actions silently.
 - **Always use tmux for long-running jobs**: Any model training, evaluation, or benchmarking runs MUST be executed inside a `tmux` session (e.g., using `tmux new-session -d -s <session_name>`). This ensures the processes survive network disconnection and can be monitored easily. This applies to both the primary agent and any subagents spawned. If you delegate tasks to subagents, ensure their prompts explicitly instruct them to run commands inside a `tmux` session.
 

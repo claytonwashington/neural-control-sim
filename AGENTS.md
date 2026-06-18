@@ -14,7 +14,7 @@ Cleo is a Python framework built on top of [Brian 2](https://brian2.readthedocs.
 ### Source of Truth
 
 > [!IMPORTANT]
-> The **remote NAS** at `/snel/home/cbwash2/cleo/` is the **canonical source of truth** for all code.
+> The **remote NAS** at `/mnt/cbwash2/cleo/` is the **canonical source of truth** for all code.
 > The local path `/Users/claywashington/code/gpu2/cleo/` is a **sync mirror only** — do not edit
 > files locally and expect them to persist. All edits must be made on the remote via `ssh gpu2`.
 
@@ -22,12 +22,12 @@ Cleo is a Python framework built on top of [Brian 2](https://brian2.readthedocs.
 
 To prevent file and execution collisions when multiple agents run experiments concurrently, each agent must operate in a dedicated **Git Worktree** checked out to their active branch.
 
-1. **Create the Worktree**: From the main/shared repository directory (`/snel/home/cbwash2/cleo`), create a new worktree directory and branch:
+1. **Create the Worktree**: From the main/shared repository directory (`/mnt/cbwash2/cleo`), create a new worktree directory and branch:
    ```bash
-   git worktree add /snel/home/cbwash2/cleo-worktrees/<branch-name> -b feature/<branch-name>
+   git worktree add /mnt/cbwash2/cleo-worktrees/<branch-name> -b feature/<branch-name>
    ```
 2. **Register the Worktree**: Update [branches.md](branches.md) and [task.md](task.md) to document the new worktree path and branch assignment.
-3. **Shift Workspace**: Conduct all subsequent file edits, command runs (such as sweeps or tests), and git commits inside the dedicated `/snel/home/cbwash2/cleo-worktrees/<branch-name>` directory.
+3. **Shift Workspace**: Conduct all subsequent file edits, command runs (such as sweeps or tests), and git commits inside the dedicated `/mnt/cbwash2/cleo-worktrees/<branch-name>` directory.
 
 ## Environment
 
@@ -37,7 +37,7 @@ To prevent file and execution collisions when multiple agents run experiments co
 - **Infrastructure**: See [`INFRASTRUCTURE.md`](INFRASTRUCTURE.md) for full details on machines, GPUs, MCP servers, and NAS storage.
   - **gpu1**: 8× RTX 2080 Ti (11GB), 48 CPUs. MCP: `gpu1` (filesystem), `gpu1_shell` (commands).
   - **gpu2**: 8× A100 80GB, 128 CPUs. MCP: `gpu2_shell` (active), or SSH.
-  - **NAS**: Home dirs shared at `/snel/home/cbwash2/` — code, envs, data visible on both machines.
+  - **NAS**: Home dirs shared at `/snel/home/cbwash2/`. Project repo lives at `/mnt/cbwash2/cleo` (migrated from `/snel/home/cbwash2/cleo`).
 - **Brian2 limitation**: Single-threaded. For parallel simulations, use `multiprocessing.Pool` with `spawn` context and `brian2.start_scope()` per worker.
 - **Running commands via MCP**: Use `bash -lc '...'` wrapper for conda activation:
   ```
@@ -82,12 +82,6 @@ Some tutorials require additional packages beyond core Cleo:
 - **Linting**: `ruff`
 - **Docs**: Sphinx + ReadTheDocs
 - **Tutorials tested with**: `nbmake`
-- **Pre-push hook (one-time per clone)**: enable the committed hooks with
-  `git config core.hooksPath .githooks`. It runs the harness smoke tests
-  (incl. the preflight-coverage guard) before each push — warns-and-allows if the
-  `cleo` env isn't found, and is bypassable with `git push --no-verify`. CI runs
-  the same tests on `master`/`modeling-dev`. (Worktrees inherit this config from
-  the shared git dir, so you only set it once per clone.)
 
 ## Conventions
 
@@ -96,7 +90,7 @@ Some tutorials require additional packages beyond core Cleo:
 - Multi-device interactions: use `DeviceInteractionRegistry`
 - Visualization: use `cleo.viz`
 - All Python commands should run within the appropriate conda env (`cleo` or `dtmodeling`)
-- **Reproducibility & Data Split**: Always use a 40/10 train/test split (10 test trials out of 50 total trials) when training digital twin models (CA-NODE, GRU, N4SID). Set and pass a fixed random seed (default: `42`, configured centrally in [config.py](file:///snel/home/cbwash2/cleo-worktrees/extended-training/modeling/config.py)) to all random number generators to ensure complete reproducibility of train/val dataset splits and network parameter initialization.
+- **Reproducibility & Data Split**: Always use a 40/10 train/test split (10 test trials out of 50 total trials) when training digital twin models (CA-NODE, GRU, N4SID). Set and pass a fixed random seed (default: `42`, configured centrally in [config.py](file:///mnt/cbwash2/cleo-worktrees/extended-training/modeling/config.py)) to all random number generators to ensure complete reproducibility of train/val dataset splits and network parameter initialization.
 - **Always explain actions and rationale beforehand**: Under no circumstances should you call any tool or execute any shell command without first outputting a message explaining what you are doing, why you are doing it, and what you expect to achieve. Do not perform actions silently.
 - **Always use tmux for long-running jobs**: Any model training, evaluation, or benchmarking runs MUST be executed inside a `tmux` session (e.g., using `tmux new-session -d -s <session_name>`). This ensures the processes survive network disconnection and can be monitored easily. This applies to both the primary agent and any subagents spawned. If you delegate tasks to subagents, ensure their prompts explicitly instruct them to run commands inside a `tmux` session.
 - **Log all experiment results via the dashboard pipeline**: All model training results, hyperparameter sweeps, and comparison benchmarks MUST be captured by the dashboard pipeline (`preflight complete` / `build_dashboard.py`). See the "Experiment / Sweep" workflow below.
@@ -183,11 +177,10 @@ python -m modeling.scripts.preflight start \
   --results-dir results/<unique-dir-name> \
   --model-type <canode|latent_canode|latent_node|gru|n4sid|other> \
   [--past-window 200] \
-  [--worktree-path /snel/home/cbwash2/cleo-worktrees/<name>]
+  [--worktree-path /mnt/cbwash2/cleo-worktrees/<name>]
 ```
 
 This enforces:
-- **Laggard gate (so ideas don't get lost)**: `start` first runs `idea_status.scan()` and prints every open *laggard* — an idea marked 🔄 IN PROGRESS, a `MANIFEST.json` stuck un-completed, a completed experiment never registered in `ideas/`, a done-but-not-closed idea, or an **`UNMERGED`** experiment (a completed/baseline `MANIFEST.json` whose feature branch still exists and was never merged into `modeling-dev` — i.e. results committed in a worktree but never landed; this is the failure the idea/manifest-status checks alone miss). It **always warns**, and **blocks** if `open ≥ --max-open-laggards` (default 2) unless `--allow-laggards` / `PREFLIGHT_ALLOW_LAGGARDS=1`. Check anytime with `python -m modeling.scripts.preflight audit` (or `modeling.scripts.idea_status`). Close laggards by completing them (`preflight complete`, which merges + removes the worktree), marking the idea ✅ COMPLETE, or registering untracked ones in `ideas/`. A `Stop` hook also surfaces the laggard count every turn.
 - The idea entry exists in the specified ideas file and is not already completed
 - The results directory does NOT already contain files (prevents overwrites)
 - `branches.md` and the idea file mutually cross-reference each other
@@ -211,11 +204,11 @@ python -m modeling.scripts.fit_latent_canode \
 
 After training finishes, close the loop:
 
-> **Run `preflight complete` from the MAIN checkout (`/snel/home/cbwash2/cleo`,
+> **Run `preflight complete` from the MAIN checkout (`/mnt/cbwash2/cleo`,
 > on `modeling-dev`), under the `dtmodeling` env** — NOT from inside the
 > experiment's worktree:
 > ```bash
-> cd /snel/home/cbwash2/cleo
+> cd /mnt/cbwash2/cleo
 > conda run -n dtmodeling python -m modeling.scripts.preflight complete ...
 > ```
 > Why: completion merges the feature branch into `modeling-dev`, pushes, and
@@ -276,31 +269,19 @@ python -m modeling.scripts.preflight start \
   --machine gpu1 --gpu-ids 0,1,2,3 \
   --results-dir results/unique_dir_name \
   --model-type latent_canode \
-  --worktree-path /snel/home/cbwash2/cleo-worktrees/name
+  --worktree-path /mnt/cbwash2/cleo-worktrees/name
 ```
 Save the printed token for the next step.
 
-#### 4. Launch Training (`preflight launch` — MANDATORY)
-Training **must** be started with `preflight launch`. It creates the tmux session,
-injects `PREFLIGHT_TOKEN`, **records `run_host` / `tmux_session` / `run_pid` /
-`started_at` into the manifest** (so `preflight status` always knows which session to
-attach to), and refuses to start a second session over a live one:
+#### 4. Launch Training in tmux
+All sweep scripts **refuse to run outside tmux**. Use the session name from preflight:
 ```bash
-python -m modeling.scripts.preflight launch \
-  --results-dir results/unique_dir_name \
-  --command 'conda activate dtmodeling && python -m modeling.scripts.sweep_... --preflight-token <TOKEN> ...'
-# optional: --session-name <name> (default exp<id>_<branch>), --dry-run to preview
+tmux new-session -d -s exp_23_branch_name \
+  'cd /mnt/cbwash2/cleo-worktrees/name && \
+   conda activate dtmodeling && \
+   python -m modeling.scripts.sweep_... \
+     --preflight-token <TOKEN> ...'
 ```
-**Enforcement (code-level, not just convention):** `launch` mints a per-experiment
-nonce into the manifest and injects `PREFLIGHT_LAUNCH_NONCE` into the session env;
-`preflight_check.validate_preflight` — which every `fit_*.py` / `sweep_*.py` already
-calls — **refuses to run** unless that nonce is present and matches. So a manual
-`tmux new-session` (or bare CLI run) is rejected, guaranteeing every run is recorded.
-Children inherit the env var, so multi-process sweeps work unchanged. The run also
-auto-stamps runtime fields via `runtime_info.record_run_start` at validation time.
-
-Escape hatch for debugging or resuming a crashed run by hand: set
-`PREFLIGHT_ALLOW_MANUAL=1` (it warns that run location may not be recorded).
 
 #### 5. Monitor Training
 ```bash
@@ -311,9 +292,9 @@ python -m modeling.scripts.preflight monitor \
 This blocks until all runs produce `results.json`, then prints the best result and the exact `preflight complete` command to run.
 
 #### 6. Complete Experiment (Postflight)
-Run from the **main checkout** (`/snel/home/cbwash2/cleo`, on `modeling-dev`), under `dtmodeling` — never from the experiment's worktree:
+Run from the **main checkout** (`/mnt/cbwash2/cleo`, on `modeling-dev`), under `dtmodeling` — never from the experiment's worktree:
 ```bash
-cd /snel/home/cbwash2/cleo
+cd /mnt/cbwash2/cleo
 conda run -n dtmodeling python -m modeling.scripts.preflight complete \
   --results-dir results/unique_dir_name \
   --status completed --best-r2 0.864 \
@@ -328,37 +309,10 @@ It enforces these gates:
 #### 7. Repeat
 Select the next experiment and go to step 2.
 
-### "Give me an update" — `preflight status`
-
-One command answers *what's open and where to look*. It scans every manifest across the
-main checkout and all worktrees, lists each OPEN experiment with its host / tmux session /
-PID / best R² / idle time, and reports liveness (🟢 ALIVE / 🔴 DEAD / ⚪ unknown — DEAD
-means the recorded session/PID is actually gone):
-```bash
-python -m modeling.scripts.preflight status          # human-readable
-python -m modeling.scripts.preflight status --json    # machine-readable
-```
-This is the entry point when the user asks for a status update. A 🔴 DEAD open experiment
-should be closed with `preflight complete` (or `abandon` below). Liveness also feeds the
-laggard `scan()`: a manifest left `running` whose session/PID is dead is flagged STALE.
-
-### Abandoning an experiment — `preflight abandon`
-
-Dropping an experiment is a documented decision, not a silent `rm`. From the **main
-checkout**, this records `status: abandoned` + the reason into the manifest/idea/branches,
-then removes the worktree and branch. It refuses if the worktree has uncommitted work
-unless you pass `--force`:
-```bash
-python -m modeling.scripts.preflight abandon \
-  --results-dir results/unique_dir_name \
-  --reason "Superseded by Exp 41; approach didn't beat baseline"
-```
-
 ### Worktree Lifecycle
 
 - **Creation**: `preflight start --worktree-path ...` creates worktrees
-- **Launch**: `preflight launch` starts training in tmux and records where it runs
-- **Deletion**: `preflight complete` auto-merges and removes worktrees; `preflight abandon` records the decision and removes them
+- **Deletion**: `preflight complete` auto-merges and removes worktrees
 - **No manual worktrees**: All worktrees must be created via preflight
 - **Stale worktrees**: Any worktree not tied to an active experiment should be cleaned up
 
@@ -367,9 +321,6 @@ python -m modeling.scripts.preflight abandon \
 1. **Never read from local file mirrors** (e.g., ~/code/gpu2/cleo/). These are stale. Always use the MCP tools (gpu1, gpu2) or SSH to read files from the actual machines.
 2. **Never run training outside tmux**. Sweep scripts enforce this and will refuse to start.
 3. **Never reuse a results directory**. Preflight enforces this — each experiment gets a unique results dir.
-4. **Never discard the user's pre-existing uncommitted changes.** If the working tree is dirty with edits you did not make (e.g. `task.md`, `results/dashboard.html`), do NOT `git checkout -- <file>`, `git restore`, `git reset --hard`, or `git clean` them away to get a clean tree. Use `git stash` (non-destructive, recoverable) if you must set them aside, and tell the user what you stashed. Their uncommitted work is theirs.
-5. **Never unilaterally edit, commit into, merge, or clean up another agent's worktree or feature branch.** Each `/snel/home/cbwash2/cleo-worktrees/<name>` belongs to whoever owns its branch in `branches.md`. Touching it risks clobbering in-flight work and corrupting that agent's merge. If cross-worktree work is genuinely needed, ask the user first and name exactly which files/branches you intend to change. The only branch you mutate freely is your own (or `modeling-dev` from the main checkout when running `preflight complete`).
-6. **Never bulk-overwrite `MANIFEST.json` files across experiments.** When closing idea debt or fixing manifests, edit them one at a time and name each target — never a blanket rewrite across `results/*/` or across worktrees.
 ### Results Digestion Protocol
 
 Every new set of experiment results **MUST** be digested through a structured git commit that updates all tracking artifacts. No results are considered "landed" until this process completes.

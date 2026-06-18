@@ -1,6 +1,6 @@
 # Spectral Loss: Frequency-Aware Loss Implementation
 
-Parent: [task.md](file:///snel/home/cbwash2/cleo/task.md)
+Parent: [task.md](file:///mnt/cbwash2/cleo/task.md)
 Branch: `feature/spectral-loss`
 Agent: Antigravity
 

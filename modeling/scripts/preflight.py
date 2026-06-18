@@ -93,7 +93,7 @@ def _assert_main_checkout(repo_root):
             "ERROR: `preflight complete` must run from the main checkout on modeling-dev.\n"
             "  - " + "\n  - ".join(problems) + "\n"
             "  Run it from the main repo instead:\n"
-            "    cd /snel/home/cbwash2/cleo\n"
+            "    cd /mnt/cbwash2/cleo\n"
             "    conda run -n dtmodeling python -m modeling.scripts.preflight complete ...\n"
             "  (set PREFLIGHT_ALLOW_ANY_CHECKOUT=1 to bypass for testing).",
             file=sys.stderr,

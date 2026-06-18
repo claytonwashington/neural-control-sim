@@ -1,6 +1,6 @@
 # Multi-Scale / Multi-Rate Integration for CA-NODE
 
-Parent: [task.md](file:///snel/home/cbwash2/cleo/task.md)
+Parent: [task.md](file:///mnt/cbwash2/cleo/task.md)
 Branch: `feature/multi-rate-integration`
 Agent: Antigravity
 

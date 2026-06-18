@@ -2,7 +2,7 @@
 """Generate the 50-trial bidirectional training dataset.
 
 Usage:
-    cd /snel/home/cbwash2/cleo-worktrees/bidirectional-plant
+    cd /mnt/cbwash2/cleo-worktrees/bidirectional-plant
     python -m modeling.scripts.generate_bidirectional_data
 """
 
@@ -25,7 +25,7 @@ def main():
     parser.add_argument("--n-workers", type=int, default=10,
                         help="Parallel workers (default 10)")
     parser.add_argument("--output", type=str,
-                        default="/snel/home/cbwash2/cleo/data/training_trials_bidirectional.h5")
+                        default="/mnt/cbwash2/cleo/data/training_trials_bidirectional.h5")
     parser.add_argument("--base-seed", type=int, default=42)
     parser.add_argument("--plant-seed", type=int, default=42)
     args = parser.parse_args()

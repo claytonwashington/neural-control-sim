@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import welch
 
 # Add repository path to sys.path
-sys.path.append("/snel/home/cbwash2/cleo")
+sys.path.append("/mnt/cbwash2/cleo")
 
 from modeling.data import load_trials_h5
 from modeling.models.canode import ControlAffineODE

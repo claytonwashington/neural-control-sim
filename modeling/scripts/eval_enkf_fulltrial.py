@@ -46,8 +46,8 @@ from modeling.models.latent_canode import LatentControlAffineODE
 # --------------------------------------------------------------------------- #
 #  Constants
 # --------------------------------------------------------------------------- #
-ABS_DATA_PATH = "/snel/home/cbwash2/cleo/data/training_trials.h5"
-ABS_CAUSAL_CKPT = "/snel/home/cbwash2/cleo/results/causal_z64_pw200_h128_lr3e4/model.pt"
+ABS_DATA_PATH = "/mnt/cbwash2/cleo/data/training_trials.h5"
+ABS_CAUSAL_CKPT = "/mnt/cbwash2/cleo/results/causal_z64_pw200_h128_lr3e4/model.pt"
 ENCODER_WINDOW = 200  # first 200 steps used for encoder init
 
 
