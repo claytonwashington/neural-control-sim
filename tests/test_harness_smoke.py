@@ -182,3 +182,55 @@ def test_idea_status_classifies_laggards(tmp_path):
     assert (9, "UNTRACKED") in kinds                   # ran but never registered
     assert not any(d["idea_id"] == 1 for d in laggards)  # completed not flagged
     assert not any(d["idea_id"] == 3 for d in laggards)  # never-started backlog not flagged
+
+
+def test_idea_status_flags_unmerged_branch(tmp_path):
+    """A completed experiment whose feature branch never landed on modeling-dev is
+    UNMERGED; an experiment whose branch IS merged is not."""
+    import subprocess
+
+    from modeling.scripts.idea_status import scan
+
+    def git(*args):
+        subprocess.run(["git", *args], cwd=str(tmp_path), check=True,
+                       capture_output=True, text=True)
+
+    git("init", "-q")
+    git("config", "user.email", "t@t.t")
+    git("config", "user.name", "t")
+    (tmp_path / "ideas").mkdir()
+    (tmp_path / "ideas" / "modeling.md").write_text(
+        "### Experiment 5. Unmerged thing\n**Status**: ✅ COMPLETE\n\n"
+        "### Experiment 6. Merged thing\n**Status**: ✅ COMPLETE\n")
+    (tmp_path / "seed.txt").write_text("base")
+    git("add", "-A")
+    git("commit", "-qm", "base")
+    git("branch", "-M", "modeling-dev")          # works on old git without init -b
+
+    # Exp 6: a feature branch that gets merged back (the happy path).
+    git("checkout", "-q", "-b", "feature/merged")
+    (tmp_path / "f6.txt").write_text("x")
+    git("add", "-A")
+    git("commit", "-qm", "f6")
+    git("checkout", "-q", "modeling-dev")
+    git("merge", "-q", "--no-ff", "-m", "merge f6", "feature/merged")
+
+    # Exp 5: a feature branch with an unmerged commit (the failure path).
+    git("checkout", "-q", "-b", "feature/unmerged")
+    (tmp_path / "f5.txt").write_text("y")
+    git("add", "-A")
+    git("commit", "-qm", "f5")
+    git("checkout", "-q", "modeling-dev")
+
+    for iid, branch in ((5, "feature/unmerged"), (6, "feature/merged")):
+        d = tmp_path / "results" / f"exp{iid}"
+        d.mkdir(parents=True)
+        (d / "MANIFEST.json").write_text(json.dumps({
+            "idea_file": "ideas/modeling.md", "idea_id": iid,
+            "experiment_name": f"Exp {iid}", "status": "completed", "branch": branch,
+        }))
+
+    laggards = scan(root=str(tmp_path), include_worktrees=False)
+    kinds = {(d["idea_id"], d["kind"]) for d in laggards}
+    assert (5, "UNMERGED") in kinds                    # committed in branch, never landed
+    assert not any(d["idea_id"] == 6 for d in laggards)  # merged branch is clean

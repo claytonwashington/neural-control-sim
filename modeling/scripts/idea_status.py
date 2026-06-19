@@ -14,6 +14,9 @@ Kinds:
                       ideas/ (it ran but was never registered).
   * DONE_NOT_CLOSED — an idea marked IN PROGRESS whose results already exist, or a
                       completed MANIFEST whose idea entry isn't ✅ COMPLETE.
+  * UNMERGED        — a completed/baseline MANIFEST whose feature branch still exists
+                      and was never merged into modeling-dev (results committed in a
+                      worktree but never landed). Catches what the status checks miss.
 
 Used by `preflight start` (warn + threshold gate), `preflight audit`, and a Stop
 hook. CLI::
@@ -60,6 +63,19 @@ def main_repo() -> str:
     r = subprocess.run(["git", "rev-parse", "--show-toplevel"],
                        capture_output=True, text=True).stdout.strip()
     return r or os.getcwd()
+
+
+def _git(root: str, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)
+
+
+def _branch_exists(root: str, branch: str) -> bool:
+    return _git(root, "rev-parse", "--verify", "--quiet", branch).returncode == 0
+
+
+def _is_merged(root: str, branch: str, into: str = "modeling-dev") -> bool:
+    """True if `branch`'s tip is already an ancestor of `into` (i.e. landed)."""
+    return _git(root, "merge-base", "--is-ancestor", branch, into).returncode == 0
 
 
 def _idea_statuses(root: str) -> dict[tuple[str, int], dict]:
@@ -128,6 +144,7 @@ def _manifests(root: str, include_worktrees: bool) -> list[dict]:
             "idea_id": iid,
             "name": j.get("experiment_name", os.path.basename(exp_dir)),
             "status": j.get("status"),
+            "branch": j.get("branch"),
             "created_at": j.get("created_at"),
             "results_dir": j.get("results_dir", os.path.basename(exp_dir)),
             "location": loc,
@@ -150,7 +167,7 @@ def scan(root: str | None = None, include_worktrees: bool = True,
     def add(key, kind, *, idea_file=None, idea_id=None, name="", status="",
             age=None, location="main", action=""):
         # keep the most actionable kind if the same experiment matches twice
-        order = {"UNTRACKED": 3, "DONE_NOT_CLOSED": 2, "STALE": 1, "IN_PROGRESS": 0}
+        order = {"UNMERGED": 4, "UNTRACKED": 3, "DONE_NOT_CLOSED": 2, "STALE": 1, "IN_PROGRESS": 0}
         if key in laggards and order.get(laggards[key]["kind"], 0) >= order.get(kind, 0):
             return
         laggards[key] = dict(kind=kind, idea_file=idea_file, idea_id=idea_id, name=name,
@@ -182,11 +199,24 @@ def scan(root: str | None = None, include_worktrees: bool = True,
                 status=m["status"], age=age, location=m["location"],
                 action=f"mark {m['idea_file']} Exp {m['idea_id']} ✅ COMPLETE (already done)")
 
+        # UNMERGED: a closed (completed/baseline) experiment whose feature branch
+        # still exists and was never landed on modeling-dev. This is the blind spot
+        # the idea/manifest status checks miss — results committed in a worktree but
+        # never merged. Only fires while the branch ref still exists (the happy path
+        # merges + deletes it, so merged-and-removed branches never trip this).
+        br = m.get("branch")
+        if (m["status"] in CLOSED_MANIFEST_STATUS and br
+                and _branch_exists(root, br) and not _is_merged(root, br)):
+            add(key, "UNMERGED", idea_file=m["idea_file"], idea_id=m["idea_id"], name=m["name"],
+                status=m["status"], age=age, location=m["location"],
+                action=f"land {br} on modeling-dev: run `preflight complete` (merges + removes the worktree)")
+
     return sorted(laggards.values(), key=lambda d: (-(d["age_days"] or 0), str(d["idea_id"])))
 
 
 # ── reporting ──────────────────────────────────────────────────────────────
-ICON = {"IN_PROGRESS": "🔄", "STALE": "⏳", "UNTRACKED": "❓", "DONE_NOT_CLOSED": "📌"}
+ICON = {"IN_PROGRESS": "🔄", "STALE": "⏳", "UNTRACKED": "❓", "DONE_NOT_CLOSED": "📌",
+        "UNMERGED": "🔀"}
 
 
 def format_report(laggards: list[dict]) -> str:
