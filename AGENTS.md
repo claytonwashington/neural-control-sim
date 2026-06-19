@@ -322,6 +322,9 @@ Select the next experiment and go to step 2.
 1. **Never read from local file mirrors** (e.g., ~/code/gpu2/cleo/). These are stale. Always use the MCP tools (gpu1, gpu2) or SSH to read files from the actual machines.
 2. **Never run training outside tmux**. Sweep scripts enforce this and will refuse to start.
 3. **Never reuse a results directory**. Preflight enforces this — each experiment gets a unique results dir.
+4. **Never discard the user's pre-existing uncommitted changes.** If the working tree is dirty with edits you did not make (e.g. `task.md`, `results/dashboard.html`), do NOT `git checkout -- <file>`, `git restore`, `git reset --hard`, or `git clean` them away to get a clean tree. Use `git stash` (non-destructive, recoverable) if you must set them aside, and tell the user what you stashed. Their uncommitted work is theirs.
+5. **Never unilaterally edit, commit into, merge, or clean up another agent's worktree or feature branch.** Each `/snel/home/cbwash2/cleo-worktrees/<name>` belongs to whoever owns its branch in `branches.md`. Touching it risks clobbering in-flight work and corrupting that agent's merge. If cross-worktree work is genuinely needed, ask the user first and name exactly which files/branches you intend to change. The only branch you mutate freely is your own (or `modeling-dev` from the main checkout when running `preflight complete`).
+6. **Never bulk-overwrite `MANIFEST.json` files across experiments.** When closing idea debt or fixing manifests, edit them one at a time and name each target — never a blanket rewrite across `results/*/` or across worktrees.
 ### Results Digestion Protocol
 
 Every new set of experiment results **MUST** be digested through a structured git commit that updates all tracking artifacts. No results are considered "landed" until this process completes.
