@@ -40,8 +40,8 @@ placement_0/
 ## Roadmap
 
 ### Phase 1: Baseline Spiking CA-NODE (single placement)
-**Status**: Not started
-**Experiment**: TBD (next in ideas/modeling.md)
+**Status**: IN PROGRESS
+**Experiment**: Experiment 37 (see ideas/modeling.md)
 
 Train a standard Latent CA-NODE on spiking data from a single probe placement,
 proving we can learn dynamics from sorted spike trains instead of MUA.
@@ -53,10 +53,10 @@ proving we can learn dynamics from sorted spike trains instead of MUA.
 - Training data: 10ms bins → may need to adjust dt and horizon
 
 **Questions to resolve before training:**
-1. Should we bin at 10ms (current) or finer resolution?
-2. Should training use Euler (to match MPC) or dopri5 (current standard)?
-3. Which placement to start with? Placement 0 is consistent (centered probe)
-4. What train/test split? Use standard 40/10 (same as MUA work)?
+1. Should we bin at 10ms (current) or finer resolution? **Decision: 10ms bins**
+2. Should training use Euler (to match MPC) or dopri5 (current standard)? **Decision: dopri5 for training, evaluate both**
+3. Which placement to start with? Placement 0 is consistent (centered probe) **Decision: Placement 0**
+4. What train/test split? Use standard 40/10 (same as MUA work)? **Decision: 40/10, seed=42**
 
 ### Phase 2: Cross-placement generalization evaluation
 **Status**: Blocked by Phase 1

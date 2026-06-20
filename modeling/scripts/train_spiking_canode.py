@@ -72,7 +72,7 @@ def load_spiking_data(
         grp = f["placement_%d" % placement]
         x_sorted = grp["x_sorted"][:]            # (n_trials, max_n, n_bins) int16
         n_sorted = grp["n_sorted_per_trial"][:]   # (n_trials,)
-        u_1ms = grp["u"][:]                       # (n_trials, 2, n_bins*10)
+        u_1ms = f["u"][:]                         # (n_trials, 2, n_bins*10) -- top level
 
     n_trials, max_n, n_bins = x_sorted.shape
     n_u = u_1ms.shape[1]
@@ -103,11 +103,12 @@ def load_spiking_data(
 
     # Normalization: per-channel mean/std from training data
     # Only compute stats over non-padded neurons to avoid bias from zeros
-    mask_expanded = m_train[:, :, None]  # (n_train, max_n, 1)
-    x_masked = x_train * mask_expanded   # zero out padded
-    count_per_neuron = mask_expanded.sum(axis=(0, 2))  # (max_n,)
-    count_per_neuron = np.maximum(count_per_neuron, 1.0)
+    # mask: (n_train, max_n), x_train: (n_train, max_n, n_bins)
+    # Count valid entries per neuron = n_valid_trials * n_bins
+    n_valid_trials_per_neuron = m_train.sum(axis=0)  # (max_n,)
+    count_per_neuron = np.maximum(n_valid_trials_per_neuron * n_bins, 1.0)
 
+    x_masked = x_train * m_train[:, :, None]  # zero out padded
     x_mean = (x_masked.sum(axis=(0, 2)) / count_per_neuron)       # (max_n,)
     x_sq_mean = ((x_masked ** 2).sum(axis=(0, 2)) / count_per_neuron)
     x_std = np.sqrt(np.maximum(x_sq_mean - x_mean ** 2, 0)) + 1e-8
