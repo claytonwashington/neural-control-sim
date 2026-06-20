@@ -16,7 +16,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 # Ensure project root on path
-sys.path.insert(0, '/snel/home/cbwash2/cleo')
+sys.path.insert(0, '/mnt/cbwash2/cleo')
 
 from modeling.data import load_trials_h5
 from modeling.config import DEFAULT_SEED, DEFAULT_TEST_TRIALS, set_seed
@@ -466,7 +466,7 @@ def generate_latent_node_prediction_plot():
 
 
 if __name__ == '__main__':
-    os.chdir('/snel/home/cbwash2/cleo')
+    os.chdir('/mnt/cbwash2/cleo')
     
     print('=== Generating Dashboard Assets ===')
     

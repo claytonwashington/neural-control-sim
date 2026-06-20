@@ -10,8 +10,8 @@ Creates three figures:
 import sys
 import os
 
-CLEO_ROOT = "/snel/home/cbwash2/cleo"
-ALIGNED_ROOT = "/snel/home/cbwash2/cleo-worktrees/aligned-distill"
+CLEO_ROOT = "/mnt/cbwash2/cleo"
+ALIGNED_ROOT = "/mnt/cbwash2/cleo-worktrees/aligned-distill"
 sys.path.insert(0, CLEO_ROOT)
 sys.path.insert(0, ALIGNED_ROOT)
 

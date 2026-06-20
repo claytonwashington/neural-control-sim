@@ -5,7 +5,7 @@ Uses build_plant_v2 (ChR2-H134R + eNpHR3.0).
 Avoids monkey-patching by using a dedicated top-level worker function.
 
 Usage:
-    cd /snel/home/cbwash2/cleo-worktrees/bidir-v2-plant
+    cd /mnt/cbwash2/cleo-worktrees/bidir-v2-plant
     python -m modeling.scripts.generate_bidir_v2_data --n-workers 50
 """
 
@@ -66,7 +66,7 @@ def main():
     parser.add_argument("--trial-duration", type=float, default=30.0)
     parser.add_argument("--n-workers", type=int, default=50)
     parser.add_argument("--output", type=str,
-                        default="/snel/home/cbwash2/cleo/data/training_trials_bidir_v2.h5")
+                        default="/mnt/cbwash2/cleo/data/training_trials_bidir_v2.h5")
     parser.add_argument("--base-seed", type=int, default=42)
     parser.add_argument("--plant-seed", type=int, default=42)
     parser.add_argument("--sample-period", type=float, default=1.0)

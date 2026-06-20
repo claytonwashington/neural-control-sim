@@ -7,7 +7,7 @@ This document catalogs all Cleo neural simulation plant configurations used in t
 ## Plant 1: Unidirectional Excitatory (v0)
 
 **Function**: `build_plant()`  
-**File**: [plant.py](file:///snel/home/cbwash2/cleo-worktrees/bidir-v2-plant/modeling/plant.py)  
+**File**: [plant.py](file:///mnt/cbwash2/cleo-worktrees/bidir-v2-plant/modeling/plant.py)  
 **Status**: ✅ Active (original baseline)
 
 | Component | Details |
@@ -44,7 +44,7 @@ meaningful rate suppression. Disregarded for all future work.
 ## Plant 3: Bidirectional v2 (ChR2-H134R + eNpHR3.0)
 
 **Function**: `build_plant_v2()`  
-**File**: [plant.py](file:///snel/home/cbwash2/cleo-worktrees/bidir-v2-plant/modeling/plant.py)  
+**File**: [plant.py](file:///mnt/cbwash2/cleo-worktrees/bidir-v2-plant/modeling/plant.py)  
 **Status**: ✅ Active (current primary plant)
 
 | Component | Details |

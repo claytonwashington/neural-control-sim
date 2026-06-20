@@ -34,7 +34,7 @@ grep "<exp_dir>" branches.md
 After an experiment finishes, `preflight complete` must be called:
 
 ```bash
-cd /snel/home/cbwash2/cleo-worktrees/<worktree>
+cd /mnt/cbwash2/cleo-worktrees/<worktree>
 
 python -m modeling.scripts.preflight complete \
   --results-dir results/<exp_dir> \
@@ -67,7 +67,7 @@ cat results/<exp_dir>/MANIFEST.json | python3 -m json.tool | grep -E "status|com
 
 ## 3. Leaderboard Update
 
-The leaderboard (`/snel/home/cbwash2/cleo/results/leaderboard.json`) tracks the best model 
+The leaderboard (`/mnt/cbwash2/cleo/results/leaderboard.json`) tracks the best model 
 from each experiment type. It is used by `results/dashboard.html`.
 
 **When to update:** After any experiment that produces a new best-in-class model.
@@ -75,7 +75,7 @@ from each experiment type. It is used by `results/dashboard.html`.
 **How to verify:**
 ```bash
 # Check if experiment appears in leaderboard
-cat /snel/home/cbwash2/cleo/results/leaderboard.json | python3 -m json.tool | grep -i "<exp_name>"
+cat /mnt/cbwash2/cleo/results/leaderboard.json | python3 -m json.tool | grep -i "<exp_name>"
 
 # The leaderboard should contain entries for:
 # - Acausal models (best R²)
@@ -116,7 +116,7 @@ grep -i "Exp 28\|Exp 29\|bidir.*v2\|H134R" results/dashboard.html
 Run this one-liner to audit all experiments at once:
 
 ```bash
-cd /snel/home/cbwash2/cleo-worktrees/bidir-v2-plant
+cd /mnt/cbwash2/cleo-worktrees/bidir-v2-plant
 
 echo "=== EXPERIMENT STATUS AUDIT ==="
 echo ""
@@ -141,7 +141,7 @@ echo ""
 echo "--- Leaderboard entries ---"
 python3 -c "
 import json
-lb = json.load(open('/snel/home/cbwash2/cleo/results/leaderboard.json'))
+lb = json.load(open('/mnt/cbwash2/cleo/results/leaderboard.json'))
 for e in lb:
     best = '🏆' if e.get('is_best_row') else '  '
     print(f\"  {best} {e['model']}: R²={e.get('r2','N/A')}\")

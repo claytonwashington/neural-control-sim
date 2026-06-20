@@ -15,7 +15,7 @@ Cleo is a Python framework built on top of [Brian 2](https://brian2.readthedocs.
 ### Source of Truth
 
 > [!IMPORTANT]
-> The **remote NAS** at `/snel/home/cbwash2/cleo/` is the **canonical source of truth** for all code.
+> The **remote NAS** at `/mnt/cbwash2/cleo/` is the **canonical source of truth** for all code.
 > The local path `/Users/claywashington/code/gpu2/cleo/` is a **sync mirror only** — do not edit
 > files locally and expect them to persist. All edits must be made on the remote via `ssh gpu2`.
 
@@ -23,12 +23,12 @@ Cleo is a Python framework built on top of [Brian 2](https://brian2.readthedocs.
 
 To prevent file and execution collisions when multiple agents run experiments concurrently, each agent must operate in a dedicated **Git Worktree** checked out to their active branch.
 
-1. **Create the Worktree**: From the main/shared repository directory (`/snel/home/cbwash2/cleo`), create a new worktree directory and branch:
+1. **Create the Worktree**: From the main/shared repository directory (`/mnt/cbwash2/cleo`), create a new worktree directory and branch:
    ```bash
-   git worktree add /snel/home/cbwash2/cleo-worktrees/<branch-name> -b feature/<branch-name>
+   git worktree add /mnt/cbwash2/cleo-worktrees/<branch-name> -b feature/<branch-name>
    ```
 2. **Register the Worktree**: Update [branches.md](branches.md) and [task.md](task.md) to document the new worktree path and branch assignment.
-3. **Shift Workspace**: Conduct all subsequent file edits, command runs (such as sweeps or tests), and git commits inside the dedicated `/snel/home/cbwash2/cleo-worktrees/<branch-name>` directory.
+3. **Shift Workspace**: Conduct all subsequent file edits, command runs (such as sweeps or tests), and git commits inside the dedicated `/mnt/cbwash2/cleo-worktrees/<branch-name>` directory.
 
 ## Environment
 
@@ -91,7 +91,7 @@ Some tutorials require additional packages beyond core Cleo:
 - Multi-device interactions: use `DeviceInteractionRegistry`
 - Visualization: use `cleo.viz`
 - All Python commands should run within the appropriate conda env (`cleo` or `dtmodeling`)
-- **Reproducibility & Data Split**: Always use a 40/10 train/test split (10 test trials out of 50 total trials) when training digital twin models (CA-NODE, GRU, N4SID). Set and pass a fixed random seed (default: `42`, configured centrally in [config.py](file:///snel/home/cbwash2/cleo-worktrees/extended-training/modeling/config.py)) to all random number generators to ensure complete reproducibility of train/val dataset splits and network parameter initialization.
+- **Reproducibility & Data Split**: Always use a 40/10 train/test split (10 test trials out of 50 total trials) when training digital twin models (CA-NODE, GRU, N4SID). Set and pass a fixed random seed (default: `42`, configured centrally in [config.py](file:///mnt/cbwash2/cleo-worktrees/extended-training/modeling/config.py)) to all random number generators to ensure complete reproducibility of train/val dataset splits and network parameter initialization.
 - **Always explain actions and rationale beforehand**: Under no circumstances should you call any tool or execute any shell command without first outputting a message explaining what you are doing, why you are doing it, and what you expect to achieve. Do not perform actions silently.
 - **Always use tmux for long-running jobs**: Any model training, evaluation, or benchmarking runs MUST be executed inside a `tmux` session (e.g., using `tmux new-session -d -s <session_name>`). This ensures the processes survive network disconnection and can be monitored easily. This applies to both the primary agent and any subagents spawned. If you delegate tasks to subagents, ensure their prompts explicitly instruct them to run commands inside a `tmux` session.
 - **Log all experiment results in the HTML dashboard**: All model training results, hyperparameter sweeps, and comparison benchmarks MUST be logged in [`results/dashboard.html`](results/dashboard.html). This is the single source of truth for experiment tracking. See the "Experiment / Sweep" workflow below for details.
@@ -174,7 +174,7 @@ python -m modeling.scripts.preflight start \
   --machine <gpu1|gpu2> \
   --gpu-ids <comma-separated GPU indices> \
   --results-dir results/<unique-dir-name> \
-  [--worktree-path /snel/home/cbwash2/cleo-worktrees/<name>]
+  [--worktree-path /mnt/cbwash2/cleo-worktrees/<name>]
 ```
 
 This enforces:
@@ -242,7 +242,7 @@ python -m modeling.scripts.preflight start \
   --data data/training_trials_bidirectional.h5 \
   --machine gpu1 --gpu-ids 0,1,2,3 \
   --results-dir results/unique_dir_name \
-  --worktree-path /snel/home/cbwash2/cleo-worktrees/name
+  --worktree-path /mnt/cbwash2/cleo-worktrees/name
 ```
 Save the printed token for the next step.
 
@@ -250,7 +250,7 @@ Save the printed token for the next step.
 All sweep scripts **refuse to run outside tmux**. Use the session name from preflight:
 ```bash
 tmux new-session -d -s exp_23_branch_name \
-  'cd /snel/home/cbwash2/cleo-worktrees/name && \
+  'cd /mnt/cbwash2/cleo-worktrees/name && \
    conda activate dtmodeling && \
    python -m modeling.scripts.sweep_... \
      --preflight-token <TOKEN> ...'

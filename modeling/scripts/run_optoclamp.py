@@ -2,8 +2,8 @@
 """Run the optoclamp rate-clamping experiment with multiple controllers.
 
 Recapitulates the optoclamp experiment (Newman et al. 2015):
-  1. Baseline: 200ms no control → measure spontaneous rate
-  2. Clamp: 1000ms → hold population rate at target (fraction of baseline)
+  1. Baseline: 200ms no control -> measure spontaneous rate
+  2. Clamp: 1000ms -> hold population rate at target (fraction of baseline)
   3. Recovery: 200ms no control
 
 Controllers compared:
@@ -44,7 +44,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from modeling.plant import build_plant_v2
 
 
-# ─── Recording-only IOProcessor for baseline measurement ───────────────────
+# --- Recording-only IOProcessor for baseline measurement ---
 
 class BaselineRecorder(LatencyIOProcessor):
     """Record firing rates without any stimulation."""
@@ -70,7 +70,7 @@ class BaselineRecorder(LatencyIOProcessor):
             counts, self.sample_period, self._rates, self.tau_rate
         )
         self.rate_log.append(np.array(self._rates, dtype=np.float64))
-        # Zero stimulation — output to both fibers independently
+        # Zero stimulation -- output to both fibers independently
         return {
             self.light_name_exc: np.zeros(1) * mwatt / mm**2,
             self.light_name_inh: np.zeros(1) * mwatt / mm**2,
@@ -82,7 +82,7 @@ class BaselineRecorder(LatencyIOProcessor):
         self.rate_log.clear()
 
 
-# ─── Metrics ───────────────────────────────────────────────────────────────
+# --- Metrics ---
 
 def compute_metrics(rates: np.ndarray, target: float,
                     clamp_start: int, clamp_end: int, dt_ms: float = 1.0):
@@ -142,7 +142,7 @@ def compute_metrics(rates: np.ndarray, target: float,
     }
 
 
-# ─── Worker function for parallel target evaluation ──────────────────────
+# --- Worker function for parallel target evaluation ---
 
 def _run_mpc_target(kwargs):
     """Run a single MPC target evaluation in a worker process.
@@ -190,6 +190,7 @@ def _run_mpc_target(kwargs):
         mpc_iters=args_dict["mpc_iters"],
         mpc_batch_size=args_dict["mpc_batch_size"],
         mpc_solver=args_dict.get("mpc_solver", "euler"),
+        mpc_timeout_s=args_dict.get("mpc_timeout", 2.0),
         compute_delay_ms=args_dict["mpc_delay"],
         u_max=50.0,
         device=args_dict["device"],
@@ -224,12 +225,12 @@ def _run_mpc_target(kwargs):
     }
 
 
-# ─── Main experiment ──────────────────────────────────────────────────────
+# --- Main experiment ---
 
 def run_optoclamp(args):
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # ── Phase 0: Measure baseline spontaneous rate ──────────────────────
+    # -- Phase 0: Measure baseline spontaneous rate --
     print("=" * 60)
     print("Phase 0: Measuring baseline spontaneous rate")
     print("=" * 60)
@@ -250,7 +251,7 @@ def run_optoclamp(args):
 
     all_results = {}
 
-    # ── Phase 1: PI Controller ──────────────────────────────────────────
+    # -- Phase 1: PI Controller --
     print("\n" + "=" * 60)
     print("Phase 1: PI Controller")
     print("=" * 60)
@@ -284,7 +285,7 @@ def run_optoclamp(args):
         )
         sim.set_io_processor(ctrl)
 
-        # Baseline → Clamp → Recovery
+        # Baseline -> Clamp -> Recovery
         sim.run(200 * ms)   # baseline (warmup)
         sim.run(1000 * ms)  # clamping
         sim.run(200 * ms)   # recovery
@@ -333,11 +334,12 @@ def run_optoclamp(args):
         "targets": pi_results,
     }
 
-    # ── Phase 2: Neural ODE MPC (parallel targets) ──────────────────────
+    # -- Phase 2: Neural ODE MPC (parallel targets) --
     if args.model_checkpoint:
         print("\n" + "=" * 60)
         print("Phase 2: Neural ODE MPC (parallel targets)")
         print(f"  Batch size: {args.mpc_batch_size}")
+        print(f"  MPC timeout: {args.mpc_timeout}s")
         print("=" * 60)
 
         # Serialize args for worker processes
@@ -346,6 +348,7 @@ def run_optoclamp(args):
             "mpc_iters": args.mpc_iters,
             "mpc_batch_size": args.mpc_batch_size,
             "mpc_solver": args.mpc_solver,
+            "mpc_timeout": args.mpc_timeout,
             "mpc_delay": args.mpc_delay,
             "reencode_k": args.reencode_k,
             "lambda_u": args.lambda_u,
@@ -357,6 +360,7 @@ def run_optoclamp(args):
             "adapt_grad_clip": args.adapt_grad_clip,
         }
 
+        _mpc_step_counter = 0
         for horizon in args.mpc_horizons:
             print(f"\n  --- MPC horizon={horizon} ---")
 
@@ -392,21 +396,22 @@ def run_optoclamp(args):
                     "batch_size": args.mpc_batch_size,
                     "delay_ms": args.mpc_delay,
                     "reencode_k": args.reencode_k,
+                    "mpc_timeout_s": args.mpc_timeout,
                 },
                 "targets": mpc_results,
             }
 
-    # ── Save results ────────────────────────────────────────────────────
+    # -- Save results --
     results_path = os.path.join(args.output_dir, "optoclamp_results.json")
     with open(results_path, "w") as f:
         json.dump(all_results, f, indent=2, default=str)
     print(f"\nResults saved to {results_path}")
 
-    # ── Generate comparison plots ───────────────────────────────────────
+    # -- Generate comparison plots --
     _plot_comparison(all_results, targets, target_fractions, args.output_dir)
     print(f"Plots saved to {args.output_dir}/")
 
-    # ── Summary ─────────────────────────────────────────────────────────
+    # -- Summary --
     print("\n" + "=" * 60)
     print("SUMMARY")
     print("=" * 60)
@@ -501,6 +506,8 @@ if __name__ == "__main__":
     parser.add_argument("--mpc-solver", type=str, default="euler",
                         choices=["euler", "dopri5"],
                         help="ODE solver for MPC rollout (default: euler)")
+    parser.add_argument("--mpc-timeout", type=float, default=2.0,
+                        help="Wall-clock timeout in seconds per MPC solve (default: 2.0)")
     parser.add_argument("--adaptive", action="store_true",
                         help="Enable online adaptive fine-tuning of g+decoder")
     parser.add_argument("--adapt-lr", type=float, default=1e-5,

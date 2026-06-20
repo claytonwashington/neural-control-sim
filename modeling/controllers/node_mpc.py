@@ -18,6 +18,8 @@ Usage:
 
 from __future__ import annotations
 
+import time as _time
+import warnings
 from collections import deque
 from typing import Tuple
 
@@ -35,11 +37,11 @@ class NeuralODEMPC(LatencyIOProcessor):
     """MPC controller using a trained causal latent CA-NODE.
 
     At each control step:
-      1. Record observation (spike counts → exponentially smoothed rates)
-      2. Encode past 200ms of rates → z₀ via causal GRU encoder
-      3. Solve H-step MPC: min_{u} Σ ||decoder(z_k) - target||² + λ||u_k||²
-         subject to z_{k+1} = z_k + dt*(f(z_k) + g(z_k)·u_k), 0 ≤ u ≤ u_max
-      4. Apply first control action u₀
+      1. Record observation (spike counts -> exponentially smoothed rates)
+      2. Encode past 200ms of rates -> z0 via causal GRU encoder
+      3. Solve H-step MPC: min_{u} Sum ||decoder(z_k) - target||^2 + lambda||u_k||^2
+         subject to z_{k+1} = z_k + dt*(f(z_k) + g(z_k)*u_k), 0 <= u <= u_max
+      4. Apply first control action u0
 
     Parameters
     ----------
@@ -65,10 +67,15 @@ class NeuralODEMPC(LatencyIOProcessor):
         Euler (fast, original behavior). 'dopri5' for adaptive Dormand-
         Prince (matches training solver, slower but more accurate).
         (default 'euler')
+    mpc_timeout_s : float
+        Wall-clock timeout in seconds for MPC optimization. If exceeded,
+        returns the best solution found so far. (default 2.0)
+    verbose : bool
+        If True, print MPC cost every 10 iterations. (default False)
     lambda_u : float
         Control effort penalty weight (default 0.01)
     u_max : float
-        Maximum irradiance in mW/mm² (default 50.0)
+        Maximum irradiance in mW/mm^2 (default 50.0)
     compute_delay_ms : float
         Simulated processing latency in ms (default 5.0)
     tau_rate_ms : float
@@ -97,6 +104,8 @@ class NeuralODEMPC(LatencyIOProcessor):
         mpc_lr: float = 0.5,
         mpc_batch_size: int = 1,
         mpc_solver: str = "euler",
+        mpc_timeout_s: float = 2.0,
+        verbose: bool = False,
         lambda_u: float = 0.01,
         u_max: float = 50.0,
         compute_delay_ms: float = 5.0,
@@ -118,6 +127,8 @@ class NeuralODEMPC(LatencyIOProcessor):
         self.mpc_lr = mpc_lr
         self.mpc_batch_size = mpc_batch_size
         self.mpc_solver = mpc_solver
+        self.mpc_timeout_s = mpc_timeout_s
+        self.verbose = verbose
         self.lambda_u = lambda_u
         self.u_max = u_max
         self.compute_delay = compute_delay_ms * ms
@@ -145,7 +156,7 @@ class NeuralODEMPC(LatencyIOProcessor):
         # State tracking
         self._rates = None  # current firing rate estimate (Brian units)
         self._rate_buffer = deque(maxlen=past_window)  # raw Hz values
-        self._u_buffer = deque(maxlen=past_window)  # raw mW/mm² values
+        self._u_buffer = deque(maxlen=past_window)  # raw mW/mm^2 values
         self._step = 0
         self._u_plan = None  # warm-start MPC plan
 
@@ -203,7 +214,7 @@ class NeuralODEMPC(LatencyIOProcessor):
         return (u_raw - self.u_mean) / self.u_std
 
     def _denormalize_u(self, u_norm: np.ndarray) -> np.ndarray:
-        """Denormalize inputs back to mW/mm²."""
+        """Denormalize inputs back to mW/mm^2."""
         return u_norm * self.u_std + self.u_mean
 
 
@@ -251,7 +262,7 @@ class NeuralODEMPC(LatencyIOProcessor):
             from brian2 import Hz
             self._rates = np.zeros(len(counts)) * Hz
 
-        # 3. Exponential smoothing → firing rates
+        # 3. Exponential smoothing -> firing rates
         self._rates = exp_firing_rate_estimate(
             counts, self.sample_period, self._rates, self.tau_rate
         )
@@ -273,7 +284,7 @@ class NeuralODEMPC(LatencyIOProcessor):
             self.u_log.append(u_out)
             return self._build_output_dict(u_out), t_samp
 
-        # 6. Encode z₀ from past window
+        # 6. Encode z0 from past window
         z0 = self._encode_z0()
         self.z0_log.append(z0.detach().cpu().numpy().flatten())
 
@@ -294,7 +305,7 @@ class NeuralODEMPC(LatencyIOProcessor):
 
     @torch.no_grad()
     def _encode_z0(self) -> torch.Tensor:
-        """Encode z₀ from the past window using the causal GRU encoder."""
+        """Encode z0 from the past window using the causal GRU encoder."""
         # Build normalized tensors from buffers
         x_past = np.array(list(self._rate_buffer))  # (past_window, n_x)
         u_past = np.array(list(self._u_buffer))  # (past_window, n_u)
@@ -318,9 +329,12 @@ class NeuralODEMPC(LatencyIOProcessor):
         (one from warm-start, rest with Gaussian perturbations) and optimizes
         all B trajectories simultaneously. Picks the best candidate.
 
-        min_{u₀...u_{H-1}} Σ_{k=0}^{H-1} ||decoder(z_k) - target||² + λ||u_k||²
-        s.t. z_{k+1} = z_k + dt * (f(z_k) + g(z_k) · u_k)
-             u_k ∈ [u_norm_lb, u_norm_ub]
+        Includes a wall-clock timeout (mpc_timeout_s) to prevent hangs.
+        If the timeout is exceeded, returns the best solution found so far.
+
+        min_{u0...u_{H-1}} Sum_{k=0}^{H-1} ||decoder(z_k) - target||^2 + lambda||u_k||^2
+        s.t. z_{k+1} = z_k + dt * (f(z_k) + g(z_k) * u_k)
+             u_k in [u_norm_lb, u_norm_ub]
 
         Returns
         -------
@@ -333,6 +347,7 @@ class NeuralODEMPC(LatencyIOProcessor):
         B = self.mpc_batch_size
         use_dopri5 = (self.mpc_solver == "dopri5")
         dt = 1e-3  # 1ms timestep
+        t_start = _time.monotonic()
 
         # Normalized bounds for u
         u_lb_norm = (0.0 - self.u_mean) / self.u_std
@@ -355,8 +370,21 @@ class NeuralODEMPC(LatencyIOProcessor):
 
             best_cost = float("inf")
             best_u = u_base.clone()
+            timed_out = False
 
             for iteration in range(self.mpc_iters):
+                # Wall-clock timeout check
+                if (_time.monotonic() - t_start) > self.mpc_timeout_s:
+                    warnings.warn(
+                        f"[NeuralODEMPC] MPC solve timed out after "
+                        f"{_time.monotonic() - t_start:.2f}s "
+                        f"(limit={self.mpc_timeout_s}s) at iteration "
+                        f"{iteration}/{self.mpc_iters}. "
+                        f"Returning best solution (cost={best_cost:.4f})."
+                    )
+                    timed_out = True
+                    break
+
                 optimizer.zero_grad()
 
                 # Rollout through learned ODE (Euler integration)
@@ -377,7 +405,8 @@ class NeuralODEMPC(LatencyIOProcessor):
                         g_ = self.model.g(z_.unsqueeze(0)).squeeze(0)
                         return d + g_ @ u_t
                     z_traj = _odeint(_ode_rhs, z, t_span, method='dopri5',
-                                     rtol=1e-4, atol=1e-5)  # (H+1, z_dim)
+                                     rtol=1e-4, atol=1e-5,
+                                     options={'max_num_steps': 200})  # (H+1, z_dim)
                     for k in range(H):
                         x_pred = self.model.decoder(z_traj[k])
                         tracking_err = ((x_pred - self.target_tensor) ** 2).sum()
@@ -412,6 +441,10 @@ class NeuralODEMPC(LatencyIOProcessor):
                     best_cost = cost.item()
                     best_u = u_var.detach().clone()
 
+                # Verbose logging
+                if self.verbose and iteration % 10 == 0:
+                    print(f"    [MPC iter {iteration:3d}] cost={cost.item():.4f}")
+
             # Save warm start for next step
             self._u_plan = best_u.detach()
             u_first = best_u[0].cpu().numpy()
@@ -438,6 +471,17 @@ class NeuralODEMPC(LatencyIOProcessor):
             best_u = u_init.clone()
 
             for iteration in range(self.mpc_iters):
+                # Wall-clock timeout check
+                if (_time.monotonic() - t_start) > self.mpc_timeout_s:
+                    warnings.warn(
+                        f"[NeuralODEMPC] Batched MPC solve timed out after "
+                        f"{_time.monotonic() - t_start:.2f}s "
+                        f"(limit={self.mpc_timeout_s}s) at iteration "
+                        f"{iteration}/{self.mpc_iters}. "
+                        f"Returning best solution."
+                    )
+                    break
+
                 optimizer.zero_grad()
 
                 # Batched rollout through learned ODE
@@ -473,6 +517,11 @@ class NeuralODEMPC(LatencyIOProcessor):
                     improved = costs < best_costs
                     best_costs[improved] = costs[improved]
                     best_u[improved] = u_var.detach()[improved]
+
+                # Verbose logging
+                if self.verbose and iteration % 10 == 0:
+                    print(f"    [MPC iter {iteration:3d}] "
+                          f"best_cost={best_costs.min().item():.4f}")
 
             # Select the candidate with lowest cost
             best_idx = best_costs.argmin().item()
@@ -544,7 +593,7 @@ class PeriodicNeuralODEMPC(NeuralODEMPC):
         self.rate_log.append(rate_hz.copy())
 
         from brian2 import mwatt, mm
-        
+
         # 5. During warmup: no control
         if self._step < self.warmup_steps:
             u_out = np.zeros(self.n_u)
@@ -559,7 +608,7 @@ class PeriodicNeuralODEMPC(NeuralODEMPC):
             u_prev = self._u_buffer[-1]
             u_norm = self._normalize_u(u_prev)
             u_t = torch.tensor(u_norm, dtype=torch.float32, device=self.device)
-            
+
             dt = 1e-3
             z = self._z_current.unsqueeze(0)
             with torch.no_grad():

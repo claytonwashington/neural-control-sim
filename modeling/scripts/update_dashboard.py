@@ -33,7 +33,7 @@ def make_image_card(title, data_uri, caption=''):
 
 
 def main():
-    os.chdir('/snel/home/cbwash2/cleo')
+    os.chdir('/mnt/cbwash2/cleo')
     
     dashboard_path = 'results/dashboard.html'
     

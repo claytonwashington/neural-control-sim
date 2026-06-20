@@ -529,9 +529,9 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", type=str, default="/snel/home/cbwash2/cleo/data/training_trials.h5")
+    parser.add_argument("--data", type=str, default="/mnt/cbwash2/cleo/data/training_trials.h5")
     parser.add_argument("--acausal-checkpoint", type=str,
-                        default="/snel/home/cbwash2/cleo/results/sweep_latent_node_40_10/run_05_z64_h256_l2_lr0.0005_dopri5.pt")
+                        default="/mnt/cbwash2/cleo/results/sweep_latent_node_40_10/run_05_z64_h256_l2_lr0.0005_dopri5.pt")
     parser.add_argument("--output-dir", type=str, required=True)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--seed", type=int, default=42)

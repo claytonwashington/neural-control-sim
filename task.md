@@ -22,21 +22,21 @@ To ensure coordinate development across different agents (IDE, 2.0 CLI, Jules, G
   - Train loss improved but generalization degraded → skip_input MLP overfits
 - `[x]` Phase 2.6: Simpler Skip Connections (Linear-only, completed R²=0.9144)
   - Branch: `feature/skip-connections`
-  - Worktree: `/snel/home/cbwash2/cleo-worktrees/skip-connections`
+  - Worktree: `/mnt/cbwash2/cleo-worktrees/skip-connections`
   - Linear-only state/input skip connections. Overfitting was avoided by applying separate weight decay (best: `swd=1.0` got R²=0.9144), but still did not beat the pure CA-NODE baseline (R²=0.9219).
-- `[ ]` Frequency-Aware Loss: Spectral Loss to break R² ceiling ([details](file:///snel/home/cbwash2/cleo/tasks/spectral_loss.md))
+- `[ ]` Frequency-Aware Loss: Spectral Loss to break R² ceiling ([details](file:///mnt/cbwash2/cleo/tasks/spectral_loss.md))
   - Branch: `feature/spectral-loss`
-  - Worktree: `/snel/home/cbwash2/cleo-worktrees/spectral-loss`
+  - Worktree: `/mnt/cbwash2/cleo-worktrees/spectral-loss`
   - Agent: Antigravity (Instance 2)
   - Penalize errors in FFT magnitude domain to capture high-frequency transients.
-- `[x]` Multi-Scale / Multi-Rate Integration: Decoupled slow/fast step sizes ([details](file:///snel/home/cbwash2/cleo/tasks/multi_rate_integration.md))
+- `[x]` Multi-Scale / Multi-Rate Integration: Decoupled slow/fast step sizes ([details](file:///mnt/cbwash2/cleo/tasks/multi_rate_integration.md))
   - Branch: `feature/multi-rate-integration` → merged to `feature/digital-twin-phase1`
-  - Worktree: `/snel/home/cbwash2/cleo-worktrees/multi-rate-integration`
+  - Worktree: `/mnt/cbwash2/cleo-worktrees/multi-rate-integration`
   - Agent: Antigravity (Instance 3)
   - Decouple slow baseline dynamics and fast optogenetic responses with sub-stepped fast integration.
 - `[x]` Phase 2.8: Extended Training Sweep (Cosine Decay + Linear Warmup)
   - Branch: `feature/extended-training` → merged to `feature/digital-twin-phase1`
-  - Worktree: `/snel/home/cbwash2/cleo-worktrees/extended-training`
+  - Worktree: `/mnt/cbwash2/cleo-worktrees/extended-training`
   - Agent: Antigravity (Instance 4)
   - Train for 500–1000 epochs with cosine decay and initial linear warmup. Best R²=0.9219 (noskip baseline, 48/2 split).
 - `[x]` Causal Latent CA-NODE: Causal encoding and forward forecasting sweep (Completed R²=0.4405)

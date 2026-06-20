@@ -3,7 +3,7 @@ import json
 import numpy as np
 import sys
 
-sys.path.append('/snel/home/cbwash2/cleo')
+sys.path.append('/mnt/cbwash2/cleo')
 from modeling.scripts.sweep_canode import parse_run_log
 
 def regenerate():
@@ -42,7 +42,7 @@ def regenerate():
                 'skip_weight_decay': swd,
             })
 
-    output_dir = '/snel/home/cbwash2/cleo/results/sweep_skip_40_10'
+    output_dir = '/mnt/cbwash2/cleo/results/sweep_skip_40_10'
     completed_runs = []
 
     for idx, config in enumerate(configs):
