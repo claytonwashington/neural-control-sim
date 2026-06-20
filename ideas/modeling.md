@@ -500,3 +500,13 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Method: At each control step, compute prediction error (predicted rate vs observed rate) and update g(z) + decoder weights via Adam with lr=1e-5 and gradient clipping=1.0. Then solve MPC with the updated model. Compare to frozen-model MPC and PI.
 - Expected: Adaptation loss should decrease over the trial; tracking RMSE should improve relative to frozen MPC
 
+
+
+### Experiment 37. Spiking CA-NODE Baseline (Single Placement)
+**Status**: 🔄 IN PROGRESS
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
+**Results dir**: `results/spiking_canode_p0/`
+- Hypothesis: Latent CA-NODE can learn dynamics from sorted spike trains (~126 neurons, 10ms bins) at placement 0
+- Architecture sweep: z in {32, 64}, h in {128, 256}, lr in {5e-4, 1e-3} (8 configs)
+- No distillation -- pure reconstruction from scratch
+- Data: spiking_plant3.h5, placement 0, 40/10 split, seed=42

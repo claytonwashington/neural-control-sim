@@ -16,6 +16,7 @@
 | feature/bidir-v2-plant | cleo-worktrees/(main) | [Exp 30](ideas/modeling.md) | `results/bidir_v2_periodic_reencode/` | Done — R²=0.9350 |
 | feature/bidir-v2-plant | cleo-worktrees/(main) | [Exp 31](ideas/modeling.md) | `results/bidir_v2_enkf/` | Done — R²=0.9998 |
 | feature/bidir-v2-plant | cleo-worktrees/(main) | [Exp 32](ideas/modeling.md) | `results/bidir_v2_optoclamp/` | Failed —  |
+| feature/bidir-v2-plant | cleo-worktrees/bidir-v2-plant | [Exp 37](ideas/modeling.md) | `results/spiking_canode_p0/` | Preflight complete |
 
 ## Completed Experiments
 
