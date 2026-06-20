@@ -127,6 +127,13 @@ def load_spiking_data(
     x_train_n *= m_train[:, :, None]
     x_test_n *= m_test[:, :, None]
 
+    # Clamp neurons that were always-padded in training (x_std=epsilon).
+    # These neurons have no learned statistics; even if a test trial has
+    # data for them, normalizing by epsilon produces ~1e10 values.
+    always_padded = (x_std < 1e-6)  # neurons with near-zero variance
+    x_train_n[:, always_padded, :] = 0.0
+    x_test_n[:, always_padded, :] = 0.0
+
     # Extract sliding windows
     W = past_steps + future_steps
     win_x, win_u, win_m = [], [], []
