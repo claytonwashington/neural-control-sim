@@ -1,0 +1,37 @@
+name: harness
+
+# Fast, focused gate for the experiment harness (preflight token/launch enforcement
+# + dashboard pipeline). Deliberately separate from `tests.yml`:
+#   - it installs only the lightweight deps the harness smoke tests actually need
+#     (pytest + brian2 + matplotlib — the latter two only because tests/conftest.py
+#     imports them), NOT the full `.[dev]` set (torch/nbmake/sphinx/notebooks), so a
+#     packaging hiccup or a flaky tutorial can't mask whether the gate is intact;
+#   - it runs only tests/test_harness_smoke.py, which includes the coverage guard
+#     asserting every training entrypoint calls validate_preflight.
+on:
+  push:
+    branches: [master, modeling-dev]
+  pull_request:
+    branches: [master, modeling-dev]
+  workflow_dispatch:
+
+jobs:
+  harness:
+    name: harness smoke tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # The harness modules are pure-stdlib; the test pulls brian2 + matplotlib only
+      # transitively via tests/conftest.py. No package install (the test puts the
+      # repo root on sys.path itself), so the broken `.[dev]` resolution is bypassed.
+      - name: Install minimal test deps
+        run: pip install pytest "brian2>=2.4,<3.0.0" matplotlib
+
+      - name: Run harness smoke tests
+        # addopts="" drops the repo's --nbmake default (we don't run notebooks here).
+        run: pytest tests/test_harness_smoke.py -o addopts="" -p no:cacheprovider -q
