@@ -37,6 +37,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import subprocess
 import sys
 import time
@@ -1295,7 +1296,9 @@ def _do_launch(args, repo_root):
     # env nonce == manifest nonce, which makes `launch` the only sanctioned way
     # to start training — a manual `tmux new-session` won't carry it.
     nonce = secrets.token_hex(8)
-    inner = (f"cd {cwd} && export PREFLIGHT_TOKEN={token} "
+    # Quote cwd (a path could contain spaces/specials); token/nonce are hex-safe and
+    # run_command is intentionally raw shell (the user's training command).
+    inner = (f"cd {shlex.quote(cwd)} && export PREFLIGHT_TOKEN={token} "
              f"PREFLIGHT_LAUNCH_NONCE={nonce} && {args.run_command}")
     if args.dry_run:
         print(f"[dry-run] Would launch tmux session '{session}' on {runtime_info.current_host()}:")
