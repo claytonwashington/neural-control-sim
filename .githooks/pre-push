@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Pre-push guard: run the fast harness smoke tests (incl. the preflight-coverage
+# guard) so a training script that bypasses the preflight gate can't be pushed.
+#
+# CI (on master / modeling-dev) is the authoritative gate; this is just fast local
+# feedback. It deliberately does NOT hard-fail on environment problems — only on a
+# real test failure — so a missing conda env never blocks a push. Bypass any time
+# with `git push --no-verify`.
+#
+# Installed via the repo's committed hooks dir:  git config core.hooksPath .githooks
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+TEST="$ROOT/tests/test_harness_smoke.py"
+[ -f "$TEST" ] || exit 0   # branch predates the harness tests — nothing to check
+
+run_pytest() {
+  # Prefer the explicit cleo env python (shared NAS path, present on gpu1/gpu2),
+  # then the alt mount, then conda, then whatever python is on PATH.
+  local py
+  for py in /snel/home/cbwash2/miniconda3/envs/cleo/bin/python \
+            /home/cbwash2/miniconda3/envs/cleo/bin/python; do
+    if [ -x "$py" ] && "$py" -c "import pytest" >/dev/null 2>&1; then
+      "$py" -m pytest "$TEST" -q; return $?
+    fi
+  done
+  if command -v conda >/dev/null 2>&1 && conda env list 2>/dev/null | grep -qiE '(^|/)cleo[[:space:]/]'; then
+    conda run -n cleo python -m pytest "$TEST" -q; return $?
+  fi
+  if command -v python >/dev/null 2>&1 && python -c "import pytest" >/dev/null 2>&1; then
+    python -m pytest "$TEST" -q; return $?
+  fi
+  return 2   # no usable env
+}
+
+echo "[pre-push] running harness smoke tests…"
+run_pytest
+rc=$?
+if [ "$rc" -eq 2 ]; then
+  echo "[pre-push] ⚠ no 'cleo' test env found; skipping local check (CI will still run)." >&2
+  exit 0
+elif [ "$rc" -ne 0 ]; then
+  echo "[pre-push] ✗ harness tests failed — push blocked." >&2
+  echo "[pre-push]   Fix the failure, or bypass with: git push --no-verify" >&2
+  exit 1
+fi
+echo "[pre-push] ✓ harness tests passed"
+exit 0
