@@ -1391,30 +1391,59 @@ def _do_abandon(args, repo_root):
             print("Commit/stash them, or pass --force to discard and abandon anyway.", file=sys.stderr)
             sys.exit(1)
 
+    # Same rule for committed-but-unmerged work: `git branch -D` below destroys it
+    # irrecoverably, so refuse unless forced. (This is exactly the UNMERGED hazard
+    # idea_status flags — abandoning shouldn't silently delete landed-nowhere commits.)
+    if branch and branch != "modeling-dev" and not args.force:
+        unmerged = subprocess.run(
+            ["git", "log", "--oneline", f"modeling-dev..{branch}"],
+            capture_output=True, text=True, cwd=repo_root).stdout.strip()
+        if unmerged:
+            n = len(unmerged.splitlines())
+            print(f"ERROR: branch '{branch}' has {n} commit(s) not merged into "
+                  "modeling-dev — abandoning would discard them:", file=sys.stderr)
+            print(unmerged, file=sys.stderr)
+            print("Merge/cherry-pick what you want to keep first, or pass --force "
+                  "to discard them anyway.", file=sys.stderr)
+            sys.exit(1)
+
     from modeling.scripts.runtime_info import atomic_update_manifest
-    atomic_update_manifest(manifest_path, {
-        "status": "abandoned",
-        "abandoned_at": datetime.now(timezone.utc).isoformat(),
-        "abandon_reason": args.reason,
-    })
-    if idea_file:
-        abandon_idea(os.path.join(repo_root, idea_file), idea_id, args.reason)
-    _set_branches_status(repo_root, results_dir, f"Abandoned — {args.reason[:40]}")
+    # These steps mutate the shared main checkout (idea/branches commits, worktree +
+    # branch removal). Take the same exclusive lock `complete` uses (H1) so a
+    # concurrent complete/abandon can't interleave and corrupt the git index.
+    with _completion_lock(repo_root):
+        atomic_update_manifest(manifest_path, {
+            "status": "abandoned",
+            "abandoned_at": datetime.now(timezone.utc).isoformat(),
+            "abandon_reason": args.reason,
+        })
+        if idea_file:
+            abandon_idea(os.path.join(repo_root, idea_file), idea_id, args.reason)
+        _set_branches_status(repo_root, results_dir, f"Abandoned — {args.reason[:40]}")
 
-    files = [f for f in ([idea_file] if idea_file else []) + ["branches.md"]
-             if os.path.exists(os.path.join(repo_root, f))]
-    if files:
-        git_commit(repo_root, f"abandon(Exp {idea_id}): {args.reason}", files)
+        files = [f for f in ([idea_file] if idea_file else []) + ["branches.md"]
+                 if os.path.exists(os.path.join(repo_root, f))]
+        if files:
+            git_commit(repo_root, f"abandon(Exp {idea_id}): {args.reason}", files)
 
-    # Remove worktree + branch (force-delete: abandoning intentionally discards
-    # the unmerged branch).
-    if worktree_path and os.path.exists(worktree_path):
-        subprocess.run(["git", "worktree", "remove", "--force", worktree_path],
-                       capture_output=True, text=True, cwd=repo_root)
-        print(f"[preflight] ✓ Removed worktree: {worktree_path}")
-    if branch and branch != "modeling-dev":
-        subprocess.run(["git", "branch", "-D", branch], capture_output=True, text=True, cwd=repo_root)
-        print(f"[preflight] ✓ Deleted branch: {branch}")
+        # Remove worktree + branch. Report failures instead of swallowing them, so a
+        # half-cleaned state (dangling worktree/branch) is visible, not silent.
+        if worktree_path and os.path.exists(worktree_path):
+            r = subprocess.run(["git", "worktree", "remove", "--force", worktree_path],
+                               capture_output=True, text=True, cwd=repo_root)
+            if r.returncode == 0:
+                print(f"[preflight] ✓ Removed worktree: {worktree_path}")
+            else:
+                print(f"[preflight] ⚠ Could not remove worktree {worktree_path}: "
+                      f"{r.stderr.strip()}", file=sys.stderr)
+        if branch and branch != "modeling-dev":
+            r = subprocess.run(["git", "branch", "-D", branch],
+                               capture_output=True, text=True, cwd=repo_root)
+            if r.returncode == 0:
+                print(f"[preflight] ✓ Deleted branch: {branch}")
+            else:
+                print(f"[preflight] ⚠ Could not delete branch {branch}: "
+                      f"{r.stderr.strip()}", file=sys.stderr)
     print(f"[preflight] ✓ Exp {idea_id} abandoned: {args.reason}")
 
 
