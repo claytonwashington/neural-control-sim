@@ -185,38 +185,43 @@ def test_idea_status_classifies_laggards(tmp_path):
 
 
 def test_all_training_scripts_enforce_preflight():
-    """Coverage guard for the mandatory-launch gate.
+    """Coverage guard for the mandatory-launch/token gate.
 
-    The launch/token enforcement lives in `validate_preflight`, so it only bites
-    scripts that actually call it. A new `fit_*`/`sweep_*` that forgets the call
-    would start training without the provenance + token check — a silent hole.
-    This statically asserts every training entrypoint calls `validate_preflight`
-    (as a bare name or `module.validate_preflight`), so the hole can't be added.
+    Enforcement lives in `validate_preflight`, so it only bites scripts that call
+    it. Any script that wires up `add_preflight_args` is a token-consuming training
+    entrypoint and MUST also call `validate_preflight`, or it silently bypasses the
+    token + launch checks. We discover entrypoints *by that behavior* (not a
+    filename glob), so a new `train_*`/`distill_*`/etc. can't slip through, and we
+    match the call as a bare name or `module.validate_preflight`.
     """
     import ast
 
-    scripts = sorted((REPO / "modeling" / "scripts").glob("fit_*.py")) + \
-        sorted((REPO / "modeling" / "scripts").glob("sweep_*.py"))
-    assert scripts, "found no fit_*/sweep_* scripts — glob or layout changed?"
-
-    missing = []
-    for path in scripts:
-        tree = ast.parse(path.read_text(), filename=str(path))
-        called = set()
-        for node in ast.walk(tree):
+    def called_names(path):
+        names = set()
+        for node in ast.walk(ast.parse(path.read_text(), filename=str(path))):
             if isinstance(node, ast.Call):
                 f = node.func
                 if isinstance(f, ast.Name):
-                    called.add(f.id)
+                    names.add(f.id)
                 elif isinstance(f, ast.Attribute):
-                    called.add(f.attr)
-        if "validate_preflight" not in called:
-            missing.append(path.name)
+                    names.add(f.attr)
+        return names
 
+    entrypoints, missing = [], []
+    for path in sorted((REPO / "modeling" / "scripts").glob("*.py")):
+        if path.name == "preflight_check.py":  # defines the helpers
+            continue
+        calls = called_names(path)
+        if "add_preflight_args" in calls:  # token-consuming training entrypoint
+            entrypoints.append(path.name)
+            if "validate_preflight" not in calls:
+                missing.append(path.name)
+
+    assert entrypoints, "found no scripts calling add_preflight_args — layout changed?"
     assert not missing, (
-        "these training scripts never call validate_preflight, so they bypass the "
-        f"preflight token + mandatory-launch gate: {missing}. Add "
-        "`validate_preflight(args)` after parsing args (see preflight_check.py)."
+        "these entrypoints wire up --preflight-token but never call "
+        f"validate_preflight, so they bypass the token + mandatory-launch gate: {missing}. "
+        "Add `validate_preflight(args)` after parsing args (see preflight_check.py)."
     )
 
 
