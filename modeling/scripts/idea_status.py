@@ -44,7 +44,7 @@ IDEA_FILES = [
     "ideas/future.md",
     "ideas/architecture_specs.md",
 ]
-CLOSED_MANIFEST_STATUS = {"completed", "failed", "baseline"}
+CLOSED_MANIFEST_STATUS = {"completed", "failed", "baseline", "abandoned"}
 DEFAULT_GRACE_DAYS = 2
 RESULT_MARKERS = ("results.json", "sweep_summary.json", "model.pt", "n4sid_model.npz")
 
@@ -149,6 +149,12 @@ def _manifests(root: str, include_worktrees: bool) -> list[dict]:
             "results_dir": j.get("results_dir", os.path.basename(exp_dir)),
             "location": loc,
             "exp_dir": exp_dir,
+            "machine": j.get("machine"),
+            "gpu_ids": j.get("gpu_ids"),
+            "run_host": j.get("run_host"),
+            "tmux_session": j.get("tmux_session"),
+            "run_pid": j.get("run_pid"),
+            "started_at": j.get("started_at"),
         })
     return found
 
@@ -190,7 +196,16 @@ def scan(root: str | None = None, include_worktrees: bool = True,
                 status=m["status"], age=age, location=m["location"],
                 action=f"add an entry to {m['idea_file'] or 'ideas/modeling.md'} for this experiment")
         elif m["status"] not in CLOSED_MANIFEST_STATUS:
-            if (age or 0) >= grace_days:
+            # Liveness-aware: a run whose tmux session / PID is dead is stale
+            # regardless of age; otherwise fall back to the grace period.
+            from modeling.scripts import runtime_info
+            alive = runtime_info.is_alive(m)
+            if alive is False:
+                add(key, "STALE", idea_file=m["idea_file"], idea_id=m["idea_id"], name=m["name"],
+                    status=m["status"], age=age, location=m["location"],
+                    action=f"process dead (tmux/{m.get('tmux_session')} pid/{m.get('run_pid')}); "
+                           "run `preflight complete` (or abandon) to close it")
+            elif alive is not True and (age or 0) >= grace_days:
                 add(key, "STALE", idea_file=m["idea_file"], idea_id=m["idea_id"], name=m["name"],
                     status=m["status"], age=age, location=m["location"],
                     action="run `preflight complete` (or --status failed) to close it")

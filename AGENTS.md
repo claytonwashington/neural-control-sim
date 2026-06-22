@@ -274,15 +274,27 @@ python -m modeling.scripts.preflight start \
 ```
 Save the printed token for the next step.
 
-#### 4. Launch Training in tmux
-All sweep scripts **refuse to run outside tmux**. Use the session name from preflight:
+#### 4. Launch Training (`preflight launch` — MANDATORY)
+Training **must** be started with `preflight launch`. It creates the tmux session,
+injects `PREFLIGHT_TOKEN`, **records `run_host` / `tmux_session` / `run_pid` /
+`started_at` into the manifest** (so `preflight status` always knows which session to
+attach to), and refuses to start a second session over a live one:
 ```bash
-tmux new-session -d -s exp_23_branch_name \
-  'cd /snel/home/cbwash2/cleo-worktrees/name && \
-   conda activate dtmodeling && \
-   python -m modeling.scripts.sweep_... \
-     --preflight-token <TOKEN> ...'
+python -m modeling.scripts.preflight launch \
+  --results-dir results/unique_dir_name \
+  --command 'conda activate dtmodeling && python -m modeling.scripts.sweep_... --preflight-token <TOKEN> ...'
+# optional: --session-name <name> (default exp<id>_<branch>), --dry-run to preview
 ```
+**Enforcement (code-level, not just convention):** `launch` mints a per-experiment
+nonce into the manifest and injects `PREFLIGHT_LAUNCH_NONCE` into the session env;
+`preflight_check.validate_preflight` — which every `fit_*.py` / `sweep_*.py` already
+calls — **refuses to run** unless that nonce is present and matches. So a manual
+`tmux new-session` (or bare CLI run) is rejected, guaranteeing every run is recorded.
+Children inherit the env var, so multi-process sweeps work unchanged. The run also
+auto-stamps runtime fields via `runtime_info.record_run_start` at validation time.
+
+Escape hatch for debugging or resuming a crashed run by hand: set
+`PREFLIGHT_ALLOW_MANUAL=1` (it warns that run location may not be recorded).
 
 #### 5. Monitor Training
 ```bash
@@ -310,10 +322,37 @@ It enforces these gates:
 #### 7. Repeat
 Select the next experiment and go to step 2.
 
+### "Give me an update" — `preflight status`
+
+One command answers *what's open and where to look*. It scans every manifest across the
+main checkout and all worktrees, lists each OPEN experiment with its host / tmux session /
+PID / best R² / idle time, and reports liveness (🟢 ALIVE / 🔴 DEAD / ⚪ unknown — DEAD
+means the recorded session/PID is actually gone):
+```bash
+python -m modeling.scripts.preflight status          # human-readable
+python -m modeling.scripts.preflight status --json    # machine-readable
+```
+This is the entry point when the user asks for a status update. A 🔴 DEAD open experiment
+should be closed with `preflight complete` (or `abandon` below). Liveness also feeds the
+laggard `scan()`: a manifest left `running` whose session/PID is dead is flagged STALE.
+
+### Abandoning an experiment — `preflight abandon`
+
+Dropping an experiment is a documented decision, not a silent `rm`. From the **main
+checkout**, this records `status: abandoned` + the reason into the manifest/idea/branches,
+then removes the worktree and branch. It refuses if the worktree has uncommitted work
+unless you pass `--force`:
+```bash
+python -m modeling.scripts.preflight abandon \
+  --results-dir results/unique_dir_name \
+  --reason "Superseded by Exp 41; approach didn't beat baseline"
+```
+
 ### Worktree Lifecycle
 
 - **Creation**: `preflight start --worktree-path ...` creates worktrees
-- **Deletion**: `preflight complete` auto-merges and removes worktrees
+- **Launch**: `preflight launch` starts training in tmux and records where it runs
+- **Deletion**: `preflight complete` auto-merges and removes worktrees; `preflight abandon` records the decision and removes them
 - **No manual worktrees**: All worktrees must be created via preflight
 - **Stale worktrees**: Any worktree not tied to an active experiment should be cleaned up
 

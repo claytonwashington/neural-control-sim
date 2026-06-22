@@ -36,6 +36,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import subprocess
 import sys
 import time
@@ -283,6 +284,26 @@ def complete_idea(ideas_path, idea_id, status, best_r2, notes):
     print(f"[preflight] ✓ Marked idea #{idea_id} as {status_emoji}")
 
 
+def abandon_idea(ideas_path, idea_id, reason):
+    """Mark an idea as abandoned with a documented reason. No-op if the idea
+    entry is absent (an untracked experiment can still be abandoned)."""
+    entry = find_idea_entry(ideas_path, idea_id) if idea_id is not None else None
+    if entry is None:
+        return
+    with open(ideas_path) as f:
+        lines = f.readlines()
+    line_idx, _ = entry
+    for j in range(line_idx + 1, min(line_idx + 10, len(lines))):
+        if lines[j].strip().startswith("**Status**"):
+            lines[j] = f"**Status**: \U0001f6d1 ABANDONED — {_md_inline(reason)}\n"
+            break
+    else:
+        lines.insert(line_idx + 1, f"**Status**: \U0001f6d1 ABANDONED — {_md_inline(reason)}\n")
+    with open(ideas_path, "w") as f:
+        f.writelines(lines)
+    print(f"[preflight] ✓ Marked idea #{idea_id} as 🛑 ABANDONED")
+
+
 # ── Branches.md Management ───────────────────────────────────────────────
 
 def update_branches_md(repo_root, branch, worktree_path, experiment_name,
@@ -500,6 +521,25 @@ def main():
     monitor.add_argument("--poll-interval", type=int, default=30, help="Seconds between checks")
     monitor.add_argument("--timeout", type=int, default=14400, help="Max seconds to wait (default 4hr)")
 
+    # ── LAUNCH subcommand ──
+    launch = sub.add_parser("launch", help="Start a registered experiment in tmux and record host/session/pid")
+    launch.add_argument("--results-dir", required=True, help="Results dir with MANIFEST.json")
+    launch.add_argument("--command", required=True, dest="run_command",
+                        help="Training command to run (PREFLIGHT_TOKEN is injected)")
+    launch.add_argument("--session-name", default=None, help="tmux session name (default: exp<id>_<branch>)")
+    launch.add_argument("--dry-run", action="store_true")
+
+    # ── STATUS subcommand ──
+    status = sub.add_parser("status", help="Show every OPEN experiment: host/session/pid/metric/liveness")
+    status.add_argument("--json", action="store_true", help="machine-readable output")
+    status.add_argument("--no-worktrees", action="store_true", help="scan only the main checkout")
+
+    # ── ABANDON subcommand ──
+    abandon = sub.add_parser("abandon", help="Document dropping an experiment + clean up its worktree")
+    abandon.add_argument("--results-dir", required=True, help="Results dir with MANIFEST.json")
+    abandon.add_argument("--reason", required=True, help="Why it's being abandoned (recorded)")
+    abandon.add_argument("--force", action="store_true", help="Discard uncommitted worktree changes too")
+
     args = parser.parse_args()
     repo_root = get_repo_root()
 
@@ -516,6 +556,12 @@ def main():
         _do_gpu_status(args)
     elif args.command == "monitor":
         _do_monitor(args, repo_root)
+    elif args.command == "launch":
+        _do_launch(args, repo_root)
+    elif args.command == "status":
+        _do_status(args, repo_root)
+    elif args.command == "abandon":
+        _do_abandon(args, repo_root)
 
 
 def _do_start(args, repo_root):
@@ -1168,6 +1214,226 @@ def _do_monitor(args, repo_root):
             print(f"\r[{elapsed/60:.0f}m] {bar} {n_done}/{n_total} ({pct:.0f}%) — {remaining} running", end="", flush=True)
 
         _time.sleep(args.poll_interval)
+
+
+# ── LAUNCH / STATUS / ABANDON ────────────────────────────────────────────
+
+def _session_slug(branch):
+    s = re.sub(r"^feature/", "", branch or "")
+    return re.sub(r"[^A-Za-z0-9_]+", "_", s).strip("_") or "exp"
+
+
+def _read_manifest(results_dir):
+    mp = os.path.join(results_dir, "MANIFEST.json")
+    if not os.path.exists(mp):
+        print(f"ERROR: No MANIFEST.json at {mp}. Was preflight run?", file=sys.stderr)
+        sys.exit(1)
+    with open(mp) as f:
+        return mp, json.load(f)
+
+
+def _best_metric(exp_dir):
+    """Best R² found across results.json / run_*/results.json / sweep_summary.json."""
+    import glob as _glob
+    best = None
+    cands = ([os.path.join(exp_dir, "results.json"),
+              os.path.join(exp_dir, "sweep_summary.json")]
+             + _glob.glob(os.path.join(exp_dir, "run_*", "results.json")))
+    for p in cands:
+        try:
+            with open(p) as f:
+                r = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        for k in ("r2", "r2_200step", "val_r2", "best_r2"):
+            v = r.get(k) if isinstance(r, dict) else None
+            if isinstance(v, (int, float)) and (best is None or v > best):
+                best = v
+    return best
+
+
+def _last_activity_age_days(exp_dir):
+    newest = 0.0
+    for root, _dirs, files in os.walk(exp_dir):
+        for fn in files:
+            try:
+                newest = max(newest, os.path.getmtime(os.path.join(root, fn)))
+            except OSError:
+                pass
+    if not newest:
+        return None
+    import time as _time
+    return (_time.time() - newest) / 86400.0
+
+
+def _do_launch(args, repo_root):
+    """Create the tmux session for a registered experiment and record where it
+    runs (host/session/pid) into the manifest. The sanctioned run path: every
+    launch self-documents, so `preflight status` always knows where to look."""
+    from modeling.scripts import runtime_info
+
+    results_dir = os.path.join(repo_root, args.results_dir) if not os.path.isabs(args.results_dir) else args.results_dir
+    manifest_path, manifest = _read_manifest(results_dir)
+
+    token = manifest.get("preflight_token")
+    if not token:
+        print("ERROR: MANIFEST.json has no preflight_token; re-run preflight start.", file=sys.stderr)
+        sys.exit(1)
+
+    session = args.session_name or f"exp{manifest.get('idea_id', 'X')}_{_session_slug(manifest.get('branch'))}"
+    cwd = manifest.get("worktree_path") or repo_root
+
+    # Refuse to double-launch a live session.
+    if runtime_info.session_alive(session, runtime_info.current_host()):
+        print(f"ERROR: tmux session '{session}' is already running on this host.", file=sys.stderr)
+        print(f"  Attach: tmux attach -t {session}   (or pass --session-name for a new one)", file=sys.stderr)
+        sys.exit(1)
+
+    # Provenance nonce: minted here, persisted to the manifest *before* tmux
+    # starts (so a child that validates its token immediately can already see
+    # it), and injected into the session env. `validate_preflight` requires
+    # env nonce == manifest nonce, which makes `launch` the only sanctioned way
+    # to start training — a manual `tmux new-session` won't carry it.
+    nonce = secrets.token_hex(8)
+    inner = (f"cd {cwd} && export PREFLIGHT_TOKEN={token} "
+             f"PREFLIGHT_LAUNCH_NONCE={nonce} && {args.run_command}")
+    if args.dry_run:
+        print(f"[dry-run] Would launch tmux session '{session}' on {runtime_info.current_host()}:")
+        print(f"  {inner}")
+        return
+    runtime_info.atomic_update_manifest(manifest_path, {"launch_nonce": nonce})
+    r = subprocess.run(["tmux", "new-session", "-d", "-s", session, "bash", "-lc", inner],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"ERROR: tmux launch failed: {r.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
+
+    # Capture the pane PID for liveness, then stamp the manifest.
+    pane = subprocess.run(["tmux", "list-panes", "-t", session, "-F", "#{pane_pid}"],
+                          capture_output=True, text=True)
+    pane_pid = pane.stdout.strip().split("\n")[0] if pane.returncode == 0 else None
+    runtime_info.atomic_update_manifest(manifest_path, {
+        "status": "running",
+        "run_host": runtime_info.current_host(),
+        "tmux_session": session,
+        "run_pid": int(pane_pid) if (pane_pid and pane_pid.isdigit()) else None,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "launch_command": args.run_command,
+    })
+    print(f"[preflight] ✓ Launched Exp {manifest.get('idea_id')} in tmux session '{session}' "
+          f"on {runtime_info.current_host()}")
+    print(f"  Attach:  tmux attach -t {session}")
+    print(f"  Monitor: python -m modeling.scripts.preflight monitor --results-dir {args.results_dir}")
+
+
+def _do_status(args, repo_root):
+    """One-shot view of every OPEN experiment: where it runs and whether it's alive.
+    The 'give me an update' entry point."""
+    from modeling.scripts import idea_status, runtime_info
+
+    CLOSED = {"completed", "failed", "baseline", "abandoned"}
+    root = idea_status.main_repo()
+    manifests = idea_status._manifests(root, include_worktrees=not args.no_worktrees)
+    open_exps = [m for m in manifests if (m.get("status") or "") not in CLOSED]
+
+    if args.json:
+        out = []
+        for m in open_exps:
+            alive = runtime_info.is_alive(m)
+            out.append({**m, "alive": alive, "best_r2": _best_metric(m["exp_dir"]),
+                        "idle_days": _last_activity_age_days(m["exp_dir"])})
+        print(json.dumps(out, indent=2, default=str))
+        return
+
+    if not open_exps:
+        print("[preflight status] No open experiments — everything is closed.")
+        return
+
+    print(f"[preflight status] {len(open_exps)} open experiment(s):\n")
+    ALIVE = {True: "🟢 ALIVE", False: "🔴 DEAD", None: "⚪ unknown"}
+    for m in sorted(open_exps, key=lambda d: str(d.get("location"))):
+        alive = runtime_info.is_alive(m)
+        r2 = _best_metric(m["exp_dir"])
+        idle = _last_activity_age_days(m["exp_dir"])
+        eid = f"Exp {m['idea_id']}" if m.get("idea_id") is not None else "(unregistered)"
+        host = m.get("run_host") or m.get("machine") or "?"
+        sess = m.get("tmux_session") or "—"
+        print(f"  {ALIVE[alive]}  {eid:8} {m['name'][:42]:42} [{m.get('location')}]")
+        print(f"       host={host}  gpus={m.get('gpu_ids') or '?'}  tmux={sess}  pid={m.get('run_pid') or '—'}")
+        print(f"       results={m['results_dir']}  best_r2={r2 if r2 is not None else '—'}  "
+              f"idle={f'{idle:.1f}d' if idle is not None else '—'}")
+        if alive is True:
+            print(f"       → attach: tmux attach -t {sess}" + (f" (on {host})" if host not in (runtime_info.current_host(), '?') else ""))
+        elif alive is False:
+            print(f"       → process is dead. Close it: preflight complete (or abandon) --results-dir {m['results_dir']}")
+        print()
+
+
+def _do_abandon(args, repo_root):
+    """Document a decision to drop an experiment: records status=abandoned + reason
+    in the manifest/idea/branches, then removes the worktree + branch."""
+    _assert_main_checkout(repo_root)
+    results_dir = os.path.join(repo_root, args.results_dir) if not os.path.isabs(args.results_dir) else args.results_dir
+    manifest_path, manifest = _read_manifest(results_dir)
+    idea_file = manifest.get("idea_file")
+    idea_id = manifest.get("idea_id")
+    branch = manifest.get("branch")
+    worktree_path = manifest.get("worktree_path")
+
+    # Honor the don't-discard rule: refuse if the worktree has uncommitted work,
+    # unless the user explicitly forces it.
+    if worktree_path and os.path.exists(worktree_path):
+        dirty = subprocess.run(["git", "-C", worktree_path, "status", "--porcelain"],
+                               capture_output=True, text=True).stdout.strip()
+        if dirty and not args.force:
+            print(f"ERROR: worktree {worktree_path} has uncommitted changes:", file=sys.stderr)
+            print(dirty, file=sys.stderr)
+            print("Commit/stash them, or pass --force to discard and abandon anyway.", file=sys.stderr)
+            sys.exit(1)
+
+    from modeling.scripts.runtime_info import atomic_update_manifest
+    atomic_update_manifest(manifest_path, {
+        "status": "abandoned",
+        "abandoned_at": datetime.now(timezone.utc).isoformat(),
+        "abandon_reason": args.reason,
+    })
+    if idea_file:
+        abandon_idea(os.path.join(repo_root, idea_file), idea_id, args.reason)
+    _set_branches_status(repo_root, results_dir, f"Abandoned — {args.reason[:40]}")
+
+    files = [f for f in ([idea_file] if idea_file else []) + ["branches.md"]
+             if os.path.exists(os.path.join(repo_root, f))]
+    if files:
+        git_commit(repo_root, f"abandon(Exp {idea_id}): {args.reason}", files)
+
+    # Remove worktree + branch (force-delete: abandoning intentionally discards
+    # the unmerged branch).
+    if worktree_path and os.path.exists(worktree_path):
+        subprocess.run(["git", "worktree", "remove", "--force", worktree_path],
+                       capture_output=True, text=True, cwd=repo_root)
+        print(f"[preflight] ✓ Removed worktree: {worktree_path}")
+    if branch and branch != "modeling-dev":
+        subprocess.run(["git", "branch", "-D", branch], capture_output=True, text=True, cwd=repo_root)
+        print(f"[preflight] ✓ Deleted branch: {branch}")
+    print(f"[preflight] ✓ Exp {idea_id} abandoned: {args.reason}")
+
+
+def _set_branches_status(repo_root, results_dir, status_str):
+    """Set the status column for a branches.md row matching results_dir."""
+    branches_path = os.path.join(repo_root, "branches.md")
+    if not os.path.exists(branches_path):
+        return
+    rel = os.path.relpath(results_dir, repo_root) if os.path.isabs(results_dir) else results_dir
+    with open(branches_path) as f:
+        lines = f.readlines()
+    for i, line in enumerate(lines):
+        if line.startswith("|") and (rel in line or results_dir in line):
+            parts = line.split("|")
+            if len(parts) >= 6:
+                parts[-2] = f" {status_str} "
+                lines[i] = "|".join(parts)
+    with open(branches_path, "w") as f:
+        f.writelines(lines)
 
 
 if __name__ == "__main__":

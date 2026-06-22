@@ -94,9 +94,46 @@ def validate_preflight(args):
         )
         sys.exit(1)
 
+    # ── Launch provenance ──
+    # Every sanctioned run must come through `preflight launch`, which mints a
+    # per-experiment nonce into the manifest and injects PREFLIGHT_LAUNCH_NONCE
+    # into the session env (children inherit it). A manual `tmux new-session` or
+    # bare CLI run won't carry the nonce → refused, so run location is always
+    # recorded and `preflight status` can always find it. Escape hatch for
+    # debugging/resume: PREFLIGHT_ALLOW_MANUAL=1.
+    launch_nonce = manifest.get("launch_nonce")
+    env_nonce = os.environ.get("PREFLIGHT_LAUNCH_NONCE")
+    if not (launch_nonce and env_nonce == launch_nonce):
+        if os.environ.get("PREFLIGHT_ALLOW_MANUAL"):
+            print("[preflight] ⚠ Launch check bypassed (PREFLIGHT_ALLOW_MANUAL set); "
+                  "run location may not be recorded.", file=sys.stderr)
+        else:
+            print(
+                "ERROR: This run did not come through `preflight launch`.\n"
+                "  Start training with:\n"
+                "    python -m modeling.scripts.preflight launch \\\n"
+                "      --results-dir <dir> --command '<training cmd>'\n"
+                "  so host/tmux-session/PID are recorded and `preflight status` can\n"
+                "  find it. To start manually anyway (debug/resume): PREFLIGHT_ALLOW_MANUAL=1.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
     print(f"[preflight] ✓ Token validated for experiment: {manifest.get('experiment_name', '?')}")
     print(f"[preflight]   Branch: {manifest.get('branch', '?')}")
     print(f"[preflight]   Data: {manifest.get('data_file', '?')}")
+
+    # Self-register runtime location (host/tmux session/pid) so `preflight status`
+    # can later say exactly where this run is. Best-effort — never break training.
+    try:
+        from modeling.scripts.runtime_info import record_run_start
+        updated = record_run_start(manifest_path)
+        if updated and updated.get("tmux_session"):
+            print(f"[preflight]   Registered: host={updated.get('run_host')} "
+                  f"tmux={updated.get('tmux_session')} pid={updated.get('run_pid')}")
+        manifest = updated or manifest
+    except Exception:
+        pass
     return manifest
 
 
