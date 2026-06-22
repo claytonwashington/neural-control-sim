@@ -534,9 +534,9 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 
 
 ### Experiment 42. LFADS No Controller RNN (with ext_input)
-**Status**: NOT STARTED
-**Results dir**: results/lfads_nocon_ext/
-**Branch/Worktree**: feature/bidir-v2-plant / cleo-worktrees/bidir-v2-plant
+**Status**: 🔄 IN PROGRESS
+**Results dir**: `results/lfads_nocon_ext/`
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
 - Hypothesis: Removing the controller RNN (ci_enc_dim=0, con_dim=0, co_dim=0) while keeping external inputs (ext_input_dim=2) tests whether the controller adds value beyond simply passing stimulus through. If recon_smth is similar to Exp 39 (with controller), the controller is redundant when ext_input is available.
 - Method: PBT on spiking data, same as Exp 39 but ci_enc_dim=0, con_dim=0, co_dim=0, ext_input_dim=2
 - Compare: Exp 39 (full controller + ext_input) vs Exp 42 (no controller + ext_input) vs Exp 40 (controller, no ext_input)
