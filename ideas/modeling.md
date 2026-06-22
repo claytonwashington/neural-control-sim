@@ -435,7 +435,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Controllers: PI baseline vs NODE MPC with periodic re-encoding
 
 ### Experiment 28. Spiking CA-NODE Baseline (Single Placement)
-**Status**: IN PROGRESS
+**Status**: ✅ COMPLETE — R²=0.9170
+**Results notes**: Acausal BiGRU encoder on bidir v2 plant, R2=0.917 with z64 h256
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
 **Results dir**: `results/spiking_canode_p0/`
 - Hypothesis: Latent CA-NODE can learn dynamics from sorted spike trains (~126 neurons, 10ms bins) at placement 0
