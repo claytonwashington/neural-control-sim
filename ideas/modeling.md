@@ -469,7 +469,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Hypothesis: EnKF state estimation provides accuracy upper bound on bidir v2 plant
 
 ### Experiment 32. Bidir V2 Optoclamp MPC vs PI
-**Status**: Not started
+**Status**: ❌ DID NOT BEAT BASELINE — R²=0.0000
+**Results notes**: MPC vs PI optoclamp, PI still beats MPC on transient RMSE
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
 **Results dir**: `results/bidir_v2_optoclamp/`
 - Hypothesis: MPC vs PI optoclamp comparison on bidirectional v2 plant
