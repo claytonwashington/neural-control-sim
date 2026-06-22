@@ -462,7 +462,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Hypothesis: Periodic re-encoding on bidir v2 aligned model improves free-run R2
 
 ### Experiment 31. Bidir V2 EnKF Eval
-**Status**: Not started
+**Status**: ✅ COMPLETE — R²=0.9997
+**Results notes**: EnKF state estimation K=1 D=0 R2=0.9997, but too slow for deployment
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
 **Results dir**: `results/bidir_v2_enkf/`
 - Hypothesis: EnKF state estimation provides accuracy upper bound on bidir v2 plant
