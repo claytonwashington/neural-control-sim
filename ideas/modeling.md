@@ -443,3 +443,52 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Architecture sweep: z in {32, 64}, h in {128, 256}, lr in {5e-4, 1e-3} (8 configs)
 - No distillation -- pure reconstruction from scratch
 - Data: spiking_plant3.h5, placement 0, 40/10 split, seed=42
+
+
+## Phase 6: Bidirectional V2 Plant (Exp 29–37)
+
+### Experiment 29. Bidir V2 Aligned Distillation
+**Status**: Not started
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
+**Results dir**: `results/bidir_v2_aligned_distill/`
+- Hypothesis: Aligned distillation from acausal BiGRU teacher to causal CA-NODE on bidir v2 plant
+
+### Experiment 30. Bidir V2 Periodic Re-Encoding
+**Status**: Not started
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
+**Results dir**: `results/bidir_v2_periodic_reencode/`
+- Hypothesis: Periodic re-encoding on bidir v2 aligned model improves free-run R2
+
+### Experiment 31. Bidir V2 EnKF Eval
+**Status**: Not started
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
+**Results dir**: `results/bidir_v2_enkf/`
+- Hypothesis: EnKF state estimation provides accuracy upper bound on bidir v2 plant
+
+### Experiment 32. Bidir V2 Optoclamp MPC vs PI
+**Status**: Not started
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
+**Results dir**: `results/bidir_v2_optoclamp/`
+- Hypothesis: MPC vs PI optoclamp comparison on bidirectional v2 plant
+
+### Experiment 33. (Reserved)
+**Status**: Not started
+
+### Experiment 34. Euler dt Sweep for Aligned Distillation
+**Status**: Not started
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
+**Results dir**: `results/bidir_v2_euler_dt_sweep/`
+- Hypothesis: Euler integration dt sweep to find optimal dt for zero gap with dopri5
+
+### Experiment 35. (Reserved — Active)
+**Status**: 🔄 IN PROGRESS
+
+### Experiment 36. (Reserved)
+**Status**: Not started
+
+### Experiment 37. Spiking CA-NODE MSE Baseline
+**Status**: Not started
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
+**Results dir**: `results/spiking_canode_p0/`
+- Hypothesis: Latent CA-NODE can learn dynamics from sorted spike trains at placement 0
+- Architecture sweep: z in {32, 64}, h in {128, 256}, lr in {5e-4, 1e-3}
