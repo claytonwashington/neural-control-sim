@@ -26,7 +26,10 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
-        python: ["3.10", 3.11, 3.12, 3.13]
+        # brian2 2.9.0 ships no cp310 wheels; on 3.10 it builds from sdist and the
+        # setuptools-scm build step fails. brian2 effectively dropped 3.10, so test
+        # the versions it actually ships wheels for.
+        python: [3.11, 3.12, 3.13]
 
     env:
       # use system python for uv
