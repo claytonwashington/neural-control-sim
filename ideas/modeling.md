@@ -492,7 +492,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 **Status**: Not started
 
 ### Experiment 37. Spiking CA-NODE MSE Baseline
-**Status**: Not started
+**Status**: ✅ COMPLETE — R²=0.4260
+**Results notes**: Spiking CA-NODE MSE baseline, z64 best R2=0.426, z32 R2=0.15
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
 **Results dir**: `results/spiking_canode_p0/`
 - Hypothesis: Latent CA-NODE can learn dynamics from sorted spike trains at placement 0
