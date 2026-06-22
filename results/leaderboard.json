@@ -20,6 +20,16 @@
     "r2_style": "color:var(--green);font-weight:700"
   },
   {
+    "model": "Bidir V2 Aligned Distillation",
+    "type": "run_05_a0.9_pw200_lr0.001",
+    "r2": 0.9173,
+    "mse": 0.079,
+    "verdict": "BEATS BASELINE",
+    "verdict_color": "#4caf50",
+    "is_best_row": false,
+    "r2_style": "font-weight:bold;color:#4caf50"
+  },
+  {
     "model": "CA-NODE (no skip \u2014 baseline)",
     "type": "Channel-Level ODE (dopri5)",
     "r2": 0.9009,

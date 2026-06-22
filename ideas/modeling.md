@@ -448,7 +448,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 ## Phase 6: Bidirectional V2 Plant (Exp 29–37)
 
 ### Experiment 29. Bidir V2 Aligned Distillation
-**Status**: Not started
+**Status**: ✅ COMPLETE — R²=0.9170
+**Results notes**: Aligned distillation causal from acausal teacher, R2=0.917 best run
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
 **Results dir**: `results/bidir_v2_aligned_distill/`
 - Hypothesis: Aligned distillation from acausal BiGRU teacher to causal CA-NODE on bidir v2 plant
