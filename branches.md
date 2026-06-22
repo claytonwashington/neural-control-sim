@@ -12,6 +12,7 @@
 | feature/bidir-aligned-distill | cleo-worktrees/bidir-aligned-distill | [Exp 23](ideas/modeling.md) | `results/bidir_aligned_distill/` | Done — R²=0.8613 |
 | feature/bidir-optoclamp | cleo-worktrees/bidir-optoclamp | [Exp 27](ideas/modeling.md) | `results/bidir_optoclamp/` | Preflight complete |
 | feature/bidir-v2-plant | cleo-worktrees/bidir-v2-plant | [Exp 42](ideas/modeling.md) | `results/lfads_nocon_ext/` | Preflight complete |
+| feature/bidir-v2-plant | cleo-worktrees/bidir-v2-plant | [Exp 43](ideas/modeling.md) | `results/lfads_nocon_noext/` | Preflight complete |
 
 ## Completed Experiments
 
