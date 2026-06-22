@@ -455,7 +455,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Hypothesis: Aligned distillation from acausal BiGRU teacher to causal CA-NODE on bidir v2 plant
 
 ### Experiment 30. Bidir V2 Periodic Re-Encoding
-**Status**: Not started
+**Status**: ✅ COMPLETE — R²=0.9350
+**Results notes**: Periodic re-encoding K=1 R2=0.935, K=20 R2=0.930
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
 **Results dir**: `results/bidir_v2_periodic_reencode/`
 - Hypothesis: Periodic re-encoding on bidir v2 aligned model improves free-run R2
