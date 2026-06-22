@@ -45,6 +45,11 @@ def main():
     add_preflight_args(parser)
     args = parser.parse_args()
 
+    # Enforce the preflight token + mandatory-launch gate before doing any work,
+    # and capture the token to pass down to child training processes.
+    validate_preflight(args)
+    _preflight_token = getattr(args, "preflight_token", None) or os.environ.get("PREFLIGHT_TOKEN", "")
+
     # Cap workers at available GPUs
     args.max_workers = min(args.max_workers, args.n_gpus)
 

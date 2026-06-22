@@ -52,6 +52,11 @@ def main():
     add_preflight_args(parser)
     args = parser.parse_args()
 
+    # Enforce the preflight token + mandatory-launch gate before doing any work,
+    # and capture the token to pass down to child training processes.
+    validate_preflight(args)
+    _preflight_token = getattr(args, "preflight_token", None) or os.environ.get("PREFLIGHT_TOKEN", "")
+
     if args.gpu_ids is not None:
         gpu_ids = [int(x) for x in args.gpu_ids.split(",")]
     else:
