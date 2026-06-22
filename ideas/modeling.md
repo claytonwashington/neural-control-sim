@@ -498,3 +498,70 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 **Results dir**: `results/spiking_canode_p0/`
 - Hypothesis: Latent CA-NODE can learn dynamics from sorted spike trains at placement 0
 - Architecture sweep: z in {32, 64}, h in {128, 256}, lr in {5e-4, 1e-3}
+### Experiment 38. Spiking CA-NODE with Poisson NLL
+**Status**: 🔄 IN PROGRESS
+**Results dir**: `results/spiking_canode_poisson_p0/`
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
+- Hypothesis: Poisson NLL (log-rate output, raw spike count target) is more appropriate than MSE for discrete spike count data, should improve R² over Exp 37's MSE-based approach
+- Architecture sweep: z in {32, 64}, h in {128, 256}, lr in {5e-4, 1e-3} (8 configs)
+- Key change: No normalization on x (raw counts), decoder outputs log-rates
+- Data: spiking_plant3.h5, placement 0, 40/10 split, seed=42
+
+### Experiment 39. LFADS-torch on Spiking Data (with ext_input)
+**Status**: 🔄 IN PROGRESS
+**Results dir**: `results/lfads_spiking_p0_ext/`
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
+- Hypothesis: LFADS with stimulus (u) as external input provides a gold-standard baseline for spiking neural dynamics extraction
+- Method: PBT with 22 workers across gpu1+gpu2, lfads-torch-cuda12, seg_len=100 (1s), overlap=50, Poisson NLL
+- ext_input_dim=2, co_dim=4 (controller + external input)
+- Data: spiking_plant3_lfads_p0.h5
+
+### Experiment 40. LFADS-torch on Spiking Data (no ext_input)
+**Status**: 🔄 IN PROGRESS
+**Results dir**: `results/lfads_spiking_p0_noext/`
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
+- Hypothesis: LFADS without explicit stimulus input must infer control effects from neural dynamics alone -- comparison to Exp 39 reveals how much stimulus info adds
+- Method: Same PBT setup as Exp 39 but ext_input_dim=0, co_dim=4 (controller only, no external input)
+- Data: spiking_plant3_lfads_p0.h5 (ext_input columns ignored)
+
+### Experiment 41. LFADS-torch on MUA Data
+**Status**: 🔄 IN PROGRESS
+**Results dir**: `results/lfads_mua_p0/`
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
+- Hypothesis: LFADS on MUA provides fair comparison to CA-NODE MUA baseline (R²=0.917)
+- Method: PBT, MSE reconstruction (MUA is continuous, not count data), ext_input_dim=2
+- Data: spiking_plant3_lfads_p0_mua.h5
+
+
+### Experiment 42. LFADS No Controller RNN (with ext_input)
+**Status**: NOT STARTED
+**Results dir**: results/lfads_nocon_ext/
+**Branch/Worktree**: feature/bidir-v2-plant / cleo-worktrees/bidir-v2-plant
+- Hypothesis: Removing the controller RNN (ci_enc_dim=0, con_dim=0, co_dim=0) while keeping external inputs (ext_input_dim=2) tests whether the controller adds value beyond simply passing stimulus through. If recon_smth is similar to Exp 39 (with controller), the controller is redundant when ext_input is available.
+- Method: PBT on spiking data, same as Exp 39 but ci_enc_dim=0, con_dim=0, co_dim=0, ext_input_dim=2
+- Compare: Exp 39 (full controller + ext_input) vs Exp 42 (no controller + ext_input) vs Exp 40 (controller, no ext_input)
+
+### Experiment 43. LFADS No Controller RNN (no ext_input)
+**Status**: NOT STARTED
+**Results dir**: results/lfads_nocon_noext/
+**Branch/Worktree**: feature/bidir-v2-plant / cleo-worktrees/bidir-v2-plant
+- Hypothesis: Without EITHER controller or external inputs, LFADS reduces to a pure IC encoder -> generator -> factors model. This is the simplest LFADS and measures how much dynamics can be captured from initial conditions alone. Expected: worst recon_smth of the 4 LFADS variants.
+- Method: PBT on spiking data, ci_enc_dim=0, con_dim=0, co_dim=0, ext_input_dim=0
+- Compare: Full 2x2 factorial: {controller, no controller} x {ext_input, no ext_input}
+
+### Experiment 44. Poisson NLL Spiking CA-NODE v2 (decoder bias init fix)
+**Status**: NOT STARTED
+**Results dir**: results/spiking_canode_poisson_v2_p0/
+**Branch/Worktree**: feature/bidir-v2-plant / cleo-worktrees/bidir-v2-plant
+- Hypothesis: Exp 38 Poisson NLL failed (R2<=0.03 vs MSE R2=0.43) because random decoder initialization produces bad log-rate predictions. Initializing decoder bias to log(mean_firing_rate) per neuron should fix convergence.
+- Method: Same sweep as Exp 38 but with decoder bias initialized to log(mean_count + 1e-5) from training data
+- Key change: nn.init.constant_(decoder.bias, log_mean_rates) before training
+
+### Idea: Inferred External Inputs for Neural ODE
+**Status**: CONCEPT
+- Concept: The CA-NODE currently receives external control inputs u directly as known signals. An alternative is to INFER the external inputs from neural activity alone (analogous to what LFADS controller does). This would make the model fully causal and self-contained -- no need to know the stimulus.
+- Motivation: In real BCI deployment, the control input may not be measurable or may arrive with unknown latency. A model that infers control effects from neural population dynamics would be more robust.
+- Architecture: Add a controller module (small RNN or MLP) that takes encoder hidden state and predicts u_hat at each timestep. The ODE then uses u_hat instead of true u. Train with auxiliary loss: MSE(u_hat, u_true) + main reconstruction loss.
+- Comparison: Compare inferred-u model vs known-u model (Exp 29) on R2 and MPC performance.
+- Risk: If neural activity does not contain enough information about control inputs (e.g., if the stimulation pathway is purely feedforward with no feedback), the model cannot infer u.
+- Relates to: LFADS Exp 39 vs 40 comparison will inform whether ext_input adds value -- if LFADS recon is similar with/without ext_input, neural activity already encodes stimulus effects, making inference viable.
