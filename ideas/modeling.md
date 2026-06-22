@@ -479,7 +479,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 **Status**: Not started
 
 ### Experiment 34. Euler dt Sweep for Aligned Distillation
-**Status**: Not started
+**Status**: ✅ COMPLETE — R²=0.9174
+**Results notes**: Euler dt sweep dt=5ms optimal R2=0.9174, zero gap with dopri5
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
 **Results dir**: `results/bidir_v2_euler_dt_sweep/`
 - Hypothesis: Euler integration dt sweep to find optimal dt for zero gap with dopri5
