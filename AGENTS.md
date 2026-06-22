@@ -82,6 +82,12 @@ Some tutorials require additional packages beyond core Cleo:
 - **Linting**: `ruff`
 - **Docs**: Sphinx + ReadTheDocs
 - **Tutorials tested with**: `nbmake`
+- **Pre-push hook (one-time per clone)**: enable the committed hooks with
+  `git config core.hooksPath .githooks`. It runs the harness smoke tests
+  (incl. the preflight-coverage guard) before each push — warns-and-allows if the
+  `cleo` env isn't found, and is bypassable with `git push --no-verify`. CI runs
+  the same tests on `master`/`modeling-dev`. (Worktrees inherit this config from
+  the shared git dir, so you only set it once per clone.)
 
 ## Conventions
 
