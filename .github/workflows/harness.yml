@@ -26,12 +26,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      # The harness modules are pure-stdlib; the test pulls brian2 + matplotlib only
-      # transitively via tests/conftest.py. No package install (the test puts the
-      # repo root on sys.path itself), so the broken `.[dev]` resolution is bypassed.
-      - name: Install minimal test deps
-        run: pip install pytest "brian2>=2.4,<3.0.0" matplotlib
+      # The harness modules are pure-stdlib and the test puts the repo root on
+      # sys.path itself, so we need nothing but pytest — no package install (bypasses
+      # the broken `.[dev]` resolution), and no brian2/matplotlib/numpy (which only
+      # come in via tests/conftest.py and clash on numpy 2.x).
+      - name: Install pytest
+        run: pip install pytest
 
       - name: Run harness smoke tests
-        # addopts="" drops the repo's --nbmake default (we don't run notebooks here).
-        run: pytest tests/test_harness_smoke.py -o addopts="" -p no:cacheprovider -q
+        # --noconftest skips tests/conftest.py (its top-level `import brian2.only`),
+        # which the harness tests don't use. addopts="" drops the repo's --nbmake.
+        run: pytest tests/test_harness_smoke.py --noconftest -o addopts="" -p no:cacheprovider -q
