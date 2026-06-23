@@ -571,3 +571,9 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Comparison: Compare inferred-u model vs known-u model (Exp 29) on R2 and MPC performance.
 - Risk: If neural activity does not contain enough information about control inputs (e.g., if the stimulation pathway is purely feedforward with no feedback), the model cannot infer u.
 - Relates to: LFADS Exp 39 vs 40 comparison will inform whether ext_input adds value -- if LFADS recon is similar with/without ext_input, neural activity already encodes stimulus effects, making inference viable.
+
+### Experiment 45. MUA Decoding Evaluation Metric
+**Status**: 🔄 IN PROGRESS
+- Hypothesis: Evaluating R2 on sparse, discrete spike counts (x_sorted) is dominated by Poisson noise. Decoding the continuous 50-channel x_mua from latent states provides a much cleaner, continuous evaluation of whether the latent space accurately captured the underlying biological dynamics.
+- Method: Train a Linear Ridge Regression from the model latents (Z) to the training set MUA, and evaluate R2 on the validation set MUA.
+- Pipeline: Enforce this metric check in `preflight complete` for all dynamics models.
