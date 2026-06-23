@@ -38,5 +38,20 @@
     "name": "Bidirectional Optoclamp MPC vs PI",
     "slug": "bidirectional-optoclamp-mpc-vs-pi",
     "has_validation": false
+  },
+  {
+    "name": "LFADS No Controller RNN (with ext_input)",
+    "slug": "lfads-no-controller-rnn-with-ext-input",
+    "has_validation": false
+  },
+  {
+    "name": "LFADS No Controller RNN (no ext_input)",
+    "slug": "lfads-no-controller-rnn-no-ext-input",
+    "has_validation": false
+  },
+  {
+    "name": "Poisson NLL Spiking CA-NODE v2 (bias init)",
+    "slug": "poisson-nll-spiking-ca-node-v2-bias-init",
+    "has_validation": false
   }
 ]

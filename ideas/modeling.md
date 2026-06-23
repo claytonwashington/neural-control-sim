@@ -499,7 +499,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Hypothesis: Latent CA-NODE can learn dynamics from sorted spike trains at placement 0
 - Architecture sweep: z in {32, 64}, h in {128, 256}, lr in {5e-4, 1e-3}
 ### Experiment 38. Spiking CA-NODE with Poisson NLL
-**Status**: 🔄 IN PROGRESS
+**Status**: ❌ DID NOT BEAT BASELINE — R²=0.0600
+**Results notes**: Poisson NLL spiking sweep failed - max R2=0.06 vs MSE R2=0.43, decoder bias init issue
 **Results dir**: `results/spiking_canode_poisson_p0/`
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
 - Hypothesis: Poisson NLL (log-rate output, raw spike count target) is more appropriate than MSE for discrete spike count data, should improve R² over Exp 37's MSE-based approach
