@@ -486,7 +486,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Hypothesis: Euler integration dt sweep to find optimal dt for zero gap with dopri5
 
 ### Experiment 35. (Reserved — Active)
-**Status**: 🔄 IN PROGRESS
+**Status**: ❌ DID NOT BEAT BASELINE — R²=0.0000
+**Results notes**: K=1 MPC diagnostic: better SS error than PI at 75pct/125pct targets but 500ms settling times, 5s/step compute
 
 ### Experiment 36. (Reserved)
 **Status**: Not started
