@@ -510,7 +510,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Data: spiking_plant3.h5, placement 0, 40/10 split, seed=42
 
 ### Experiment 39. LFADS-torch on Spiking Data (with ext_input)
-**Status**: 🔄 IN PROGRESS
+**Status**: ❌ DID NOT BEAT BASELINE — R²=0.0000
+**Results notes**: LFADS with ext_input PBT, recon_smth=2.085 at epoch 164. R2 TBD pending rate extraction
 **Results dir**: `results/lfads_spiking_p0_ext/`
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
 - Hypothesis: LFADS with stimulus (u) as external input provides a gold-standard baseline for spiking neural dynamics extraction
