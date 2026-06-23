@@ -14,7 +14,7 @@
 | feature/bidir-v2-plant | cleo-worktrees/bidir-v2-plant | [Exp 42](ideas/modeling.md) | `results/lfads_nocon_ext/` | Failed —  |
 | feature/bidir-v2-plant | cleo-worktrees/bidir-v2-plant | [Exp 43](ideas/modeling.md) | `results/lfads_nocon_noext/` | Preflight complete |
 | feature/bidir-v2-plant | cleo-worktrees/bidir-v2-plant | [Exp 44](ideas/modeling.md) | `results/spiking_canode_poisson_v2_p0/` | Preflight complete |
-| feature/mua-decoding-metric | cleo-worktrees/mua-decoding-metric | [Exp 45](ideas/modeling.md) | `results/mua_decoding_metric/` | Preflight complete |
+| feature/mua-decoding-metric | cleo-worktrees/mua-decoding-metric | [Exp 45](ideas/modeling.md) | `results/mua_decoding_metric/` | Done — R²=0.0000 |
 
 ## Completed Experiments
 
