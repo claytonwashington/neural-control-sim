@@ -538,7 +538,7 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 
 
 ### Experiment 42. LFADS No Controller RNN (with ext_input)
-**Status**: ❌ DID NOT BEAT BASELINE — R²=0.0000
+**Status**: ❌ DID NOT BEAT BASELINE — 
 **Results notes**: LFADS no controller + ext_input, recon_smth=2.060 at epoch 339. R2 TBD pending rate extraction
 **Results dir**: `results/lfads_nocon_ext/`
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`

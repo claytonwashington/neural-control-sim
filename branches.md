@@ -11,7 +11,7 @@
 | feature/grokking | cleo-worktrees/grokking | Exp 10: Grokking (causal z64) | — | Done — R²=0.8535 (causal), acausal killed |
 | feature/bidir-aligned-distill | cleo-worktrees/bidir-aligned-distill | [Exp 23](ideas/modeling.md) | `results/bidir_aligned_distill/` | Done — R²=0.8613 |
 | feature/bidir-optoclamp | cleo-worktrees/bidir-optoclamp | [Exp 27](ideas/modeling.md) | `results/bidir_optoclamp/` | Preflight complete |
-| feature/bidir-v2-plant | cleo-worktrees/bidir-v2-plant | [Exp 42](ideas/modeling.md) | `results/lfads_nocon_ext/` | Preflight complete |
+| feature/bidir-v2-plant | cleo-worktrees/bidir-v2-plant | [Exp 42](ideas/modeling.md) | `results/lfads_nocon_ext/` | Failed —  |
 | feature/bidir-v2-plant | cleo-worktrees/bidir-v2-plant | [Exp 43](ideas/modeling.md) | `results/lfads_nocon_noext/` | Preflight complete |
 | feature/bidir-v2-plant | cleo-worktrees/bidir-v2-plant | [Exp 44](ideas/modeling.md) | `results/spiking_canode_poisson_v2_p0/` | Preflight complete |
 | feature/mua-decoding-metric | cleo-worktrees/mua-decoding-metric | [Exp 45](ideas/modeling.md) | `results/mua_decoding_metric/` | Preflight complete |

@@ -50,6 +50,11 @@
     "has_validation": false
   },
   {
+    "name": "MUA Decoding Metric",
+    "slug": "mua-decoding-metric",
+    "has_validation": false
+  },
+  {
     "name": "Poisson NLL Spiking CA-NODE v2 (bias init)",
     "slug": "poisson-nll-spiking-ca-node-v2-bias-init",
     "has_validation": false
