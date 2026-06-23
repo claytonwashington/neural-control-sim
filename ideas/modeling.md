@@ -469,6 +469,6 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - MPC with sign-splitting vs PI on the genuinely-bidirectional v2 plant (replaces Exp 27).
 
 ### Experiment 34. Euler dt Sweep for Aligned Distillation
-**Status**: 🔄 IN PROGRESS — branch `feature/bidir-v2-plant`
-**Results dir**: `results/bidir_v2_euler_sweep/`
-- Sweep the Euler integration dt for the aligned-distilled v2 model.
+**Status**: ✅ COMPLETE — R²=0.9173 (euler ≈ dopri5; flat across dt=1–10ms)
+**Results dir**: `results/bidir_v2_euler_dt_sweep/`
+- Sweep the Euler integration dt for the aligned-distilled v2 model. Finding: Euler at the MPC timestep matches dopri5 exactly (R² gap 0.000), and accuracy is flat over dt=1–10ms — so the cheap solver is safe for deployment.

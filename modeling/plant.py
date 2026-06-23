@@ -394,3 +394,165 @@ if __name__ == "__main__":
     print("Running 100ms smoke test...")
     sim.run(100 * ms)
     print("Done.")
+
+
+def build_plant_v2(
+    n_exc: int = 800,
+    n_inh: int = 200,
+    n_channels: int = 50,
+    volume_um: float = 500.0,
+    p_connect: float = 0.1,
+    seed: int = 42,
+) -> tuple[cleo.CLSimulator, dict]:
+    """Build the Cleo E/I plant with ChR2(H134R) + eNpHR3.0.
+
+    Uses ChR2(H134R) (excitatory cation channel, peak ~450nm) driven by
+    a blue fiber and eNpHR3.0 (inhibitory chloride pump, peak ~590nm,
+    E=-400mV) driven by a yellow fiber. Unlike GtACR2 (E=-69.5mV),
+    eNpHR3.0 is a pump with strong hyperpolarizing drive, enabling
+    genuine inhibition below baseline.
+
+    Parameters
+    ----------
+    n_exc : int
+        Number of excitatory neurons
+    n_inh : int
+        Number of inhibitory neurons
+    n_channels : int
+        Number of MUA probe channels
+    volume_um : float
+        Side length of cubic volume in microns
+    p_connect : float
+        Connection probability for recurrent synapses
+    seed : int
+        Random seed
+
+    Returns
+    -------
+    sim : cleo.CLSimulator
+        The configured simulator (no IOProcessor set yet)
+    devices : dict
+        References to key devices
+    """
+    from cleo.opto.opsin_library import chr2_h134r_4s, enphr3_3s
+
+    np.random.seed(seed)
+
+    n_total = n_exc + n_inh
+    half = volume_um / 2
+
+    # -------------------------------------------------------------------------
+    # Network: LIF E/I population (identical to v1)
+    # -------------------------------------------------------------------------
+    b2.start_scope()
+
+    ng = b2.NeuronGroup(
+        n_total,
+        """
+        dv/dt = (-(v - E_L) + Rm * (I_syn + I_exc_opto + I_inh_opto + I_bg)) / tau_m : volt
+        I_syn : amp
+        I_exc_opto : amp
+        I_inh_opto : amp
+        """,
+        threshold="v > v_th",
+        reset="v = E_L",
+        refractory=2 * ms,
+        method="euler",
+        namespace={
+            "tau_m": 20 * ms,
+            "Rm": 500 * Mohm,
+            "E_L": -70 * mV,
+            "v_th": -50 * mV,
+            "I_bg": 60 * pA,
+        },
+    )
+    ng.v = "E_L + rand() * (v_th - E_L)"
+
+    exc_syn = b2.Synapses(
+        ng[:n_exc],
+        ng,
+        on_pre="I_syn_post += w_exc",
+        namespace={"w_exc": 0.1 * mV / (500 * Mohm)},
+    )
+    exc_syn.connect(p=p_connect)
+
+    inh_syn = b2.Synapses(
+        ng[n_exc:],
+        ng,
+        on_pre="I_syn_post -= w_inh",
+        namespace={"w_inh": 0.4 * mV / (500 * Mohm)},
+    )
+    inh_syn.connect(p=p_connect)
+
+    net = b2.Network(ng, exc_syn, inh_syn)
+
+    # -------------------------------------------------------------------------
+    # 3D spatial layout
+    # -------------------------------------------------------------------------
+    cleo.coords.assign_coords_rand_rect_prism(
+        ng,
+        xlim=(-half, half),
+        ylim=(-half, half),
+        zlim=(-half, half),
+        unit=um,
+    )
+
+    # -------------------------------------------------------------------------
+    # Simulator + devices
+    # -------------------------------------------------------------------------
+    sim = cleo.CLSimulator(net)
+
+    quarter = half / 2
+
+    # Light 1: Blue fiber for ChR2(H134R) (~450nm excitation)
+    light_exc = cleo.light.Light(
+        name="fiber_exc",
+        light_model=cleo.light.fiber473nm(),
+        coords=np.array([[-quarter, -quarter, -half]]) * um,
+        direction=np.array([[0, 0, 1]]),
+        wavelength=450 * nmeter,
+    )
+    sim.inject(light_exc, ng)
+
+    # Light 2: Yellow fiber for eNpHR3.0 (~590nm inhibition)
+    light_inh = cleo.light.Light(
+        name="fiber_inh",
+        light_model=cleo.light.fiber473nm(),
+        coords=np.array([[quarter, quarter, -half]]) * um,
+        direction=np.array([[0, 0, 1]]),
+        wavelength=590 * nmeter,
+    )
+    sim.inject(light_inh, ng)
+
+    # Opsin 1: ChR2(H134R) — excitatory cation channel (E=0mV)
+    opsin_exc = chr2_h134r_4s()
+    sim.inject(opsin_exc, ng, Iopto_var_name="I_exc_opto")
+
+    # Opsin 2: eNpHR3.0 — inhibitory chloride pump (E=-400mV)
+    opsin_inh = enphr3_3s()
+    sim.inject(opsin_inh, ng, Iopto_var_name="I_inh_opto")
+
+    # Probe: 50-channel MultiUnitActivity
+    mua = cleo.ephys.MultiUnitActivity(name="mua")
+    probe_coords = _make_probe_coords(n_channels, volume_um)
+    probe = cleo.ephys.Probe(
+        name="probe",
+        coords=probe_coords * um,
+        signals=[mua],
+        save_history=True,
+    )
+    sim.inject(probe, ng)
+
+    devices = {
+        "light_exc": light_exc,
+        "light_inh": light_inh,
+        "opsin_exc": opsin_exc,
+        "opsin_inh": opsin_inh,
+        "probe": probe,
+        "mua": mua,
+        "ng": ng,
+        "exc_syn": exc_syn,
+        "inh_syn": inh_syn,
+    }
+
+    return sim, devices

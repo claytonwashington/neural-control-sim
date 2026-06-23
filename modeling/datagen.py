@@ -210,14 +210,19 @@ def _detect_light_config(devices: dict) -> tuple[list[str], int]:
         n_inputs = len(devices["light"].coords)
         return ["fibers"], n_inputs
     elif "light_red" in devices and "light_blue" in devices:
-        # Bidirectional plant: two separate Light devices
+        # Bidirectional plant v1: two separate Light devices (ChrimsonR + GtACR2)
         n_red = len(devices["light_red"].coords)
         n_blue = len(devices["light_blue"].coords)
         return ["fiber_red", "fiber_blue"], n_red + n_blue
+    elif "light_exc" in devices and "light_inh" in devices:
+        # Bidirectional plant v2: ChR2(H134R) + eNpHR3.0
+        n_exc = len(devices["light_exc"].coords)
+        n_inh = len(devices["light_inh"].coords)
+        return ["fiber_exc", "fiber_inh"], n_exc + n_inh
     else:
         raise ValueError(
             "Could not detect light configuration from devices dict. "
-            "Expected either 'light' or ('light_red', 'light_blue') keys."
+            "Expected 'light', ('light_red', 'light_blue'), or ('light_exc', 'light_inh') keys."
         )
 
 

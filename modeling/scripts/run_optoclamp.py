@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import multiprocessing as mp
 import os
 import time
 
@@ -30,14 +31,17 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from brian2 import ms, Hz, mwatt, mm
+import brian2.only as b2
+from brian2 import ms, second, Hz, mwatt, mm
+b2.prefs.codegen.runtime.cython.cache_dir = f'/tmp/brian2_cache_{os.getpid()}'
 
+import cleo
 from cleo.ioproc import LatencyIOProcessor, exp_firing_rate_estimate
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from modeling.plant import build_plant
+from modeling.plant import build_plant_v2
 
 
 # ─── Recording-only IOProcessor for baseline measurement ───────────────────
@@ -46,12 +50,14 @@ class BaselineRecorder(LatencyIOProcessor):
     """Record firing rates without any stimulation."""
 
     def __init__(self, sample_period_ms=1.0, tau_rate_ms=20.0,
-                 probe_name="probe", mua_name="mua", light_name="fibers"):
+                 probe_name="probe", mua_name="mua",
+                 light_name_exc="fiber_exc", light_name_inh="fiber_inh"):
         super().__init__(sample_period=sample_period_ms * ms)
         self.tau_rate = tau_rate_ms * ms
         self.probe_name = probe_name
         self.mua_name = mua_name
-        self.light_name = light_name
+        self.light_name_exc = light_name_exc
+        self.light_name_inh = light_name_inh
         self._rates = None
         self.rate_log = []
 
@@ -64,8 +70,11 @@ class BaselineRecorder(LatencyIOProcessor):
             counts, self.sample_period, self._rates, self.tau_rate
         )
         self.rate_log.append(np.array(self._rates, dtype=np.float64))
-        # Zero stimulation
-        return {self.light_name: np.zeros(2) * mwatt / mm**2}, t_samp
+        # Zero stimulation — output to both fibers independently
+        return {
+            self.light_name_exc: np.zeros(1) * mwatt / mm**2,
+            self.light_name_inh: np.zeros(1) * mwatt / mm**2,
+        }, t_samp
 
     def _base_reset(self):
         super()._base_reset()
@@ -133,6 +142,88 @@ def compute_metrics(rates: np.ndarray, target: float,
     }
 
 
+# ─── Worker function for parallel target evaluation ──────────────────────
+
+def _run_mpc_target(kwargs):
+    """Run a single MPC target evaluation in a worker process.
+
+    Must be top-level for pickling. Sets up its own Brian2 cache.
+    """
+    import os
+    import brian2.only as b2
+    b2.prefs.codegen.runtime.cython.cache_dir = f'/tmp/brian2_cache_{os.getpid()}'
+
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+    from modeling.plant import build_plant_v2
+    from modeling.controllers.node_mpc import PeriodicNeuralODEMPC
+    from modeling.controllers.node_mpc import AdaptivePeriodicNeuralODEMPC
+
+    frac = kwargs["frac"]
+    target = kwargs["target"]
+    horizon = kwargs["horizon"]
+    args_dict = kwargs["args"]
+
+    print(f"\n  MPC (H={horizon}) @ {frac*100:.0f}% target ({target:.1f} Hz)...")
+
+    # Build target rate vector (broadcast to all channels)
+    target_rate_vec = np.full(50, target)
+
+    sim, devices = build_plant_v2(seed=args_dict["seed"])
+
+    # Choose controller class
+    ControllerClass = (AdaptivePeriodicNeuralODEMPC
+                       if args_dict.get("adaptive", False)
+                       else PeriodicNeuralODEMPC)
+    extra_kwargs = {}
+    if args_dict.get("adaptive", False):
+        extra_kwargs["adapt_lr"] = args_dict.get("adapt_lr", 1e-5)
+        extra_kwargs["adapt_params"] = args_dict.get("adapt_params", "g+decoder")
+        extra_kwargs["adapt_grad_clip"] = args_dict.get("adapt_grad_clip", 1.0)
+
+    ctrl = ControllerClass(
+        checkpoint_path=args_dict["model_checkpoint"],
+        target_rate=target_rate_vec,
+        sample_period_ms=1.0,
+        mpc_horizon=horizon,
+        mpc_iters=args_dict["mpc_iters"],
+        mpc_batch_size=args_dict["mpc_batch_size"],
+        mpc_solver=args_dict.get("mpc_solver", "euler"),
+        compute_delay_ms=args_dict["mpc_delay"],
+        u_max=50.0,
+        device=args_dict["device"],
+        warmup_steps=200,
+        bidirectional=True,
+        light_name_exc="fiber_exc",
+        light_name_inh="fiber_inh",
+        reencode_period=args_dict["reencode_k"],
+        lambda_u=args_dict["lambda_u"],
+        **extra_kwargs,
+    )
+    sim.set_io_processor(ctrl)
+
+    t0 = time.time()
+    sim.run(200 * ms)   # baseline (warmup / fill encoder buffer)
+    sim.run(1000 * ms)  # clamping
+    sim.run(200 * ms)   # recovery
+    elapsed = time.time() - t0
+
+    results = ctrl.get_results()
+    metrics = compute_metrics(results["rates"], target, 200, 1200)
+    metrics["wall_time_s"] = elapsed
+
+    print(f"    RMSE={metrics['tracking_rmse']:.2f}, "
+          f"Settling={metrics['settling_time_ms']:.0f}ms, "
+          f"Wall time={elapsed:.1f}s")
+
+    return {
+        "frac": frac,
+        "target": target,
+        "metrics": metrics,
+    }
+
+
 # ─── Main experiment ──────────────────────────────────────────────────────
 
 def run_optoclamp(args):
@@ -143,7 +234,7 @@ def run_optoclamp(args):
     print("Phase 0: Measuring baseline spontaneous rate")
     print("=" * 60)
 
-    sim, devices = build_plant(seed=args.seed)
+    sim, devices = build_plant_v2(seed=args.seed)
     recorder = BaselineRecorder(sample_period_ms=1.0)
     sim.set_io_processor(recorder)
     sim.run(1000 * ms)  # 1 second baseline
@@ -158,10 +249,6 @@ def run_optoclamp(args):
     print(f"  Target rates: {[f'{t:.1f} Hz ({f*100:.0f}%)' for t, f in zip(targets, target_fractions)]}")
 
     all_results = {}
-    # Per (controller, target) time series, persisted so the (expensive) closed-loop
-    # run never has to be repeated just to re-plot. mean_rate: (n_steps,);
-    # u: (n_steps, n_u) optogenetic input.
-    trajectories: dict[tuple[str, str], dict] = {}
 
     # ── Phase 1: PI Controller ──────────────────────────────────────────
     print("\n" + "=" * 60)
@@ -176,7 +263,7 @@ def run_optoclamp(args):
         {"Kp": 2.0, "Ki": 0.02},
     ]
 
-    from modeling.controllers.pi_controller import PIController
+    from modeling.controllers.pi_controller import BidirectionalPIController
 
     best_pi = None
     best_pi_rmse = float("inf")
@@ -185,14 +272,15 @@ def run_optoclamp(args):
         print(f"\n  PI: Kp={pi_cfg['Kp']}, Ki={pi_cfg['Ki']}")
         target = targets[1]  # 75% for tuning
 
-        sim, devices = build_plant(seed=args.seed)
-        ctrl = PIController(
+        sim, devices = build_plant_v2(seed=args.seed)
+        ctrl = BidirectionalPIController(
             target_rate=target,
             Kp=pi_cfg["Kp"],
             Ki=pi_cfg["Ki"],
-            n_u=2,
             sample_period_ms=1.0,
             warmup_steps=200,
+            light_name_exc="fiber_exc",
+            light_name_inh="fiber_inh",
         )
         sim.set_io_processor(ctrl)
 
@@ -217,13 +305,14 @@ def run_optoclamp(args):
     pi_results = {}
     for frac, target in zip(target_fractions, targets):
         print(f"\n  PI @ {frac*100:.0f}% target ({target:.1f} Hz)...")
-        sim, devices = build_plant(seed=args.seed)
-        ctrl = PIController(
+        sim, devices = build_plant_v2(seed=args.seed)
+        ctrl = BidirectionalPIController(
             target_rate=target,
             Kp=best_pi["Kp"],
             Ki=best_pi["Ki"],
-            n_u=2,
             warmup_steps=200,
+            light_name_exc="fiber_exc",
+            light_name_inh="fiber_inh",
         )
         sim.set_io_processor(ctrl)
         sim.run(200 * ms)
@@ -232,12 +321,10 @@ def run_optoclamp(args):
 
         results = ctrl.get_results()
         metrics = compute_metrics(results["rates"], target, 200, 1200)
-        tgt_key = f"{int(frac*100)}pct"
-        pi_results[tgt_key] = {
+        pi_results[f"{int(frac*100)}pct"] = {
             "target": target,
             "metrics": metrics,
         }
-        trajectories[("PI", tgt_key)] = _extract_trajectory(results, target)
         print(f"    RMSE={metrics['tracking_rmse']:.2f}, "
               f"Settling={metrics['settling_time_ms']:.0f}ms")
 
@@ -246,75 +333,77 @@ def run_optoclamp(args):
         "targets": pi_results,
     }
 
-    # ── Phase 2: Neural ODE MPC ─────────────────────────────────────────
+    # ── Phase 2: Neural ODE MPC (parallel targets) ──────────────────────
     if args.model_checkpoint:
         print("\n" + "=" * 60)
-        print("Phase 2: Neural ODE MPC")
+        print("Phase 2: Neural ODE MPC (parallel targets)")
+        print(f"  Batch size: {args.mpc_batch_size}")
         print("=" * 60)
 
-        from modeling.controllers.node_mpc import NeuralODEMPC
-
-        mpc_results = {}
-        for frac, target in zip(target_fractions, targets):
-            print(f"\n  MPC @ {frac*100:.0f}% target ({target:.1f} Hz)...")
-
-            # Build target rate vector (broadcast to all channels)
-            target_rate_vec = np.full(50, target)
-
-            sim, devices = build_plant(seed=args.seed)
-            ctrl = NeuralODEMPC(
-                checkpoint_path=args.model_checkpoint,
-                target_rate=target_rate_vec,
-                sample_period_ms=1.0,
-                mpc_horizon=args.mpc_horizon,
-                mpc_iters=args.mpc_iters,
-                compute_delay_ms=args.mpc_delay,
-                u_max=50.0,
-                device=args.device,
-                warmup_steps=200,
-            )
-            sim.set_io_processor(ctrl)
-
-            t0 = time.time()
-            sim.run(200 * ms)   # baseline (warmup / fill encoder buffer)
-            sim.run(1000 * ms)  # clamping
-            sim.run(200 * ms)   # recovery
-            elapsed = time.time() - t0
-
-            results = ctrl.get_results()
-            metrics = compute_metrics(results["rates"], target, 200, 1200)
-            metrics["wall_time_s"] = elapsed
-
-            tgt_key = f"{int(frac*100)}pct"
-            mpc_results[tgt_key] = {
-                "target": target,
-                "metrics": metrics,
-            }
-            trajectories[("NODE_MPC", tgt_key)] = _extract_trajectory(results, target)
-            print(f"    RMSE={metrics['tracking_rmse']:.2f}, "
-                  f"Settling={metrics['settling_time_ms']:.0f}ms, "
-                  f"Wall time={elapsed:.1f}s")
-
-        all_results["NODE_MPC"] = {
-            "config": {
-                "horizon": args.mpc_horizon,
-                "iters": args.mpc_iters,
-                "delay_ms": args.mpc_delay,
-            },
-            "targets": mpc_results,
+        # Serialize args for worker processes
+        args_dict = {
+            "model_checkpoint": args.model_checkpoint,
+            "mpc_iters": args.mpc_iters,
+            "mpc_batch_size": args.mpc_batch_size,
+            "mpc_solver": args.mpc_solver,
+            "mpc_delay": args.mpc_delay,
+            "reencode_k": args.reencode_k,
+            "lambda_u": args.lambda_u,
+            "device": args.device,
+            "seed": args.seed,
+            "adaptive": args.adaptive,
+            "adapt_lr": args.adapt_lr,
+            "adapt_params": args.adapt_params,
+            "adapt_grad_clip": args.adapt_grad_clip,
         }
 
-    # ── Save results + trajectories ─────────────────────────────────────
+        for horizon in args.mpc_horizons:
+            print(f"\n  --- MPC horizon={horizon} ---")
+
+            # Build worker kwargs for all 3 targets
+            worker_args = [
+                {
+                    "frac": frac,
+                    "target": target,
+                    "horizon": horizon,
+                    "args": args_dict,
+                }
+                for frac, target in zip(target_fractions, targets)
+            ]
+
+            # Run targets in parallel (3 workers, same GPU)
+            ctx = mp.get_context("spawn")
+            with ctx.Pool(processes=len(target_fractions)) as pool:
+                target_results = pool.map(_run_mpc_target, worker_args)
+
+            # Collect results
+            mpc_results = {}
+            for res in target_results:
+                frac = res["frac"]
+                mpc_results[f"{int(frac*100)}pct"] = {
+                    "target": res["target"],
+                    "metrics": res["metrics"],
+                }
+
+            all_results[f"NODE_MPC_H{horizon}"] = {
+                "config": {
+                    "horizon": horizon,
+                    "iters": args.mpc_iters,
+                    "batch_size": args.mpc_batch_size,
+                    "delay_ms": args.mpc_delay,
+                    "reencode_k": args.reencode_k,
+                },
+                "targets": mpc_results,
+            }
+
+    # ── Save results ────────────────────────────────────────────────────
     results_path = os.path.join(args.output_dir, "optoclamp_results.json")
     with open(results_path, "w") as f:
         json.dump(all_results, f, indent=2, default=str)
     print(f"\nResults saved to {results_path}")
 
-    _save_trajectories(trajectories, args.output_dir)
-
-    # ── Generate plots (from the persisted trajectories) ────────────────
-    _plot_comparison(all_results, trajectories, targets, target_fractions, args.output_dir)
-    _plot_control_signals(trajectories, targets, target_fractions, args.output_dir)
+    # ── Generate comparison plots ───────────────────────────────────────
+    _plot_comparison(all_results, targets, target_fractions, args.output_dir)
     print(f"Plots saved to {args.output_dir}/")
 
     # ── Summary ─────────────────────────────────────────────────────────
@@ -330,153 +419,63 @@ def run_optoclamp(args):
                   f"{m['settling_time_ms']:<12.0f} {m['steady_state_error']:<10.2f}")
 
 
-CTRL_COLORS = {"PI": "#3b82f6", "NODE_MPC": "#ef4444", "LDS_LQR": "#10b981"}
-PHASES = (200, 1200, 1400)  # baseline_end, clamp_end, recovery_end (ms; dt=1ms)
-
-
-def _extract_trajectory(results, target):
-    """Pull the persistable time series out of a controller's get_results()."""
-    rates = results.get("rates", np.array([]))
-    mean_rate = rates.mean(axis=1) if getattr(rates, "size", 0) else np.array([])
-    u = results.get("u", np.array([]))
-    return {
-        "target": float(target),
-        "mean_rate": np.asarray(mean_rate, dtype=np.float32),
-        "u": np.asarray(u, dtype=np.float32),
-    }
-
-
-def _save_trajectories(trajectories, output_dir, dt_ms=1.0, phases=PHASES):
-    """Persist every (controller, target) time series to one .npz, so figures can
-    be regenerated later WITHOUT re-running the (slow) closed-loop experiment."""
-    if not trajectories:
-        return
-    arrays = {"dt_ms": np.asarray(dt_ms, dtype=np.float32),
-              "phases": np.asarray(phases, dtype=np.int32)}
-    meta = {}
-    for (ctrl, tgt), d in trajectories.items():
-        key = f"{ctrl}__{tgt}"
-        arrays[f"{key}__mean_rate"] = d["mean_rate"]
-        arrays[f"{key}__u"] = d["u"]
-        meta[key] = {"controller": ctrl, "target": tgt, "target_hz": d["target"]}
-    arrays["meta_json"] = np.asarray(json.dumps(meta))
-    path = os.path.join(output_dir, "optoclamp_trajectories.npz")
-    np.savez_compressed(path, **arrays)
-    print(f"Trajectories saved to {path} ({len(trajectories)} runs)")
-
-
-def load_trajectories(npz_path):
-    """Inverse of _save_trajectories -> (trajectories, dt_ms, phases)."""
-    d = np.load(npz_path, allow_pickle=False)
-    meta = json.loads(str(d["meta_json"]))
-    trajectories = {
-        (m["controller"], m["target"]): {
-            "target": m["target_hz"],
-            "mean_rate": d[f"{key}__mean_rate"],
-            "u": d[f"{key}__u"],
-        }
-        for key, m in meta.items()
-    }
-    return trajectories, float(d["dt_ms"]), tuple(int(p) for p in d["phases"])
-
-
-def _plot_comparison(all_results, trajectories, targets, fracs, output_dir,
-                     dt_ms=1.0, phases=PHASES):
-    """Rate-tracking trajectories (controlled population rate vs. target) per
-    target, plus the RMSE bar chart."""
-    fig, axes = plt.subplots(len(fracs), 1, figsize=(12, 3.4 * len(fracs)), sharex=True)
+def _plot_comparison(all_results, targets, fracs, output_dir):
+    """Generate comparison plots for all controllers and targets."""
+    fig, axes = plt.subplots(len(fracs), 1, figsize=(12, 4 * len(fracs)),
+                              sharex=True)
     if len(fracs) == 1:
         axes = [axes]
-    b_end, c_end, r_end = phases
+
+    colors = {"PI": "#3b82f6", "NODE_MPC": "#ef4444", "LDS_LQR": "#10b981"}
+
     for ax, frac, target in zip(axes, fracs, targets):
-        ax.axhline(target, color="gray", ls="--", alpha=0.6, label="Target")
-        ax.axvspan(0, b_end, alpha=0.06, color="blue")
-        ax.axvspan(b_end, c_end, alpha=0.06, color="green")
-        ax.axvspan(c_end, r_end, alpha=0.06, color="orange")
-        tgt_key = f"{int(frac*100)}pct"
-        for ctrl in CTRL_COLORS:
-            tr = trajectories.get((ctrl, tgt_key))
-            if tr is None or np.size(tr["mean_rate"]) == 0:
-                continue
-            mr = tr["mean_rate"]
-            t = np.arange(len(mr)) * dt_ms
-            rmse = (all_results.get(ctrl, {}).get("targets", {}).get(tgt_key, {})
-                    .get("metrics", {}).get("tracking_rmse"))
-            lbl = ctrl + (f" (RMSE={rmse:.1f})" if isinstance(rmse, (int, float)) else "")
-            ax.plot(t, mr, color=CTRL_COLORS[ctrl], lw=1.1, alpha=0.9, label=lbl)
-        ax.set_ylabel("Pop. mean rate (Hz)")
+        ax.axhline(target, color="gray", linestyle="--", alpha=0.5, label="Target")
+        ax.axvspan(0, 200, alpha=0.1, color="blue", label="Baseline")
+        ax.axvspan(200, 1200, alpha=0.1, color="green", label="Clamp")
+        ax.axvspan(1200, 1400, alpha=0.1, color="orange", label="Recovery")
+
+        for ctrl_name, ctrl_data in all_results.items():
+            tgt_key = f"{int(frac*100)}pct"
+            if tgt_key in ctrl_data["targets"]:
+                m = ctrl_data["targets"][tgt_key]["metrics"]
+                rmse = m["tracking_rmse"]
+                ax.text(0.98, 0.95, f"{ctrl_name}: RMSE={rmse:.2f}",
+                        transform=ax.transAxes, ha="right", va="top",
+                        fontsize=9, color=colors.get(ctrl_name, "black"))
+
+        ax.set_ylabel("Population Mean Rate (Hz)")
         ax.set_title(f"Target: {frac*100:.0f}% of baseline ({target:.1f} Hz)")
-        ax.legend(loc="upper right", fontsize=8)
-    axes[-1].set_xlabel("Time (ms)  ·  baseline | clamp | recovery")
+        ax.legend(loc="lower right", fontsize=8)
+
+    axes[-1].set_xlabel("Time (ms)")
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "optoclamp_comparison.png"), dpi=150)
     plt.close()
 
-    # RMSE bar chart
+    # Bar chart: RMSE comparison
     fig, ax = plt.subplots(figsize=(8, 5))
     x = np.arange(len(fracs))
     width = 0.25
     for i, (ctrl_name, ctrl_data) in enumerate(all_results.items()):
-        rmses = [ctrl_data["targets"].get(f"{int(f*100)}pct", {})
-                 .get("metrics", {}).get("tracking_rmse", 0) for f in fracs]
-        ax.bar(x + i * width, rmses, width, label=ctrl_name,
-               color=CTRL_COLORS.get(ctrl_name, "gray"))
-    ax.set_xlabel("Target level")
+        rmses = []
+        for frac in fracs:
+            tgt_key = f"{int(frac*100)}pct"
+            if tgt_key in ctrl_data["targets"]:
+                rmses.append(ctrl_data["targets"][tgt_key]["metrics"]["tracking_rmse"])
+            else:
+                rmses.append(0)
+        ax.bar(x + i * width, rmses, width,
+               label=ctrl_name, color=colors.get(ctrl_name, "gray"))
+
+    ax.set_xlabel("Target Level")
     ax.set_ylabel("Tracking RMSE (Hz)")
-    ax.set_title("Optoclamp: controller comparison")
+    ax.set_title("Optoclamp: Controller Comparison")
     ax.set_xticks(x + width / 2)
     ax.set_xticklabels([f"{int(f*100)}%" for f in fracs])
     ax.legend()
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "optoclamp_rmse_comparison.png"), dpi=150)
     plt.close()
-
-
-def _plot_control_signals(trajectories, targets, fracs, output_dir,
-                          dt_ms=1.0, phases=PHASES):
-    """Optogenetic control input over time per target (one line per fiber)."""
-    if not trajectories:
-        return
-    fig, axes = plt.subplots(len(fracs), 1, figsize=(12, 3.0 * len(fracs)), sharex=True)
-    if len(fracs) == 1:
-        axes = [axes]
-    b_end, c_end, _ = phases
-    for ax, frac in zip(axes, fracs):
-        ax.axvspan(b_end, c_end, alpha=0.06, color="green")
-        tgt_key = f"{int(frac*100)}pct"
-        for ctrl in CTRL_COLORS:
-            tr = trajectories.get((ctrl, tgt_key))
-            if tr is None or np.size(tr["u"]) == 0:
-                continue
-            u = np.atleast_2d(tr["u"])
-            if u.shape[0] != len(tr["mean_rate"]) and u.shape[1] == len(tr["mean_rate"]):
-                u = u.T  # ensure (n_steps, n_u)
-            t = np.arange(u.shape[0]) * dt_ms
-            for j in range(u.shape[1]):
-                ax.plot(t, u[:, j], color=CTRL_COLORS[ctrl], lw=0.9, alpha=0.85,
-                        ls=("-" if j == 0 else "--"), label=f"{ctrl} u{j}")
-        ax.set_ylabel("Input (mW/mm²)")
-        ax.set_title(f"Control signal — {frac*100:.0f}% target")
-        ax.legend(loc="upper right", fontsize=7)
-    axes[-1].set_xlabel("Time (ms)")
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "optoclamp_control_signals.png"), dpi=150)
-    plt.close()
-
-
-def replot_from_npz(npz_path, output_dir=None):
-    """Regenerate all optoclamp figures from a persisted trajectories .npz — no
-    closed-loop re-run needed (RMSE labels read from optoclamp_results.json)."""
-    output_dir = output_dir or os.path.dirname(npz_path)
-    trajectories, dt_ms, phases = load_trajectories(npz_path)
-    tgt_by_key = {tgt: tr["target"] for (ctrl, tgt), tr in trajectories.items()}
-    fracs = sorted({int(k.replace("pct", "")) / 100 for k in tgt_by_key})
-    targets = [tgt_by_key[f"{int(f*100)}pct"] for f in fracs]
-    rj = os.path.join(output_dir, "optoclamp_results.json")
-    all_results = json.load(open(rj)) if os.path.exists(rj) else {}
-    _plot_comparison(all_results, trajectories, targets, fracs, output_dir, dt_ms, phases)
-    _plot_control_signals(trajectories, targets, fracs, output_dir, dt_ms, phases)
-    print(f"Regenerated optoclamp figures in {output_dir}")
 
 
 if __name__ == "__main__":
@@ -486,15 +485,30 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", type=str, default="results/optoclamp")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--mpc-horizon", type=int, default=20)
+    parser.add_argument("--mpc-horizons", type=int, nargs="+", default=[5, 10, 20, 50],
+                        help="MPC planning horizons to sweep (default: [5, 10, 20, 50])")
+    parser.add_argument("--reencode-k", type=int, default=20,
+                        help="Re-encoding period K for PeriodicNeuralODEMPC "
+                             "(default: 20, chosen based on Exp 22)")
     parser.add_argument("--mpc-iters", type=int, default=30)
     parser.add_argument("--mpc-delay", type=float, default=5.0,
                         help="MPC compute delay in ms")
-    parser.add_argument("--replot-from", type=str, default=None,
-                        help="Path to optoclamp_trajectories.npz: regenerate figures "
-                             "from persisted trajectories without re-running the sim.")
+    parser.add_argument("--lambda-u", type=float, default=0.01,
+                        help="MPC control effort penalty (default: 0.01)")
+    parser.add_argument("--mpc-batch-size", type=int, default=1,
+                        help="Number of parallel MPC candidates (default: 1, "
+                             "set >1 for batched multi-start)")
+    parser.add_argument("--mpc-solver", type=str, default="euler",
+                        choices=["euler", "dopri5"],
+                        help="ODE solver for MPC rollout (default: euler)")
+    parser.add_argument("--adaptive", action="store_true",
+                        help="Enable online adaptive fine-tuning of g+decoder")
+    parser.add_argument("--adapt-lr", type=float, default=1e-5,
+                        help="Learning rate for online adaptation")
+    parser.add_argument("--adapt-params", type=str, default="g+decoder",
+                        choices=["decoder", "g+decoder", "f+g+decoder"],
+                        help="Which model params to adapt online")
+    parser.add_argument("--adapt-grad-clip", type=float, default=1.0,
+                        help="Gradient clipping for adaptation")
     args = parser.parse_args()
-    if args.replot_from:
-        replot_from_npz(args.replot_from)
-    else:
-        run_optoclamp(args)
+    run_optoclamp(args)
