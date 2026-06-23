@@ -13,6 +13,7 @@
 | feature/bidir-optoclamp | cleo-worktrees/bidir-optoclamp | [Exp 27](ideas/modeling.md) | `results/bidir_optoclamp/` | Preflight complete |
 | feature/bidir-v2-plant | cleo-worktrees/bidir-v2-plant | [Exp 42](ideas/modeling.md) | `results/lfads_nocon_ext/` | Preflight complete |
 | feature/bidir-v2-plant | cleo-worktrees/bidir-v2-plant | [Exp 43](ideas/modeling.md) | `results/lfads_nocon_noext/` | Preflight complete |
+| feature/bidir-v2-plant | cleo-worktrees/bidir-v2-plant | [Exp 44](ideas/modeling.md) | `results/spiking_canode_poisson_v2_p0/` | Preflight complete |
 
 ## Completed Experiments
 

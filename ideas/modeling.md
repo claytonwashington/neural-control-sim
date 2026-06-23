@@ -550,9 +550,9 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Compare: Full 2x2 factorial: {controller, no controller} x {ext_input, no ext_input}
 
 ### Experiment 44. Poisson NLL Spiking CA-NODE v2 (decoder bias init fix)
-**Status**: NOT STARTED
-**Results dir**: results/spiking_canode_poisson_v2_p0/
-**Branch/Worktree**: feature/bidir-v2-plant / cleo-worktrees/bidir-v2-plant
+**Status**: 🔄 IN PROGRESS
+**Results dir**: `results/spiking_canode_poisson_v2_p0/`
+**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
 - Hypothesis: Exp 38 Poisson NLL failed (R2<=0.03 vs MSE R2=0.43) because random decoder initialization produces bad log-rate predictions. Initializing decoder bias to log(mean_firing_rate) per neuron should fix convergence.
 - Method: Same sweep as Exp 38 but with decoder bias initialized to log(mean_count + 1e-5) from training data
 - Key change: nn.init.constant_(decoder.bias, log_mean_rates) before training
