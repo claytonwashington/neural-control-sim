@@ -691,7 +691,7 @@ def _do_complete(args, repo_root):
 
     # GATE 1 (cheap, no mutation): fail early if eval results are missing.
     if args.status != "failed":
-        _require_eval_results(results_dir)
+        _require_eval_results(results_dir, manifest)
 
     # Everything past here mutates the shared working tree. Serialize across
     # worktrees (H1), do all mutations, then commit atomically and push — so a
@@ -742,7 +742,7 @@ def _do_complete(args, repo_root):
     print(f"[preflight] ✓ Experiment {idea_id} fully completed, pushed, and cleaned up.")
 
 
-def _require_eval_results(results_dir):
+def _require_eval_results(results_dir, manifest):
     """HARD GATE: Refuse to complete if no eval results exist."""
     found = []
     for root, dirs, files in os.walk(results_dir):
@@ -758,6 +758,19 @@ def _require_eval_results(results_dir):
             file=sys.stderr,
         )
         sys.exit(1)
+
+    model_type = manifest.get("model_type")
+    if model_type and model_type != "other":
+        mua_path = os.path.join(results_dir, "mua_decoding_results.json")
+        if not os.path.exists(mua_path):
+            print(
+                f"ERROR: MUA decoding metric missing.\n"
+                f"  File not found: {mua_path}\n"
+                f"  All dynamics models (model_type != 'other') MUST run the MUA decoding evaluation.\n"
+                f"  Run: python -m modeling.scripts.evaluate_mua_decoding --run-dir {results_dir}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
     basenames = [os.path.relpath(f, results_dir) for f in found[:5]]
     print(f"[preflight] \u2713 Found {len(found)} result file(s): {basenames}")
 
