@@ -520,7 +520,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Data: spiking_plant3_lfads_p0.h5
 
 ### Experiment 40. LFADS-torch on Spiking Data (no ext_input)
-**Status**: 🔄 IN PROGRESS
+**Status**: ❌ DID NOT BEAT BASELINE — R²=0.0000
+**Results notes**: LFADS no ext_input PBT, recon_smth=2.046 best of 4 LFADS variants. R2 TBD
 **Results dir**: `results/lfads_spiking_p0_noext/`
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
 - Hypothesis: LFADS without explicit stimulus input must infer control effects from neural dynamics alone -- comparison to Exp 39 reveals how much stimulus info adds
