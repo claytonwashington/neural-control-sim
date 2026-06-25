@@ -156,7 +156,7 @@ Every experiment **MUST** produce:
 - **Key finding**: Cross-architecture distillation is at least as hard as same-architecture
 
 ### Experiment 10. Grokking (1000 Epochs, 500 Trials)
-**Status**: 🔄 IN PROGRESS — gpu2
+**Status**: ✅ COMPLETE — R²=0.8535 (causal), acausal killed
 **Results dir**: `results/grok_causal_z64/` (causal), `results/grok_acausal_z128/` (acausal)
 **Branch/Worktree**: `feature/grokking` / `cleo-worktrees/grokking`
 - Hypothesis: extended training on larger dataset may unlock delayed generalization (grokking)
@@ -427,7 +427,7 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Sweep: K ∈ {1, 20, 100, 999} × D ∈ {0, 10ms} × Q ∈ {0.1, 1.0} × R ∈ {0.01, 0.1}
 
 ### Experiment 27. Bidirectional Optoclamp MPC
-**Status**: 🔄 IN PROGRESS
+**Status**: ❌ DID NOT BEAT BASELINE — closed, sessions died
 **Branch/Worktree**: `feature/bidir-optoclamp` / `cleo-worktrees/bidir-optoclamp`
 **Results dir**: `results/bidir_optoclamp/`
 - Hypothesis: MPC with the bidirectional aligned model can achieve inhibition (hitting 50% and 75% target rates) which was impossible on the excitatory-only plant. This is the primary validation of the bidirectional plant.
@@ -529,7 +529,7 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Data: spiking_plant3_lfads_p0.h5 (ext_input columns ignored)
 
 ### Experiment 41. LFADS-torch on MUA Data
-**Status**: 🔄 IN PROGRESS
+**Status**: ❌ DID NOT BEAT BASELINE — never launched, wrong env
 **Results dir**: `results/lfads_mua_p0/`
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
 - Hypothesis: LFADS on MUA provides fair comparison to CA-NODE MUA baseline (R²=0.917)
