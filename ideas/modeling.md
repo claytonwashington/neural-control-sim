@@ -579,3 +579,13 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Hypothesis: Evaluating R2 on sparse, discrete spike counts (x_sorted) is dominated by Poisson noise. Decoding the continuous 50-channel x_mua from latent states provides a much cleaner, continuous evaluation of whether the latent space accurately captured the underlying biological dynamics.
 - Method: Train a Linear Ridge Regression from the model latents (Z) to the training set MUA, and evaluate R2 on the validation set MUA.
 - Pipeline: Enforce this metric check in `preflight complete` for all dynamics models.
+
+### Experiment 46. LFADS No Controller + ext_input (grad_clip=1.0)
+**Status**: 🔄 IN PROGRESS
+- Hypothesis: Exp 42 failed due to NaN in IC encoder. Reducing gradient_clip_val from 200 to 1.0 should stabilize training.
+- Method: PBT on spiking data, con_dim=0, co_dim=0, ext_input_dim=2, gradient_clip_val=1.0
+
+### Experiment 47. LFADS No Controller, No ext_input (grad_clip=1.0)
+**Status**: Not started
+- Hypothesis: Exp 43 failed due to NaN in IC encoder (2/12 trials). Reducing gradient_clip_val from 200 to 1.0 should stabilize training.
+- Method: PBT on spiking data, ci_enc_dim=0, con_dim=0, co_dim=0, ext_input_dim=0, gradient_clip_val=1.0
