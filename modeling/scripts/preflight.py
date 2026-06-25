@@ -40,6 +40,23 @@ import secrets
 import shlex
 import subprocess
 import sys
+from enum import Enum
+
+class ExperimentStatus(str, Enum):
+    REGISTERED = "registered"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+    @classmethod
+    def terminal(cls):
+        return {cls.COMPLETED, cls.FAILED, cls.CANCELLED}
+
+    @classmethod
+    def success(cls):
+        return {cls.COMPLETED}
+
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -482,6 +499,7 @@ def main():
                         help="Idea/experiment number (auto-incremented if omitted)")
     start.add_argument("--experiment-name", required=True, help="Descriptive name")
     start.add_argument("--branch", required=True, help="Git branch name")
+    start.add_argument("--depends-on", help="Comma-separated list of dependencies. Supports OR with pipe, e.g., 44|60, 48")
     start.add_argument("--hypothesis", required=True, help="What you're testing")
     start.add_argument("--data", required=True, help="Path to data file")
     start.add_argument("--machine", required=True, choices=["gpu1", "gpu2"])
@@ -1279,6 +1297,40 @@ def _last_activity_age_days(exp_dir):
     import time as _time
     return (_time.time() - newest) / 86400.0
 
+
+
+def _check_dependencies(manifest, repo_root):
+    deps_and = manifest.get("depends_on", [])
+    if not deps_and:
+        return
+    for dep_group in deps_and:
+        candidates = [int(x.strip()) for x in str(dep_group).split("|")]
+        success = False
+        statuses = {}
+        for cand in candidates:
+            status = _get_experiment_status(cand, repo_root)
+            statuses[cand] = status
+            if status in ExperimentStatus.success():
+                success = True
+                break
+        if not success:
+            cand_str = " OR ".join(str(c) for c in candidates)
+            print(f"ERROR: Blocked — Need at least one of ({cand_str}) to succeed.\n  Current statuses: {statuses}", file=sys.stderr)
+            sys.exit(1)
+
+def _get_experiment_status(idea_id, repo_root):
+    ideas_path = os.path.join(repo_root, "ideas", "modeling.md")
+    if not os.path.exists(ideas_path): return "unknown"
+    with open(ideas_path) as f:
+        content = f.read()
+    match = re.search(f"### Experiment {idea_id}\\..*?\\n\\*\\*Status\\*\\*: (.*?)\\n", content)
+    if not match: return "unknown"
+    status_line = match.group(1)
+    if "COMPLETED" in status_line: return ExperimentStatus.COMPLETED
+    if "FAILED" in status_line: return ExperimentStatus.FAILED
+    if "CANCELLED" in status_line: return ExperimentStatus.CANCELLED
+    if "IN PROGRESS" in status_line: return ExperimentStatus.RUNNING
+    return ExperimentStatus.REGISTERED
 
 def _do_launch(args, repo_root):
     """Create the tmux session for a registered experiment and record where it
