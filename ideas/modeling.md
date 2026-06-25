@@ -547,7 +547,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Compare: Exp 39 (full controller + ext_input) vs Exp 42 (no controller + ext_input) vs Exp 40 (controller, no ext_input)
 
 ### Experiment 43. LFADS No Controller RNN (no ext_input)
-**Status**: ❌ DID NOT BEAT BASELINE — R²=0.0000
+**Status**: ❌ DID NOT BEAT BASELINE — 
+**Results notes**: NaN in IC encoder at epoch 65-89; gradient_clip_val=200 too permissive
 **Results notes**: LFADS no controller no ext_input crashed with NaN in IC encoder, under investigation
 **Results dir**: `results/lfads_nocon_noext/`
 **Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
