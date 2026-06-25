@@ -586,6 +586,6 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Method: PBT on spiking data, con_dim=0, co_dim=0, ext_input_dim=2, gradient_clip_val=1.0
 
 ### Experiment 47. LFADS No Controller, No ext_input (grad_clip=1.0)
-**Status**: Not started
+**Status**: 🔄 IN PROGRESS
 - Hypothesis: Exp 43 failed due to NaN in IC encoder (2/12 trials). Reducing gradient_clip_val from 200 to 1.0 should stabilize training.
 - Method: PBT on spiking data, ci_enc_dim=0, con_dim=0, co_dim=0, ext_input_dim=0, gradient_clip_val=1.0
