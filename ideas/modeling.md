@@ -557,22 +557,7 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 - Compare: Full 2x2 factorial: {controller, no controller} x {ext_input, no ext_input}
 
 ### Experiment 44. Poisson NLL Spiking CA-NODE v2 (decoder bias init fix)
-**Status**: 🔄 IN PROGRESS
-**Results dir**: `results/spiking_canode_poisson_v2_p0/`
-**Branch/Worktree**: `feature/bidir-v2-plant` / `cleo-worktrees/bidir-v2-plant`
-- Hypothesis: Exp 38 Poisson NLL failed (R2<=0.03 vs MSE R2=0.43) because random decoder initialization produces bad log-rate predictions. Initializing decoder bias to log(mean_firing_rate) per neuron should fix convergence.
-- Method: Same sweep as Exp 38 but with decoder bias initialized to log(mean_count + 1e-5) from training data
-- Key change: nn.init.constant_(decoder.bias, log_mean_rates) before training
-
-### Idea: Inferred External Inputs for Neural ODE
-**Status**: CONCEPT
-- Concept: The CA-NODE currently receives external control inputs u directly as known signals. An alternative is to INFER the external inputs from neural activity alone (analogous to what LFADS controller does). This would make the model fully causal and self-contained -- no need to know the stimulus.
-- Motivation: In real BCI deployment, the control input may not be measurable or may arrive with unknown latency. A model that infers control effects from neural population dynamics would be more robust.
-- Architecture: Add a controller module (small RNN or MLP) that takes encoder hidden state and predicts u_hat at each timestep. The ODE then uses u_hat instead of true u. Train with auxiliary loss: MSE(u_hat, u_true) + main reconstruction loss.
-- Comparison: Compare inferred-u model vs known-u model (Exp 29) on R2 and MPC performance.
-- Risk: If neural activity does not contain enough information about control inputs (e.g., if the stimulation pathway is purely feedforward with no feedback), the model cannot infer u.
-- Relates to: LFADS Exp 39 vs 40 comparison will inform whether ext_input adds value -- if LFADS recon is similar with/without ext_input, neural activity already encodes stimulus effects, making inference viable.
-
+**Status**: ❌ FAILED (R²=-0.04, deterministic autoencoder failed to converge)
 ### Experiment 45. MUA Decoding Evaluation Metric
 **Status**: ✅ COMPLETE — R²=0.0000
 **Results notes**: Implemented MUA decoding metric
@@ -589,3 +574,7 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 **Status**: 🔄 IN PROGRESS
 - Hypothesis: Exp 43 failed due to NaN in IC encoder (2/12 trials). Reducing gradient_clip_val from 200 to 1.0 should stabilize training.
 - Method: PBT on spiking data, ci_enc_dim=0, con_dim=0, co_dim=0, ext_input_dim=0, gradient_clip_val=1.0
+
+### Experiment 61. Variational Spiking CA-NODE (Proper VAE)
+**Status**: 🔄 IN PROGRESS
+**Hypothesis**: Adding KL divergence and z0 sampling forces a smooth latent space, enabling Poisson NLL convergence.

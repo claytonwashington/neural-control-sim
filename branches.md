@@ -17,6 +17,7 @@
 | feature/mua-decoding-metric | cleo-worktrees/mua-decoding-metric | [Exp 45](ideas/modeling.md) | `results/mua_decoding_metric/` | Done — R²=0.0000 |
 | feature/lfads-nocon-gc1 | cleo-worktrees/lfads-nocon-gc1 | [Exp 46](ideas/modeling.md) | `results/lfads_nocon_ext_gc1/` | Preflight complete |
 | feature/lfads-nocon-noext-gc1 | cleo-worktrees/lfads-nocon-noext-gc1 | [Exp 47](ideas/modeling.md) | `results/lfads_nocon_noext_gc1/` | Preflight complete |
+| feature/bidir-v2-plant | cleo-worktrees/bidir-v2-plant | [Exp 61](ideas/modeling.md) | `results/spiking_canode_vae_v2_p0/` | Preflight complete |
 
 ## Completed Experiments
 
