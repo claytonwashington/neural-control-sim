@@ -291,7 +291,7 @@ def main(args):
 
             # Causal encoder: only sees past
             x_pred, mu, logvar = causal_model.forward(
-                x_past, u_past, u_future_sub, dt_tensor, method=args.ode_method, deterministic=True
+                x_past, u_past, u_future_sub, dt_tensor, method="euler", deterministic=True
             )
 
             # Distillation loss: match acausal z0
@@ -341,7 +341,7 @@ def main(args):
                     u_future_sub = u_future
 
                 x_pred, mu, logvar = causal_model.forward(
-                    x_past, u_past, u_future_sub, dt_tensor, method=args.ode_method, deterministic=True
+                    x_past, u_past, u_future_sub, dt_tensor, method="euler", deterministic=True
                 )
                 distill_loss = nn.functional.mse_loss(mu, z0_target)
                 recon_loss = nn.functional.mse_loss(x_pred, x_future_sub)
@@ -365,7 +365,6 @@ def main(args):
                 "alpha_init": args.alpha_init,
                 "alpha_final": args.alpha_final,
                 "euler_dt_ms": args.euler_dt,
-                "ode_method": args.ode_method,
             }, os.path.join(args.output_dir, "best_model.pt"))
 
         if epoch % 10 == 0:
@@ -386,7 +385,6 @@ def main(args):
         "alpha_init": args.alpha_init,
         "alpha_final": args.alpha_final,
         "euler_dt_ms": args.euler_dt,
-        "ode_method": args.ode_method,
     }, os.path.join(args.output_dir, "model.pt"))
 
     # ── Evaluate best model ────────────────────────────────────────────
@@ -456,7 +454,6 @@ def main(args):
         "alpha_final": args.alpha_final,
         "hidden": args.hidden,
         "freeze_decoder_epochs": args.freeze_decoder_epochs,
-        "ode_method": args.ode_method,
     }
     with open(os.path.join(args.output_dir, "results.json"), "w") as f:
         json.dump(results, f, indent=2)
@@ -506,7 +503,7 @@ def main(args):
                 u_past = u_trial[t : t + pw].unsqueeze(0)
                 x_future = x_trial[t + pw : t + pw + fw]
                 u_future = u_trial[t + pw : t + pw + fw].unsqueeze(0)
-                x_pred_e = causal_model.predict(x_past, u_past, u_future, dt_eval_euler, method=args.ode_method)
+                x_pred_e = causal_model.predict(x_past, u_past, u_future, dt_eval_euler, method="euler")
                 all_preds_euler.append(x_pred_e.squeeze(0).cpu().numpy())
                 all_trues_euler.append(x_future.cpu().numpy())
 
@@ -524,7 +521,6 @@ def main(args):
     results["r2_euler"] = float(r2_euler)
     results["mse_euler"] = float(mse_euler)
     results["euler_dt_ms"] = args.euler_dt
-    results["ode_method"] = args.ode_method
     with open(os.path.join(args.output_dir, "results.json"), "w") as f:
         json.dump(results, f, indent=2)
 
@@ -559,12 +555,9 @@ if __name__ == "__main__":
     parser.add_argument("--freeze-decoder-epochs", type=int, default=50,
                         help="Freeze decoder for this many epochs to anchor latent space")
     parser.add_argument("--n-test-trials", type=int, default=10)
-    parser.add_argument("--fixed-dt", "--euler-dt", type=int, default=1, dest="euler_dt",
-                        help="Fixed-step integration dt in ms (1, 5, 10, 20, 50). Controls time step "
-                             "during training. Evaluation always includes 1ms.")
-    parser.add_argument("--ode-method", type=str, default="rk4",
-                        choices=["euler", "rk4", "dopri5"],
-                        help="ODE solver method for integration (default: rk4)")
+    parser.add_argument("--euler-dt", type=int, default=1,
+                        help="Euler integration dt in ms (1, 5, or 10). Controls time step "
+                             "during training. Evaluation always includes 1ms Euler.")
 
     add_preflight_args(parser)
     args = parser.parse_args()

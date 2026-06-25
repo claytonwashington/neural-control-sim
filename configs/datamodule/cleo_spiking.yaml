@@ -1,0 +1,4 @@
+_target_: lfads_torch.datamodules.BasicDataModule
+datafile_pattern: /mnt/cbwash2/cleo-worktrees/bidir-v2-plant/data/spiking_plant3_lfads_p0.h5
+batch_size: 64
+dm_ic_enc_seq_len: 20

@@ -4,20 +4,24 @@
 Records SortedSpiking alongside MUA for both plants, using the same
 seeds as existing MUA-only data so the underlying dynamics are identical.
 
+Also records LFP signals:
+- TKLFPSignal (Teleńczuk kernel, archived for reference)
+- RWSLFPSignalFromSpikes (Reference Weighted Sum, primary for experiments)
+
 Multiple random (ε-constrained) probe placements per trial enable
 future electrode-invariant representation learning.
 
 Usage:
-    python -m modeling.scripts.generate_spiking_data \
-        --plant v2 \
-        --n-trials 50 \
-        --n-placements 6 \
-        --output data/spiking_plant3.h5
+    python -m modeling.scripts.generate_spiking_data \\
+        --plant v2 \\
+        --n-trials 50 \\
+        --n-placements 6 \\
+        --output data/spiking_plant3_v2.h5
 
-    python -m modeling.scripts.generate_spiking_data \
-        --plant v1 \
-        --n-trials 50 \
-        --n-placements 6 \
+    python -m modeling.scripts.generate_spiking_data \\
+        --plant v1 \\
+        --n-trials 50 \\
+        --n-placements 6 \\
         --output data/spiking_plant1.h5
 """
 
@@ -85,8 +89,9 @@ def _run_trial_placement(args: dict) -> dict:
     """Worker: run one (trial, placement) combination.
 
     Builds the plant fresh (same connectivity via plant_seed), adds a
-    SortedSpiking probe at the specified offset, runs the sim with OU
-    stimulation, then bins spikes at the requested resolution.
+    SortedSpiking probe at the specified offset, adds an LFP probe with
+    both TKLFPSignal and RWSLFPSignalFromSpikes, runs the sim with OU
+    stimulation, then bins spikes and downsamples LFP.
 
     Must be top-level for pickling. Uses Brian2 start_scope().
     """
@@ -123,6 +128,7 @@ def _run_trial_placement(args: dict) -> dict:
         seed=args["plant_seed"],
     )
     ng = devices["ng"]
+    n_exc = args["n_exc"]
 
     # Add SortedSpiking probe at the specified offset
     from cleo.ephys import SortedSpiking, Probe
@@ -142,6 +148,50 @@ def _run_trial_placement(args: dict) -> dict:
 
     print(f"[PID={pid}] Trial {trial_idx+1} pl={placement_idx}: "
           f"{n_sorted} sorted neurons")
+
+    # -------------------------------------------------------------------------
+    # Add LFP probe with TKLFP and RWSLFP signals at the same coordinates
+    # -------------------------------------------------------------------------
+    from cleo.ephys.lfp import TKLFPSignal, RWSLFPSignalFromSpikes
+
+    sample_period_b2 = args["sample_period_ms"] * b2.ms
+
+    # -- TKLFP: Two signals, one for exc subgroup, one for inh subgroup.
+    #    Each TKLFPSignal instance accumulates into the same probe.
+    tklfp_exc_sig = TKLFPSignal(name="tklfp_exc")
+    tklfp_inh_sig = TKLFPSignal(name="tklfp_inh")
+
+    # -- RWSLFP: Single signal, needs ampa/gaba synapses on injection.
+    rwslfp_sig = RWSLFPSignalFromSpikes(name="rwslfp")
+
+    lfp_probe = Probe(
+        name="lfp_probe",
+        coords=probe_coords * b2.um,
+        signals=[tklfp_exc_sig, tklfp_inh_sig, rwslfp_sig],
+        save_history=True,
+    )
+
+    # Inject TKLFP on exc and inh subgroups separately
+    sim.inject(
+        lfp_probe, ng[:n_exc],
+        tklfp_type="exc",
+        sample_period=sample_period_b2,
+    )
+    sim.inject(
+        lfp_probe, ng[n_exc:],
+        tklfp_type="inh",
+        sample_period=sample_period_b2,
+    )
+
+    # Inject RWSLFP on the full neuron group with synapse references
+    sim.inject(
+        lfp_probe, ng,
+        ampa_syns=[devices["exc_syn"]],
+        gaba_syns=[devices["inh_syn"]],
+    )
+
+    print(f"[PID={pid}] Trial {trial_idx+1} pl={placement_idx}: "
+          f"LFP probe injected (TKLFP exc+inh, RWSLFP)")
 
     # Run simulation with OU stimulation (same datagen pipeline)
     from modeling.datagen import generate_dataset
@@ -186,16 +236,50 @@ def _run_trial_placement(args: dict) -> dict:
     else:
         x_mua_binned = x_mua
 
+    # -------------------------------------------------------------------------
+    # Extract and downsample LFP signals
+    # -------------------------------------------------------------------------
+    # TKLFP: sum exc + inh contributions (they record on the same probe)
+    # Each .lfp is (n_samples, n_channels) with Brian units
+    tklfp_exc_lfp = np.array(tklfp_exc_sig.lfp)  # (n_samples, n_channels)
+    tklfp_inh_lfp = np.array(tklfp_inh_sig.lfp)  # (n_samples, n_channels)
+    tklfp_combined = tklfp_exc_lfp + tklfp_inh_lfp  # sum exc + inh kernels
+    # Transpose to (n_channels, n_samples) to match x convention
+    tklfp_combined = tklfp_combined.T
+
+    # RWSLFP: single signal
+    rwslfp_lfp = np.array(rwslfp_sig.lfp)  # (n_samples, n_channels)
+    rwslfp_lfp = rwslfp_lfp.T  # -> (n_channels, n_samples)
+
+    # Downsample LFP to match bin resolution (same bin_factor as MUA)
+    # LFP is sampled at sample_period_ms (1ms), bin at bin_ms (10ms)
+    T_lfp = tklfp_combined.shape[1]
+    T_lfp_use = T_binned * bin_factor
+    if T_lfp_use <= T_lfp:
+        x_lfp_tklfp = tklfp_combined[:, :T_lfp_use].reshape(
+            tklfp_combined.shape[0], T_binned, bin_factor
+        ).mean(axis=2).astype(np.float32)
+        x_lfp_rwslfp = rwslfp_lfp[:, :T_lfp_use].reshape(
+            rwslfp_lfp.shape[0], T_binned, bin_factor
+        ).mean(axis=2).astype(np.float32)
+    else:
+        # Fallback: use as-is if fewer samples than expected
+        x_lfp_tklfp = tklfp_combined.astype(np.float32)
+        x_lfp_rwslfp = rwslfp_lfp.astype(np.float32)
+
     n_spikes = int(x_sorted.sum())
     n_active = int((x_sorted.sum(axis=1) > 0).sum())
     print(f"[PID={pid}] Trial {trial_idx+1} pl={placement_idx} done: "
-          f"{n_spikes} spikes, {n_active}/{n_sorted} active neurons")
+          f"{n_spikes} spikes, {n_active}/{n_sorted} active neurons, "
+          f"LFP shapes: tklfp={x_lfp_tklfp.shape}, rwslfp={x_lfp_rwslfp.shape}")
 
     return {
         "trial_idx": trial_idx,
         "placement_idx": placement_idx,
         "x_sorted": x_sorted,          # (n_sorted, T_binned) int16
         "x_mua": x_mua_binned,         # (n_channels, T_binned) float
+        "x_lfp_tklfp": x_lfp_tklfp,    # (n_channels, T_binned) float32
+        "x_lfp_rwslfp": x_lfp_rwslfp,  # (n_channels, T_binned) float32
         "u": u,                         # (n_inputs, T_fine) float
         "n_sorted": n_sorted,
         "probe_coords": probe_coords,   # (n_channels, 3) float
@@ -249,6 +333,7 @@ def main():
     print(f"  Trial duration: {args.trial_duration}s")
     print(f"  Bin size: {args.bin_ms}ms, SNR cutoff: {args.snr_cutoff}")
     print(f"  Plant seed: {args.plant_seed}, OU base seed: {args.base_seed}")
+    print(f"  Recording: SortedSpiking + MUA + TKLFPSignal + RWSLFPSignalFromSpikes")
     print(f"  Probe placements:")
     for i, (dx, dz) in enumerate(offsets):
         tag = "centered" if i == 0 else "random"
@@ -338,12 +423,20 @@ def main():
                 x_sorted[i, :n_i, :] = r["x_sorted"]
             x_mua = np.stack([r["x_mua"] for r in p_results])
 
+            # Stack LFP data: (n_trials, n_channels, T_binned)
+            x_lfp_tklfp = np.stack([r["x_lfp_tklfp"] for r in p_results])
+            x_lfp_rwslfp = np.stack([r["x_lfp_rwslfp"] for r in p_results])
+
             grp.create_dataset("x_sorted", data=x_sorted, compression="gzip")
             grp.create_dataset("x_mua", data=x_mua, compression="gzip")
+            grp.create_dataset("x_lfp_tklfp", data=x_lfp_tklfp, compression="gzip")
+            grp.create_dataset("x_lfp_rwslfp", data=x_lfp_rwslfp, compression="gzip")
             grp.create_dataset("probe_coords", data=p_results[0]["probe_coords"])
 
             total_spikes = int(x_sorted.sum())
             print(f"  Placement {p_idx}: x_sorted={x_sorted.shape}, "
+                  f"x_lfp_tklfp={x_lfp_tklfp.shape}, "
+                  f"x_lfp_rwslfp={x_lfp_rwslfp.shape}, "
                   f"max_n_sorted={max_n_sorted}, "
                   f"n_sorted range=[{n_sorted_per_trial.min()}, "
                   f"{n_sorted_per_trial.max()}], spikes={total_spikes}")
@@ -360,6 +453,8 @@ def main():
         f.attrs["trial_duration_s"] = args.trial_duration
         f.attrs["n_exc"] = args.n_exc
         f.attrs["n_inh"] = args.n_inh
+        f.attrs["has_lfp"] = True
+        f.attrs["lfp_signals"] = ["tklfp", "rwslfp"]
 
     elapsed = time.time() - t_start
     print(f"\nDone in {elapsed:.0f}s ({elapsed/60:.1f} min)")
