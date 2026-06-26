@@ -486,25 +486,23 @@ def main(args):
                    test_x, test_u, test_m,
                    n_x, n_u)
 
-    # Run sequentially per GPU using multiprocessing
-    import multiprocessing as mp
-    mp.set_start_method("spawn", force=True)
+    # Run GPU workers in parallel using threads
+    # (threads work because each worker uses a different GPU and releases GIL during CUDA)
+    import concurrent.futures
 
     all_results = []
 
-    def worker_wrapper(gpu_id, cfgs):
-        return gpu_worker(gpu_id, cfgs, shared_data,
-                          args.output_dir, args.epochs, args.batch_size, args.seed)
-
-    # Launch all GPU workers in parallel
-    with mp.Pool(processes=n_gpus) as pool:
-        async_results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n_gpus) as executor:
+        futures = []
         for gpu_id in gpu_ids:
-            if gpu_configs[gpu_id]:  # only if there are configs for this GPU
-                ar = pool.apply_async(worker_wrapper, (gpu_id, gpu_configs[gpu_id]))
-                async_results.append(ar)
-        for ar in async_results:
-            all_results.extend(ar.get())
+            if gpu_configs[gpu_id]:
+                f = executor.submit(
+                    gpu_worker, gpu_id, gpu_configs[gpu_id], shared_data,
+                    args.output_dir, args.epochs, args.batch_size, args.seed,
+                )
+                futures.append(f)
+        for f in concurrent.futures.as_completed(futures):
+            all_results.extend(f.result())
 
     # Sort by R² and save summary
     all_results.sort(key=lambda r: r["r2"], reverse=True)
