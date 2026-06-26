@@ -18,7 +18,7 @@
 | feature/lfads-nocon-gc1 | cleo-worktrees/lfads-nocon-gc1 | [Exp 46](ideas/modeling.md) | `results/lfads_nocon_ext_gc1/` | Preflight complete |
 | feature/lfads-nocon-noext-gc1 | cleo-worktrees/lfads-nocon-noext-gc1 | [Exp 47](ideas/modeling.md) | `results/lfads_nocon_noext_gc1/` | Preflight complete |
 | feature/bidir-v2-plant | cleo-worktrees/bidir-v2-plant | [Exp 61](ideas/modeling.md) | `results/spiking_canode_vae_v2_p0/` | Preflight complete |
-| feature/acausal-vae-canode | cleo-worktrees/acausal-vae-canode | [Exp 62](ideas/modeling.md) | `results/spiking_canode_vae_acausal_p0/` | Preflight complete |
+| feature/acausal-vae-canode | cleo-worktrees/acausal-vae-canode | [Exp 62](ideas/modeling.md) | `results/spiking_canode_vae_acausal_p0/` | Abandoned — Exp 62 used full 30s trials instead of t |
 
 ## Completed Experiments
 

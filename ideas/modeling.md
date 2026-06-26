@@ -580,6 +580,6 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 **Hypothesis**: Adding KL divergence and z0 sampling forces a smooth latent space, enabling Poisson NLL convergence.
 
 ### Experiment 62. Acausal Variational CA-NODE (LFADS-style)
-**Status**: 🔄 IN PROGRESS
+**Status**: 🛑 ABANDONED — Exp 62 used full 30s trials instead of trialized 1s segments. Replaced by Exp 63.
 **Branch**: feature/acausal-vae-canode
 **Hypothesis**: Auto-encoding spikes bidirectionally over the full trial (acausal) is required to learn smooth CA-ODE dynamics from sparse spike counts. Causal forecasting from 200ms is too hard a prior.
