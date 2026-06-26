@@ -106,6 +106,12 @@ def _run_trial_placement(args: dict) -> dict:
     plant_type = args["plant_type"]
     bin_ms = args["bin_ms"]
 
+    # Seed Brian2's runtime RNG so the spiking dynamics are reproducible.
+    # (build_fn's np.random.seed pins connectivity/positions; the OU input is
+    # seeded separately. Without this, Brian2's stochastic elements made every
+    # run differ.) sim_seed is deterministic per (trial, placement).
+    b2.seed(args["sim_seed"])
+
     pid = mp.current_process().pid
     print(f"[PID={pid}] Trial {trial_idx+1}/{n_trials}, "
           f"placement {placement_idx}, offset=({offset_xz[0]:.1f}, {offset_xz[1]:.1f})µm")
@@ -352,6 +358,7 @@ def main():
                 "placement_idx": placement_idx,
                 "n_trials": args.n_trials,
                 "ou_seed": args.base_seed + trial_idx,
+                "sim_seed": args.base_seed + trial_idx * 1000 + placement_idx,
                 "offset_xz": offset_xz,
                 "plant_type": args.plant,
                 "plant_seed": args.plant_seed,
