@@ -140,6 +140,74 @@ def _run_trial_placement(args: dict) -> dict:
     sim.inject(sorted_probe, ng)
     n_sorted = sorted_sig.n_sorted
 
+    # ------------------------------------------------------------------
+    # LFP recording (purely additive — does NOT touch x_sorted/x_mua).
+    #
+    # Both LFP proxies are ALWAYS generated and archived (project policy;
+    # experiments use RWSLFP). They are placed on a SEPARATE probe at the
+    # *same* coordinates as the SortedSpiking probe so the existing
+    # whole-group SortedSpiking injection is left byte-for-byte unchanged;
+    # the LFP signals only add passive SpikeMonitors, which do not perturb
+    # the Brian2 dynamics that produce x_mua.
+    #
+    # Modeling assumptions:
+    #   * Pyramidal cells == excitatory population (ng[:n_exc]). LFP is
+    #     dominated by synaptic currents onto pyramidal cells, so RWSLFP
+    #     currents target only synapses landing on j < n_exc, and the
+    #     TKLFP/RWSLFP reference population is the excitatory subgroup.
+    #   * TKLFP: excitatory spikes use the 'exc' kernel and inhibitory
+    #     spikes the 'inh' kernel; both subgroups contribute (Telenczuk
+    #     et al. kernel LFP).
+    #   * RWSLFP-from-spikes: AMPA = recurrent excitatory synapses
+    #     (exc_syn), GABA = recurrent inhibitory synapses (inh_syn), each
+    #     restricted to synapses onto pyramidal cells (j < n_exc). Synaptic
+    #     weights are read from the plant namespace (w_exc, w_inh) and
+    #     passed as positive magnitudes (the AMPA/GABA sign convention is
+    #     handled internally by wslfp). Because the plant uses instantaneous
+    #     delta-synapses (I_syn += w) with no explicit current dynamics, we
+    #     use the documented spike-based path
+    #     (wslfp.spikes_to_biexp_currents) with the library-default
+    #     biexponential kernel (tau1/tau2 AMPA = 2/0.4 ms, GABA = 5/0.25 ms,
+    #     syn_delay = 1 ms).
+    #   * LFP is sampled at the IOProcessor period (== sample_period_ms,
+    #     1 ms) just like the raw MUA, then bin-averaged into bin_ms bins
+    #     exactly as x_mua, yielding (n_channels, T_binned) per trial.
+    # ------------------------------------------------------------------
+    from cleo.ephys import TKLFPSignal, RWSLFPSignalFromSpikes
+
+    n_exc = args["n_exc"]
+    exc_syn = devices["exc_syn"]
+    inh_syn = devices["inh_syn"]
+    # Synaptic weight magnitudes (amps) from the plant namespace.
+    w_exc_A = float(exc_syn.namespace["w_exc"] / b2.amp)
+    w_inh_A = float(inh_syn.namespace["w_inh"] / b2.amp)
+
+    tklfp_sig = TKLFPSignal(name="tklfp")
+    rwslfp_sig = RWSLFPSignalFromSpikes(name="rwslfp")
+    lfp_probe = Probe(
+        name="lfp_probe",
+        coords=probe_coords * b2.um,   # co-located with the sorted probe
+        signals=[tklfp_sig, rwslfp_sig],
+        save_history=True,
+    )
+
+    sample_period = args["sample_period_ms"] * b2.ms
+    # Excitatory subgroup: 'exc' TKLFP kernel + AMPA/GABA currents onto
+    # pyramidal cells (j < n_exc) for RWSLFP.
+    sim.inject(
+        lfp_probe, ng[:n_exc],
+        tklfp_type="exc",
+        sample_period=sample_period,
+        ampa_syns=[(exc_syn[f"j < {n_exc}"], {"weight": w_exc_A})],
+        gaba_syns=[(inh_syn[f"j < {n_exc}"], {"weight": w_inh_A})],
+    )
+    # Inhibitory subgroup contributes only inhibitory spikes to TKLFP.
+    sim.inject(
+        lfp_probe, ng[n_exc:],
+        tklfp_type="inh",
+        sample_period=sample_period,
+    )
+
     print(f"[PID={pid}] Trial {trial_idx+1} pl={placement_idx}: "
           f"{n_sorted} sorted neurons")
 
@@ -186,6 +254,24 @@ def _run_trial_placement(args: dict) -> dict:
     else:
         x_mua_binned = x_mua
 
+    # ------------------------------------------------------------------
+    # Bin LFP exactly like x_mua: signal.lfp is (T_fine, n_channels) at
+    # the 1 ms IOProcessor period -> transpose to (n_channels, T_fine),
+    # then average within each bin_ms window -> (n_channels, T_binned).
+    # ------------------------------------------------------------------
+    def _bin_lfp(lfp_TxC):
+        lfp_CxT = np.asarray(lfp_TxC, dtype=np.float64).T  # (n_channels, T_fine)
+        if T_use <= lfp_CxT.shape[1]:
+            return lfp_CxT[:, :T_use].reshape(
+                lfp_CxT.shape[0], T_binned, bin_factor
+            ).mean(axis=2)
+        return lfp_CxT
+
+    # TKLFP is stored with Brian units (uvolt); strip to plain microvolts.
+    x_lfp_tklfp = _bin_lfp(tklfp_sig.lfp / b2.uvolt)
+    # RWSLFP is dimensionless (arbitrary units, normalized downstream).
+    x_lfp_rwslfp = _bin_lfp(np.asarray(rwslfp_sig.lfp))
+
     n_spikes = int(x_sorted.sum())
     n_active = int((x_sorted.sum(axis=1) > 0).sum())
     print(f"[PID={pid}] Trial {trial_idx+1} pl={placement_idx} done: "
@@ -196,6 +282,8 @@ def _run_trial_placement(args: dict) -> dict:
         "placement_idx": placement_idx,
         "x_sorted": x_sorted,          # (n_sorted, T_binned) int16
         "x_mua": x_mua_binned,         # (n_channels, T_binned) float
+        "x_lfp_tklfp": x_lfp_tklfp,    # (n_channels, T_binned) float (uV)
+        "x_lfp_rwslfp": x_lfp_rwslfp,  # (n_channels, T_binned) float (a.u.)
         "u": u,                         # (n_inputs, T_fine) float
         "n_sorted": n_sorted,
         "probe_coords": probe_coords,   # (n_channels, 3) float
@@ -337,9 +425,14 @@ def main():
                 n_i = r["n_sorted"]
                 x_sorted[i, :n_i, :] = r["x_sorted"]
             x_mua = np.stack([r["x_mua"] for r in p_results])
+            # LFP: (n_trials, n_channels, T_binned), same binning as x_mua.
+            x_lfp_tklfp = np.stack([r["x_lfp_tklfp"] for r in p_results])
+            x_lfp_rwslfp = np.stack([r["x_lfp_rwslfp"] for r in p_results])
 
             grp.create_dataset("x_sorted", data=x_sorted, compression="gzip")
             grp.create_dataset("x_mua", data=x_mua, compression="gzip")
+            grp.create_dataset("x_lfp_tklfp", data=x_lfp_tklfp, compression="gzip")
+            grp.create_dataset("x_lfp_rwslfp", data=x_lfp_rwslfp, compression="gzip")
             grp.create_dataset("probe_coords", data=p_results[0]["probe_coords"])
 
             total_spikes = int(x_sorted.sum())
