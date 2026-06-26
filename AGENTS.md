@@ -414,3 +414,47 @@ with torch.no_grad():
     inference_time_ms = (time.time() - t0) / 100 * 1000
 ```
 
+
+---
+
+### Modeling Rules: Spiking Data & Autoencoder Regularization
+
+#### Coordinated Dropout (MANDATORY for autoencoders)
+
+Any autoencoding model (sequential autoencoder, VAE, LFADS-style) that encodes
+and reconstructs neural data **MUST** include **Coordinated Dropout** (CD) as a
+hyperparameter. CD prevents identity overfitting where the model learns to
+copy input→output rather than learning latent dynamics.
+
+**How it works** (from AutoLFADS, Keshtkaran et al.):
+1. Randomly mask `cd_rate` fraction of input timesteps fed to the encoder
+2. Compute reconstruction loss on the **original** (unmasked) data
+3. Block gradients for timesteps that were NOT masked (only penalize "fill-in-the-blank")
+4. Protect any IC encoder segment from masking (`ic_enc_seq_len`)
+
+**Required hyperparameter range** to sweep: `cd_rate ∈ {0.0, 0.15, 0.3, 0.5}`.
+Default `cd_pass_rate=0.5`. Setting `cd_rate=0.0` disables CD.
+
+Reference implementation: `CoordinatedDropout` class in
+`modeling/scripts/sweep_spiking_det_sae_v2.py`.
+
+#### Loss Functions for Spike Count Data
+
+Our spiking data (`x_sorted`) has spike counts per 10ms bin with a **biophysical
+ceiling at count=5** (2ms refractory period → max 5 spikes per 10ms bin) and
+Fano factor ~2.6 (overdispersed). This violates the Poisson assumption.
+
+**Preferred losses** (in order):
+1. **MSE on z-scored firing rates** — z-score per neuron using training stats,
+   ensures equal contribution from all neurons. This is what produced R²=0.4
+   in Exp 37.
+2. **MSE on Gaussian-smoothed spike trains** — convolve with σ=50ms kernel
+   before computing MSE.
+3. **Poisson NLL** — only if data is truly Poisson (no ceiling, Fano≈1).
+   Our data violates both conditions.
+
+#### R² Evaluation Standard for Spiking Models
+
+All spiking model R² values should be computed on **Gaussian-smoothed firing
+rates** (σ=50ms) to be comparable across experiments. Raw spike count R² is
+meaningless due to Poisson noise. Report both `r2_smooth` and `r2_raw`.
