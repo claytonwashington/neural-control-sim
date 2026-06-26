@@ -583,3 +583,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 **Status**: 🛑 ABANDONED — Exp 62 used full 30s trials instead of trialized 1s segments. Replaced by Exp 63.
 **Branch**: feature/acausal-vae-canode
 **Hypothesis**: Auto-encoding spikes bidirectionally over the full trial (acausal) is required to learn smooth CA-ODE dynamics from sparse spike counts. Causal forecasting from 200ms is too hard a prior.
+
+### Experiment 63. Acausal VAE CA-NODE (Trialized 1s Segments)
+**Status**: 🔄 IN PROGRESS
+**Branch**: feature/acausal-vae-canode-v2
+**Hypothesis**: Trialized 1s overlapping segments (matching LFADS convention) enable bidirectional encoding of spiking data to learn smooth CA-ODE dynamics. Fixes Exp 62 which incorrectly used full 30s trials.
