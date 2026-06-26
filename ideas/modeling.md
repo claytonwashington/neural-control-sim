@@ -588,3 +588,8 @@ Initialize causal ODE from acausal weights, then distill with α schedule
 **Status**: 🔄 IN PROGRESS
 **Branch**: feature/acausal-vae-canode-v2
 **Hypothesis**: Trialized 1s overlapping segments (matching LFADS convention) enable bidirectional encoding of spiking data to learn smooth CA-ODE dynamics. Fixes Exp 62 which incorrectly used full 30s trials.
+
+### Experiment 64. Deterministic SAE CA-NODE Sweep (CtD-style, No VAE)
+**Status**: 🔄 IN PROGRESS
+**Branch**: feature/det-sae-canode
+**Hypothesis**: Matching the CtD benchmark architecture (deterministic encoder, Euler dynamics, Poisson NLL, no KL) will outperform our VAE-based CA-NODE on trialized spiking segments. Sweep over z_dim=[10,32,64], hidden=[128,256], lr=[1e-3,5e-4,1e-4].
