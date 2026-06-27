@@ -619,7 +619,7 @@ def build_plant_v3(
             "V_T": -50.4 * mV,
             "Delta_T": 2 * mV,
             "V_reset": -70.6 * mV,
-            "V_cut": 20 * mV,
+            "V_cut": -40 * mV,  # ~V_T+5*Delta_T: catch spike before exp-term overflow (was 20mV -> NaN)
             "a": a_nS * nS,
             "b_adapt": b_pA * pA,
             "tau_w": tau_w_ms * ms,

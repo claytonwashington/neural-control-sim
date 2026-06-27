@@ -66,7 +66,7 @@ def run_config(cfg):
 if __name__ == "__main__":
     grid = []
     for i, (ibg, mu, b) in enumerate(itertools.product(
-            [30, 80], [10, 25, 50, 100], [40, 80, 160])):
+            [600, 650, 700], [0, 20, 40], [80])):
         grid.append({"idx": i, "I_bg_pA": float(ibg), "ou_mu": float(mu),
                      "b_pA": float(b), "ou_sigma": round(0.5 * mu, 1)})
     print(f"Sweeping {len(grid)} configs, {N_WORKERS} workers, {DUR}s each...")
