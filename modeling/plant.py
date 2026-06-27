@@ -604,7 +604,7 @@ def build_plant_v3(
         dv/dt = (-g_L*(v - E_L) + g_L*Delta_T*exp((v - V_T)/Delta_T)
                  + I_syn + I_exc_opto + I_inh_opto + I_bg - w) / C_m : volt
         dw/dt = (a*(v - E_L) - w) / tau_w : amp
-        I_syn : amp
+        dI_syn/dt = -I_syn / tau_syn : amp
         I_exc_opto : amp
         I_inh_opto : amp
         """,
@@ -624,6 +624,7 @@ def build_plant_v3(
             "b_adapt": b_pA * pA,
             "tau_w": tau_w_ms * ms,
             "I_bg": I_bg_pA * pA,
+            "tau_syn": 5 * ms,
         },
     )
 
