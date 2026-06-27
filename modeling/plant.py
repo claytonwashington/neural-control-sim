@@ -556,3 +556,125 @@ def build_plant_v2(
     }
 
     return sim, devices
+
+
+def build_plant_v3(
+    n_exc: int = 800,
+    n_inh: int = 200,
+    n_channels: int = 50,
+    volume_um: float = 500.0,
+    p_connect: float = 0.1,
+    seed: int = 42,
+    runtime_seed: int | None = None,
+    I_bg_pA: float = 15.0,
+    a_nS: float = 4.0,
+    b_pA: float = 80.5,
+    tau_w_ms: float = 144.0,
+    w_exc_pA: float = 3.0,
+    w_inh_pA: float = 12.0,
+) -> tuple[cleo.CLSimulator, dict]:
+    """AdEx E/I plant (ChR2 H134R + eNpHR3.0). Mirrors :func:`build_plant_v2`
+    but swaps LIF -> Adaptive Exponential Integrate-and-Fire (Brette & Gerstner
+    2005) for spike-frequency adaptation + depolarization block, and uses a
+    subthreshold I_bg so the dark baseline is low (no LIF overdrive).
+
+    Seeding (composes with the data generator's per-trial seeding):
+      * ``seed`` seeds numpy (coords) AND Brian2 connectivity -> fixed network.
+      * ``runtime_seed`` (if given) re-seeds Brian2 *after* connectivity, just
+        before initial-voltage draw -> per-trial dynamics without changing the
+        network. Pass plant_seed as ``seed`` and the per-trial sim_seed as
+        ``runtime_seed``.
+
+    Devices dict matches v2: light_exc, light_inh, opsin_exc, opsin_inh, probe,
+    mua, ng, exc_syn, inh_syn.
+    """
+    from brian2 import nS, pF
+    from cleo.opto.opsin_library import chr2_h134r_4s, enphr3_3s
+
+    np.random.seed(seed)  # numpy randomness (coords)
+    n_total = n_exc + n_inh
+    half = volume_um / 2
+
+    b2.start_scope()
+    b2.seed(seed)  # fixed connectivity across trials
+
+    ng = b2.NeuronGroup(
+        n_total,
+        """
+        dv/dt = (-g_L*(v - E_L) + g_L*Delta_T*exp((v - V_T)/Delta_T)
+                 + I_syn + I_exc_opto + I_inh_opto + I_bg - w) / C_m : volt
+        dw/dt = (a*(v - E_L) - w) / tau_w : amp
+        I_syn : amp
+        I_exc_opto : amp
+        I_inh_opto : amp
+        """,
+        threshold="v > V_cut",
+        reset="v = V_reset; w += b_adapt",
+        refractory=2 * ms,
+        method="euler",
+        namespace={
+            "C_m": 281 * pF,
+            "g_L": 30 * nS,
+            "E_L": -70.6 * mV,
+            "V_T": -50.4 * mV,
+            "Delta_T": 2 * mV,
+            "V_reset": -70.6 * mV,
+            "V_cut": 20 * mV,
+            "a": a_nS * nS,
+            "b_adapt": b_pA * pA,
+            "tau_w": tau_w_ms * ms,
+            "I_bg": I_bg_pA * pA,
+        },
+    )
+
+    # Recurrent synapses (delta-current; PSP magnitude preserved from v2 at the
+    # AdEx input resistance R = 1/g_L = 33.3 MOhm: 3 pA -> 0.1 mV, 12 pA -> 0.4 mV)
+    exc_syn = b2.Synapses(ng[:n_exc], ng, on_pre="I_syn_post += w_exc",
+                          namespace={"w_exc": w_exc_pA * pA})
+    exc_syn.connect(p=p_connect)
+    inh_syn = b2.Synapses(ng[n_exc:], ng, on_pre="I_syn_post -= w_inh",
+                          namespace={"w_inh": w_inh_pA * pA})
+    inh_syn.connect(p=p_connect)
+
+    cleo.coords.assign_coords_rand_rect_prism(
+        ng, xlim=(-half, half), ylim=(-half, half), zlim=(-half, half), unit=um,
+    )
+
+    if runtime_seed is not None:
+        b2.seed(runtime_seed)  # per-trial dynamics, network already built
+    ng.v = "E_L + rand() * (V_T - E_L)"
+    ng.w = 0 * pA
+
+    net = b2.Network(ng, exc_syn, inh_syn)
+    sim = cleo.CLSimulator(net)
+    quarter = half / 2
+
+    light_exc = cleo.light.Light(
+        name="fiber_exc", light_model=cleo.light.fiber473nm(),
+        coords=np.array([[-quarter, -quarter, -half]]) * um,
+        direction=np.array([[0, 0, 1]]), wavelength=450 * nmeter)
+    sim.inject(light_exc, ng)
+    light_inh = cleo.light.Light(
+        name="fiber_inh", light_model=cleo.light.fiber473nm(),
+        coords=np.array([[quarter, quarter, -half]]) * um,
+        direction=np.array([[0, 0, 1]]), wavelength=590 * nmeter)
+    sim.inject(light_inh, ng)
+
+    opsin_exc = chr2_h134r_4s()
+    sim.inject(opsin_exc, ng, Iopto_var_name="I_exc_opto")
+    opsin_inh = enphr3_3s()
+    sim.inject(opsin_inh, ng, Iopto_var_name="I_inh_opto")
+
+    mua = cleo.ephys.MultiUnitActivity(name="mua")
+    probe_coords = _make_probe_coords(n_channels, volume_um)
+    probe = cleo.ephys.Probe(name="probe", coords=probe_coords * um,
+                             signals=[mua], save_history=True)
+    sim.inject(probe, ng)
+
+    devices = {
+        "light_exc": light_exc, "light_inh": light_inh,
+        "opsin_exc": opsin_exc, "opsin_inh": opsin_inh,
+        "probe": probe, "mua": mua, "ng": ng,
+        "exc_syn": exc_syn, "inh_syn": inh_syn,
+    }
+    return sim, devices

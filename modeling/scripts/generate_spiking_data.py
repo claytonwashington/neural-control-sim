@@ -117,16 +117,26 @@ def _run_trial_placement(args: dict) -> dict:
           f"placement {placement_idx}, offset=({offset_xz[0]:.1f}, {offset_xz[1]:.1f})µm")
 
     # Build the plant (same seed → same connectivity and neuron positions)
-    if plant_type == "v2":
+    if plant_type == "v3":
+        from modeling.plant import build_plant_v3 as build_fn
+        _extra = dict(
+            runtime_seed=args["sim_seed"],
+            I_bg_pA=args["I_bg_pA"], a_nS=args["a_nS"],
+            b_pA=args["b_pA"], tau_w_ms=args["tau_w_ms"],
+        )
+    elif plant_type == "v2":
         from modeling.plant import build_plant_v2 as build_fn
+        _extra = {}
     else:
         from modeling.plant import build_plant as build_fn
+        _extra = {}
 
     sim, devices = build_fn(
         n_exc=args["n_exc"],
         n_inh=args["n_inh"],
         n_channels=args["n_channels"],
         seed=args["plant_seed"],
+        **_extra,
     )
     ng = devices["ng"]
 
@@ -301,7 +311,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate spiking training data with multiple probe placements"
     )
-    parser.add_argument("--plant", choices=["v1", "v2"], required=True,
+    parser.add_argument("--plant", choices=["v1", "v2", "v3"], required=True,
                         help="Plant version: v1 (ChrimsonR+GtACR2) or v2 (H134R+eNpHR3.0)")
     parser.add_argument("--n-trials", type=int, default=50)
     parser.add_argument("--n-placements", type=int, default=6,
@@ -326,6 +336,12 @@ def main():
     parser.add_argument("--n-inh", type=int, default=200)
     parser.add_argument("--n-channels", type=int, default=50)
     parser.add_argument("--volume-um", type=float, default=500.0)
+    parser.add_argument("--ou-mu", type=float, default=5.0)
+    parser.add_argument("--ou-sigma", type=float, default=2.0)
+    parser.add_argument("--I-bg-pA", type=float, default=15.0, help="v3 AdEx background current (pA)")
+    parser.add_argument("--a-nS", type=float, default=4.0, help="v3 AdEx subthreshold adaptation (nS)")
+    parser.add_argument("--b-pA", type=float, default=80.5, help="v3 AdEx spike-triggered adaptation (pA)")
+    parser.add_argument("--tau-w-ms", type=float, default=144.0, help="v3 AdEx adaptation tau (ms)")
     args = parser.parse_args()
 
     t_start = time.time()
@@ -370,8 +386,12 @@ def main():
                 "sample_period_ms": 1.0,
                 "tau_smooth_ms": 20.0,
                 "ou_tau": 0.05,
-                "ou_sigma": 2.0,
-                "ou_mu": 5.0,
+                "ou_sigma": args.ou_sigma,
+                "ou_mu": args.ou_mu,
+                "I_bg_pA": args.I_bg_pA,
+                "a_nS": args.a_nS,
+                "b_pA": args.b_pA,
+                "tau_w_ms": args.tau_w_ms,
                 "bin_ms": args.bin_ms,
                 "snr_cutoff": args.snr_cutoff,
             })
